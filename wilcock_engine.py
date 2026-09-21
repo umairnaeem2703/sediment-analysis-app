@@ -1,96 +1,142 @@
 import math
+
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+SECONDS_PER_YEAR = 365.25 * 24.0 * 3600.0
+PHI_BREAK = 1.35
+
+
 class FractionalModel:
     def __init__(self):
-        self.g = 9.81              
-        self.rho_w = 1000.0        
-        self.rho_s = 2650.0        
-        self.s = self.rho_s / self.rho_w 
-        
-        self.d50 = 0.02            
-        self.f_s = 0.10            
-        self.manning_n = 0.05      
-        self.bed_width = 50.0      
-        self.depth = 0.5           
+        self.g = 9.81
+        self.rho_w = 1000.0
+        self.rho_s = 2650.0
+        self.s = self.rho_s / self.rho_w
+
+        self.d50 = 0.02
+        self.f_s = 0.10
+        self.manning_n = 0.05
+        self.bed_width = 50.0
+        self.depth = 0.5
         self.fractions = []
+        self._fi = np.array([], dtype=float)
+        self._tau_ri = np.array([], dtype=float)
 
     def calculate_hydraulics(self, q_flow: float):
         if q_flow <= 0:
             return 0.0, 0.0
         area = self.bed_width * self.depth
         velocity = q_flow / area
-        tau = (self.rho_w * self.g * (self.manning_n ** 2) * (velocity ** 2)) / math.pow(self.depth, 1.0/3.0)
+        tau = (self.rho_w * self.g * (self.manning_n ** 2) * (velocity ** 2)) / math.pow(self.depth, 1.0 / 3.0)
         u_star = math.sqrt(tau / self.rho_w)
         return tau, u_star
 
     def calculate_dimensionless_transport(self, phi: float) -> float:
         if phi <= 0:
             return 0.0
-        if phi < 1.35:
+        if phi < PHI_BREAK:
             return 0.002 * math.pow(phi, 7.5)
-        else:
-            return 14.0 * math.pow((1.0 - (0.894 / phi)), 4.5)
+        return 14.0 * math.pow((1.0 - (0.894 / phi)), 4.5)
 
     def compute_daily_fractional_transport(self, q_flow: float):
-        tau, u_star = self.calculate_hydraulics(q_flow)
-        if tau == 0.0:
-            return 0.0
-        total_q_b = 0.0
-        for frac in self.fractions:
-            phi = tau / frac['tau_ri']
-            w_star_i = self.calculate_dimensionless_transport(phi)
-            q_bi = (w_star_i * frac['Fi'] * math.pow(u_star, 3)) / ((self.s - 1.0) * self.g)
-            total_q_b += q_bi
-        return total_q_b
+        series = self.compute_transport_series(np.array([q_flow], dtype=float))
+        return float(series[0])
+
+    def compute_transport_series(self, q_flow) -> np.ndarray:
+        if self._fi.size == 0:
+            raise ValueError("Fractional parameters have not been loaded.")
+
+        q = np.asarray(q_flow, dtype=float).reshape(-1)
+        cross_section = self.bed_width * self.depth
+        velocity = np.divide(q, cross_section, out=np.zeros_like(q), where=q > 0)
+        tau = (self.rho_w * self.g * (self.manning_n ** 2) * (velocity ** 2)) / (self.depth ** (1.0 / 3.0))
+        tau = np.where(q > 0, tau, 0.0)
+        u_star = np.sqrt(tau / self.rho_w)
+
+        phi = tau[:, None] / self._tau_ri[None, :]
+        w_star = np.zeros_like(phi)
+        low = (phi > 0) & (phi < PHI_BREAK)
+        high = phi >= PHI_BREAK
+        w_star = np.where(low, 0.002 * np.power(phi, 7.5), w_star)
+        w_star = np.where(high, 14.0 * np.power(1.0 - (0.894 / np.where(high, phi, 1.0)), 4.5), w_star)
+
+        q_bi = (w_star * self._fi[None, :] * np.power(u_star[:, None], 3)) / ((self.s - 1.0) * self.g)
+        total = q_bi.sum(axis=1)
+        return np.where(tau == 0.0, 0.0, total)
 
     def load_fractional_parameters(self, df: pd.DataFrame):
-        self.fractions = []
-        for _, row in df.iterrows():
-            fraction_data = {
-                'di': float(row['di']),         
-                'Fi': float(row['Fi']),         
-                'bi': float(row['bi']),         
-                'tau_ri': float(row['tau_ri'])  
-            }
-            self.fractions.append(fraction_data)
+        required = ["di", "Fi", "bi", "tau_ri"]
+        missing = [col for col in required if col not in df.columns]
+        if missing:
+            raise KeyError(f"Fractional table missing columns: {missing}")
+
+        work = df[required].apply(pd.to_numeric, errors="coerce")
+        if work.isna().any().any():
+            raise ValueError("Fractional parameters contain non-numeric or empty values.")
+        if (work["tau_ri"] <= 0).any():
+            raise ValueError("All tau_ri values must be greater than zero.")
+        fi_sum = float(work["Fi"].sum())
+        if not np.isclose(fi_sum, 1.0, atol=0.02):
+            raise ValueError(f"Fi fractions must sum to ~1.0 (got {fi_sum:.4f}).")
+
+        self.fractions = work.to_dict(orient="records")
+        self._fi = work["Fi"].to_numpy(dtype=float)
+        self._tau_ri = work["tau_ri"].to_numpy(dtype=float)
+
 
 class TimeSeriesAggregator:
     def __init__(self, model: FractionalModel):
         self.model = model
 
     def process_annual_averages(self, df_flow: pd.DataFrame) -> pd.DataFrame:
-        df_flow['Date'] = pd.to_datetime(df_flow['Date'])
-        df_flow['Year'] = df_flow['Date'].dt.year
-        df_flow['Daily_Bedload'] = df_flow['Flow'].apply(self.model.compute_daily_fractional_transport)
-        
-        annual_summary = df_flow.groupby('Year').agg(
-            Annual_Average_Flow=('Flow', 'mean'),
-            Annual_Average_Bedload=('Daily_Bedload', 'mean')
+        required = ["Date", "Flow"]
+        missing = [col for col in required if col not in df_flow.columns]
+        if missing:
+            raise KeyError(f"Flow table missing columns: {missing}")
+
+        df = df_flow.copy()
+        df["Date"] = pd.to_datetime(df["Date"])
+        df["Year"] = df["Date"].dt.year
+        df["Daily_Bedload"] = self.model.compute_transport_series(df["Flow"].to_numpy())
+
+        annual_summary = df.groupby("Year", as_index=True).agg(
+            Annual_Average_Flow=("Flow", "mean"),
+            Annual_Average_Bedload=("Daily_Bedload", "mean"),
         )
         return annual_summary
 
-class BedloadVisualizer:
-    def __init__(self):
-        plt.style.use('default')
+    def to_phase3_handoff(self, annual_summary: pd.DataFrame) -> pd.DataFrame:
+        """Convert mean volumetric rate (m3/s per unit width) to annual volume."""
+        if annual_summary.empty:
+            raise ValueError("Annual summary is empty.")
+        handoff = annual_summary.reset_index()
+        handoff["Bedload_Volume_m3"] = (
+            handoff["Annual_Average_Bedload"] * self.model.bed_width * SECONDS_PER_YEAR
+        )
+        return handoff[["Year", "Bedload_Volume_m3"]]
 
+
+class BedloadVisualizer:
     def generate_trend_graph(self, df_summary: pd.DataFrame):
         if df_summary.empty:
             raise ValueError("Dataframe is empty. Cannot generate plot.")
         fig, ax1 = plt.subplots(figsize=(10, 6))
         years = df_summary.index
-        ax1.plot(years, df_summary['Annual_Average_Flow'], color='blue', marker='o', label='Average Flow')
-        ax1.set_xlabel('Year', fontweight='bold')
-        ax1.set_ylabel('Annual Average Flow (m³/s)', color='blue', fontweight='bold')
-        ax1.tick_params(axis='y', labelcolor='blue')
-        ax1.grid(True, linestyle='--', alpha=0.6)
+        line1 = ax1.plot(years, df_summary["Annual_Average_Flow"], color="blue", marker="o", label="Average Flow")[0]
+        ax1.set_xlabel("Year", fontweight="bold")
+        ax1.set_ylabel("Annual Average Flow (m³/s)", color="blue", fontweight="bold")
+        ax1.tick_params(axis="y", labelcolor="blue")
+        ax1.grid(True, linestyle="--", alpha=0.6)
 
-        ax2 = ax1.twinx()  
-        ax2.plot(years, df_summary['Annual_Average_Bedload'], color='red', marker='s', label='Average Bedload')
-        ax2.set_ylabel('Annual Average Bedload (m³/s)', color='red', fontweight='bold')
-        ax2.tick_params(axis='y', labelcolor='red')
-
-        plt.title('Annual Flow vs. Bedload Transport Trends', fontweight='bold', pad=15)
+        ax2 = ax1.twinx()
+        line2 = ax2.plot(
+            years, df_summary["Annual_Average_Bedload"], color="red", marker="s", label="Average Bedload"
+        )[0]
+        ax2.set_ylabel("Annual Average Bedload (m³/s / m)", color="red", fontweight="bold")
+        ax2.tick_params(axis="y", labelcolor="red")
+        ax1.legend([line1, line2], [line1.get_label(), line2.get_label()], loc="upper left")
+        ax1.set_title("Annual Flow vs. Bedload Transport Trends", fontweight="bold", pad=15)
         fig.tight_layout()
         return fig
