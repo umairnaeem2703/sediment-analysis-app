@@ -123,8 +123,30 @@ class SedimentApp:
         self.btn_export_phase2.pack(side=tk.LEFT, padx=6)
         ttk.Button(button_row, text="Export 10-class CSV", command=self.export_10_class_csv).pack(side=tk.LEFT, padx=6)
 
-        self.rusle_results = tk.Text(self.rusle_frame, height=10, width=80, state="disabled")
-        self.rusle_results.grid(row=4, column=0, columnspan=3, padx=10, pady=8, sticky="nsew")
+        results_wrap = ttk.Frame(self.rusle_frame)
+        results_wrap.grid(row=4, column=0, columnspan=3, padx=10, pady=8, sticky="nsew")
+
+        cols = ("basin", "subbasin", "year", "yield_t_yr", "volume_m3_yr", "sp_yield_m3_yr_km2")
+        self.results_tree = ttk.Treeview(results_wrap, columns=cols, show="headings", height=8)
+        self.results_tree.heading("basin", text="Basin")
+        self.results_tree.heading("subbasin", text="Sub-Basin")
+        self.results_tree.heading("year", text="Year")
+        self.results_tree.heading("yield_t_yr", text="Yield (t/yr)")
+        self.results_tree.heading("volume_m3_yr", text="Volume (m³/yr)")
+        self.results_tree.heading("sp_yield_m3_yr_km2", text="Sp. Yield (m³/yr/km²)")
+
+        # reasonable column sizing
+        self.results_tree.column("basin", width=180, anchor="w")
+        self.results_tree.column("subbasin", width=180, anchor="w")
+        self.results_tree.column("year", width=80, anchor="center")
+        self.results_tree.column("yield_t_yr", width=120, anchor="e")
+        self.results_tree.column("volume_m3_yr", width=140, anchor="e")
+        self.results_tree.column("sp_yield_m3_yr_km2", width=160, anchor="e")
+
+        results_scroll = ttk.Scrollbar(results_wrap, orient="vertical", command=self.results_tree.yview)
+        self.results_tree.configure(yscrollcommand=results_scroll.set)
+        self.results_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        results_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.rusle_frame.columnconfigure(1, weight=1)
         self.rusle_frame.rowconfigure(1, weight=1)
         self.rusle_frame.rowconfigure(4, weight=1)
@@ -404,23 +426,33 @@ class SedimentApp:
         rows = self.rusle_row_metrics or []
         if not rows:
             return
-        mean_t_ha = rows[0]["raster_mean_t_ha_yr"]
-        lines = [
-            f"Raster mean: {mean_t_ha:.4f} t/ha/yr (shared across all grid rows)",
-            "5-class map uses np.digitize(..., right=True): 20.0 is class 4; class 5 is A > 20.",
-            "",
-        ]
+        # clear existing tree rows
+        try:
+            self.results_tree.delete(*self.results_tree.get_children())
+        except Exception:
+            pass
+
+        # Insert computed rows into the grid, rounding numeric values to 2 decimals
         for m in rows:
-            lines.append(
-                f"{m['basin']} / {m['subbasin']} ({m['year']}): "
-                f"area {m['area_km2']:.4f} km², slope {m['slope']}, "
-                f"yield {m['yield_mass_t']:.2f} t/yr, volume {m['volume_m3']:.2f} m³/yr"
+            basin = m.get("basin", "")
+            subbasin = m.get("subbasin", "")
+            year = m.get("year", "")
+            mass = m.get("yield_mass_t", 0.0)
+            volume = m.get("volume_m3", 0.0)
+            sp_yield = m.get("specific_yield_m3_km2", 0.0)
+
+            self.results_tree.insert(
+                "",
+                "end",
+                values=(
+                    basin,
+                    subbasin,
+                    year,
+                    f"{mass:.2f}",
+                    f"{volume:.2f}",
+                    f"{sp_yield:.2f}",
+                ),
             )
-        text = "\n".join(lines) + "\n"
-        self.rusle_results.config(state="normal")
-        self.rusle_results.delete(1.0, tk.END)
-        self.rusle_results.insert(tk.END, text)
-        self.rusle_results.config(state="disabled")
 
     def _show_rusle_preview(self):
         if self._rusle_preview_window is not None and self._rusle_preview_window.winfo_exists():
