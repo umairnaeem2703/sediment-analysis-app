@@ -160,7 +160,8 @@ class SedimentApp:
     def setup_wc_tab(self):
         self.wc_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.wc_frame, text="Wilcock & Crowe Bedload")
-
+        # allow the file-entry column to expand horizontally
+        self.wc_frame.columnconfigure(1, weight=1)
         self.flow_file_var = tk.StringVar()
         self.frac_file_var = tk.StringVar()
 
@@ -168,14 +169,14 @@ class SedimentApp:
             row=0, column=0, padx=10, pady=10, sticky="w"
         )
         ttk.Entry(self.wc_frame, textvariable=self.flow_file_var, width=50, state="readonly").grid(
-            row=0, column=1, padx=10, pady=10
+            row=0, column=1, padx=10, pady=10, sticky="ew"
         )
 
         ttk.Button(
             self.wc_frame, text="Browse Fractional CSV", command=lambda: self.browse_file(self.frac_file_var)
         ).grid(row=1, column=0, padx=10, pady=10, sticky="w")
         ttk.Entry(self.wc_frame, textvariable=self.frac_file_var, width=50, state="readonly").grid(
-            row=1, column=1, padx=10, pady=10
+            row=1, column=1, padx=10, pady=10, sticky="ew"
         )
 
         wc_buttons = ttk.Frame(self.wc_frame)
@@ -191,10 +192,18 @@ class SedimentApp:
 
         self.wc_status_var = tk.StringVar(value="Idle")
         ttk.Label(self.wc_frame, textvariable=self.wc_status_var).grid(row=3, column=0, columnspan=2, pady=4)
-
+        # Inline graph container (will hold the embedded Matplotlib canvas)
+        self.wc_graph_frame = ttk.Frame(self.wc_frame)
+        self.wc_graph_frame.grid(row=4, column=0, columnspan=2, sticky="nsew", padx=10, pady=6)
+        self.wc_frame.rowconfigure(4, weight=1)
     def setup_integration_tab(self):
         self.integration_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.integration_frame, text="Integration & Handoff")
+
+        # allow the second column (entry widgets) to expand horizontally
+        # keep the left column (buttons) fixed so entries stretch from button to window edge
+        self.integration_frame.columnconfigure(0, weight=0)
+        self.integration_frame.columnconfigure(1, weight=1)
 
         self.phase2_file_var = tk.StringVar()
         self.phase3_file_var = tk.StringVar()
@@ -206,7 +215,7 @@ class SedimentApp:
             command=lambda: self.browse_file(self.phase2_file_var),
         ).grid(row=0, column=0, padx=10, pady=5, sticky="w")
         ttk.Entry(self.integration_frame, textvariable=self.phase2_file_var, width=50, state="readonly").grid(
-            row=0, column=1, padx=10, pady=5
+            row=0, column=1, padx=10, pady=5, sticky="ew"
         )
 
         ttk.Button(
@@ -215,7 +224,7 @@ class SedimentApp:
             command=lambda: self.browse_file(self.phase3_file_var),
         ).grid(row=1, column=0, padx=10, pady=5, sticky="w")
         ttk.Entry(self.integration_frame, textvariable=self.phase3_file_var, width=50, state="readonly").grid(
-            row=1, column=1, padx=10, pady=5
+            row=1, column=1, padx=10, pady=5, sticky="ew"
         )
 
         ttk.Button(
@@ -224,7 +233,7 @@ class SedimentApp:
             command=lambda: self.browse_file(self.bathy_file_var),
         ).grid(row=2, column=0, padx=10, pady=5, sticky="w")
         ttk.Entry(self.integration_frame, textvariable=self.bathy_file_var, width=50, state="readonly").grid(
-            row=2, column=1, padx=10, pady=5
+            row=2, column=1, padx=10, pady=5, sticky="ew"
         )
 
         self.btn_run_integration = ttk.Button(
@@ -233,7 +242,8 @@ class SedimentApp:
         self.btn_run_integration.grid(row=3, column=0, columnspan=2, pady=10)
 
         self.results_text = tk.Text(self.integration_frame, height=10, width=70, state="disabled")
-        self.results_text.grid(row=4, column=0, columnspan=2, padx=10, pady=5)
+        self.results_text.grid(row=4, column=0, columnspan=2, padx=10, pady=5, sticky="nsew")
+        self.integration_frame.rowconfigure(4, weight=1)
 
         self.btn_export_master = ttk.Button(
             self.integration_frame,
@@ -557,44 +567,51 @@ class SedimentApp:
         self.annual_summary = annual_summary
         self.phase3_df = phase3_df
         self.btn_export_phase3.config(state="normal")
-        self.wc_status_var.set("Complete — plot opened on the UI thread.")
-        visualizer = BedloadVisualizer()
-        fig = visualizer.generate_trend_graph(annual_summary)
-        self.display_plot_window(fig)
 
-    def display_plot_window(self, fig):
-        if self._wc_plot_window is not None and self._wc_plot_window.winfo_exists():
-            self._wc_plot_window.destroy()
+        # Embed the generated Matplotlib figure into the inline WC graph frame
+        try:
+            visualizer = BedloadVisualizer()
+            fig = visualizer.generate_trend_graph(annual_summary)
+        except Exception as exc:
+            self.wc_status_var.set("Failed")
+            messagebox.showerror("Visualization Error", f"Could not generate plot:\n\n{exc}")
+            return
+
+        # clear previous inline widgets (canvas, buttons)
+        for child in list(self.wc_graph_frame.winfo_children()):
+            try:
+                child.destroy()
+            except Exception:
+                pass
+
+        # close previous figure if present
         if self._wc_fig is not None:
-            plt.close(self._wc_fig)
+            try:
+                plt.close(self._wc_fig)
+            except Exception:
+                pass
+
         self._wc_fig = fig
 
-        plot_window = tk.Toplevel(self.root)
-        plot_window.title("Wilcock & Crowe Bedload Trend")
-        plot_window.geometry("800x600")
-        self._wc_plot_window = plot_window
-
-        canvas = FigureCanvasTkAgg(fig, master=plot_window)
+        canvas = FigureCanvasTkAgg(fig, master=self.wc_graph_frame)
         canvas.draw()
-        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
         def save_fig():
             save_path = filedialog.asksaveasfilename(
                 title="Save Trend Graph", defaultextension=".png", filetypes=[("PNG Image", "*.png")]
             )
             if save_path:
-                fig.savefig(save_path, dpi=300, bbox_inches="tight")
-                messagebox.showinfo("Success", f"Graph successfully saved to:\n{save_path}")
+                try:
+                    fig.savefig(save_path, dpi=300, bbox_inches="tight")
+                    messagebox.showinfo("Success", f"Graph successfully saved to:\n{save_path}")
+                except Exception as exc:
+                    messagebox.showerror("Export Error", str(exc))
 
-        ttk.Button(plot_window, text="Export as PNG", command=save_fig).pack(pady=10)
+        ttk.Button(self.wc_graph_frame, text="Export as PNG", command=save_fig).pack(pady=6)
+        self.wc_status_var.set("Complete — plot embedded.")
 
-        def on_close():
-            plt.close(fig)
-            if self._wc_fig is fig:
-                self._wc_fig = None
-            plot_window.destroy()
-
-        plot_window.protocol("WM_DELETE_WINDOW", on_close)
+    
 
     def export_phase3_csv(self):
         if self.phase3_df is None:
