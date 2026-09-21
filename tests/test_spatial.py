@@ -30,6 +30,15 @@ def test_fixture_matrix_classification_and_lut_shape():
     assert rgb.dtype == np.uint8
 
 
+def test_cem_sio_uses_decimal_slope_not_percent():
+    calc = YieldCalculator()
+    slope = 0.015
+    expected = 1.0 / (2.05823 + 0.02816 * slope**2)
+    percent_form = 1.0 / (2.05823 + 0.02816 * (slope * 100.0) ** 2)
+    assert np.isclose(calc.calculate_cem_sio(slope), expected)
+    assert not np.isclose(calc.calculate_cem_sio(slope), percent_form)
+
+
 def test_gross_mass_uses_hectares():
     calc = YieldCalculator()
     mean = 2.0

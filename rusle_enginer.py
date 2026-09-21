@@ -64,7 +64,8 @@ class YieldCalculator:
         return 0.51 * math.pow(area_km2, -0.11)
 
     def calculate_cem_sio(self, slope: float) -> float:
-        return 1.0 / (2.05823 + (0.02816 * math.pow(slope, 2)))
+        """CEM SIO uses slope S as a decimal (m/m), not a percentage."""
+        return 1.0 / (2.05823 + 0.02816 * math.pow(slope, 2))
 
     def calculate_average_sio(self, area_km2: float, slope: float) -> float:
         usda_sio = self.calculate_usda_scs_sio(area_km2)

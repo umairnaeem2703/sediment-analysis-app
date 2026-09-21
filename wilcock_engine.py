@@ -66,15 +66,31 @@ class FractionalModel:
         total = q_bi.sum(axis=1)
         return np.where(tau == 0.0, 0.0, total)
 
+    def _reference_stress_for_fraction(self, d_i: float) -> float:
+        """Wilcock & Crowe tau_ri from sand fraction, D50, and grain size d_i."""
+        tau_rm_star = 0.021 + 0.015 * math.exp(-20 * self.f_s)
+        tau_rm = tau_rm_star * (self.s - 1) * self.rho_w * self.g * self.d50
+        b = 0.67 / (1 + math.exp(1.5 - (d_i / self.d50)))
+        return tau_rm * math.pow((d_i / self.d50), b)
+
     def load_fractional_parameters(self, df: pd.DataFrame):
-        required = ["di", "Fi", "bi", "tau_ri"]
+        required = ["di", "Fi", "bi"]
         missing = [col for col in required if col not in df.columns]
         if missing:
             raise KeyError(f"Fractional table missing columns: {missing}")
 
-        work = df[required].apply(pd.to_numeric, errors="coerce")
+        cols = list(required)
+        has_tau_ri = "tau_ri" in df.columns
+        if has_tau_ri:
+            cols.append("tau_ri")
+
+        work = df[cols].apply(pd.to_numeric, errors="coerce")
         if work.isna().any().any():
             raise ValueError("Fractional parameters contain non-numeric or empty values.")
+
+        if not has_tau_ri:
+            work["tau_ri"] = [self._reference_stress_for_fraction(d_i) for d_i in work["di"]]
+
         if (work["tau_ri"] <= 0).any():
             raise ValueError("All tau_ri values must be greater than zero.")
         fi_sum = float(work["Fi"].sum())

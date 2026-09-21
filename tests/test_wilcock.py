@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import pandas as pd
 
@@ -10,6 +12,21 @@ def _model():
     model = FractionalModel()
     model.load_fractional_parameters(df_frac)
     return model
+
+
+def test_tau_ri_fallback_uses_wilcock_crowe():
+    df_frac = read_table(resource_path("inputs", "fractional_parameters.csv"))
+    df_no_tau = df_frac.drop(columns=["tau_ri"])
+    model = FractionalModel()
+    model.load_fractional_parameters(df_no_tau)
+
+    tau_rm_star = 0.021 + 0.015 * math.exp(-20 * model.f_s)
+    tau_rm = tau_rm_star * (model.s - 1) * model.rho_w * model.g * model.d50
+    expected = []
+    for d_i in df_no_tau["di"]:
+        b = 0.67 / (1 + math.exp(1.5 - (d_i / model.d50)))
+        expected.append(tau_rm * math.pow((d_i / model.d50), b))
+    np.testing.assert_allclose(model._tau_ri, expected, rtol=1e-12, atol=1e-12)
 
 
 def test_vectorized_matches_scalar_kernel():
