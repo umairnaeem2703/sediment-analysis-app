@@ -72,12 +72,27 @@ class YieldCalculator:
         cem_sio = self.calculate_cem_sio(slope)
         return (usda_sio + cem_sio) / 2.0
 
-    def raster_mean_t_ha_yr(self, raster_array: np.ndarray) -> float:
+    def raster_mean_t_ha_yr(self, raster_array: np.ndarray, nodata_value: float = -9999.0, basin_mask: np.ndarray = None) -> float:
+        """
+        Calculates the mean of the valid pixels inside the basin, ignoring NoData 
+        backgrounds and areas outside the provided mask.
+        """
         raster = np.asarray(raster_array, dtype=float)
-        finite = raster[np.isfinite(raster)]
-        if finite.size == 0:
+        
+        # 1. Filter out non-finite values and the specific NoData value
+        valid_pixels = np.isfinite(raster) & (raster != nodata_value)
+        
+        # 2. If a specific basin shape mask is provided, isolate only those pixels
+        if basin_mask is not None:
+            valid_pixels = valid_pixels & np.asarray(basin_mask, dtype=bool)
+            
+        # 3. Extract the clean data array
+        basin_data = raster[valid_pixels]
+        
+        if basin_data.size == 0:
             return 0.0
-        return float(np.mean(finite))
+            
+        return float(np.mean(basin_data))
 
     def calculate_metrics(self, raster_mean_t_ha_yr: float, area_km2: float, slope: float):
         """Gross mass = mean (t/ha/yr) * ik; yield mass applies average SIO."""
