@@ -613,22 +613,26 @@ class SedimentApp:
 
         self._clear_wc_display()
         summary_df = BedloadVisualizer.prepare_summary_table(self.annual_summary)
-        columns = ("Year", "Annual Average Flow (m3/s)", "Annual Average Bedload (m3/s/m)")
+        columns = list(summary_df.columns)
         tree = ttk.Treeview(self.wc_graph_frame, columns=columns, show="headings", height=max(8, min(15, len(summary_df))))
         for col in columns:
             tree.heading(col, text=col)
-            tree.column(col, width=200 if "Flow" in col or "Bedload" in col else 100, anchor="center")
+            width = 180 if "Flow" in col or "Bedload" in col else 100
+            tree.column(col, width=width, anchor="center")
 
         for _, row in summary_df.iterrows():
-            tree.insert(
-                "",
-                "end",
-                values=(
-                    int(row["Year"]),
-                    f"{float(row['Annual Average Flow (m3/s)']):.4f}",
-                    f"{float(row['Annual Average Bedload (m3/s/m)']):.6f}",
-                ),
-            )
+            values = []
+            for col_name in columns:
+                value = row[col_name]
+                if col_name == "Year":
+                    values.append(int(value))
+                elif "Flow" in col_name:
+                    values.append(f"{float(value):.4f}")
+                elif "Bedload" in col_name:
+                    values.append(f"{float(value):.6f}")
+                else:
+                    values.append(value)
+            tree.insert("", "end", values=tuple(values))
 
         tree_scroll = ttk.Scrollbar(self.wc_graph_frame, orient="vertical", command=tree.yview)
         tree.configure(yscrollcommand=tree_scroll.set)

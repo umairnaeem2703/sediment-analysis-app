@@ -1,5 +1,4 @@
 import math
-
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -62,6 +61,7 @@ class FractionalModel:
         w_star = np.where(low, 0.002 * np.power(phi, 7.5), w_star)
         w_star = np.where(high, 14.0 * np.power(1.0 - (0.894 / np.where(high, phi, 1.0)), 4.5), w_star)
 
+        # Calculates intermediate volumetric transport rate per unit width (m2/s)
         q_bi = (w_star * self._fi[None, :] * np.power(u_star[:, None], 3)) / ((self.s - 1.0) * self.g)
         total = q_bi.sum(axis=1)
         return np.where(tau == 0.0, 0.0, total)
@@ -137,25 +137,34 @@ class TimeSeriesAggregator:
         try:
             df["Date"] = pd.to_datetime(df["Date"], format="%d/%m/%Y")
         except (ValueError, TypeError):
-            # Fallback: allow pandas to infer common formats, with day-first preference
             df["Date"] = pd.to_datetime(df["Date"], dayfirst=True)
+            
         df["Year"] = df["Date"].dt.year
-        df["Daily_Bedload"] = self.model.compute_transport_series(df["Flow Q (m3/s)"].to_numpy(dtype=float))
+        
+        # Calculate intermediate daily m2/s rate
+        df["Daily_Bedload_Rate"] = self.model.compute_transport_series(df["Flow Q (m3/s)"].to_numpy(dtype=float))
 
+        # Extract annual mean flow and mean transport rate
         annual_summary = df.groupby("Year", as_index=True).agg(
             Annual_Average_Flow=("Flow Q (m3/s)", "mean"),
-            Annual_Average_Bedload=("Daily_Bedload", "mean"),
+            Average_Rate_m2_s=("Daily_Bedload_Rate", "mean"),
         )
+
+        annual_summary["Annual_Average_Bedload"] = annual_summary["Average_Rate_m2_s"]
+
+        # Extrapolate gap-safe mean to true total annual volume
+        annual_summary["Annual_Total_Bedload"] = (
+            annual_summary["Average_Rate_m2_s"] * self.model.bed_width * SECONDS_PER_YEAR
+        )
+
         return annual_summary
 
     def to_phase3_handoff(self, annual_summary: pd.DataFrame) -> pd.DataFrame:
-        """Convert mean volumetric rate (m3/s per unit width) to annual volume."""
+        """Hand off the pre-calculated total annual volume."""
         if annual_summary.empty:
             raise ValueError("Annual summary is empty.")
         handoff = annual_summary.reset_index()
-        handoff["Bedload_Volume_m3"] = (
-            handoff["Annual_Average_Bedload"] * self.model.bed_width * SECONDS_PER_YEAR
-        )
+        handoff["Bedload_Volume_m3"] = handoff["Annual_Total_Bedload"]
         return handoff[["Year", "Bedload_Volume_m3"]]
 
 
@@ -168,17 +177,18 @@ class BedloadVisualizer:
         display = df_summary.reset_index().copy()
         if "Year" not in display.columns:
             display = display.rename(columns={display.columns[0]: "Year"})
-        required = ["Year", "Annual_Average_Flow", "Annual_Average_Bedload"]
+            
+        required = ["Year", "Annual_Average_Flow", "Annual_Total_Bedload"]
         missing = [col for col in required if col not in display.columns]
         if missing:
             raise KeyError(f"Annual summary is missing required columns: {missing}")
 
-        table = display[["Year", "Annual_Average_Flow", "Annual_Average_Bedload"]].copy()
+        table = display[["Year", "Annual_Average_Flow", "Annual_Total_Bedload"]].copy()
         table = table.rename(
             columns={
                 "Year": "Year",
                 "Annual_Average_Flow": "Annual Average Flow (m3/s)",
-                "Annual_Average_Bedload": "Annual Average Bedload (m3/s/m)",
+                "Annual_Total_Bedload": "Annual Total Bedload (m3/year)",
             }
         )
         return table
@@ -192,8 +202,10 @@ class BedloadVisualizer:
     def generate_trend_graph(self, df_summary: pd.DataFrame):
         if df_summary.empty:
             raise ValueError("Dataframe is empty. Cannot generate plot.")
+            
         fig, ax1 = plt.subplots(figsize=(10, 6))
         years = df_summary.index
+        
         line1 = ax1.plot(years, df_summary["Annual_Average_Flow"], color="blue", marker="o", label="Average Flow")[0]
         ax1.set_xlabel("Year", fontweight="bold")
         ax1.set_ylabel("Annual Average Flow (m³/s)", color="blue", fontweight="bold")
@@ -202,11 +214,13 @@ class BedloadVisualizer:
 
         ax2 = ax1.twinx()
         line2 = ax2.plot(
-            years, df_summary["Annual_Average_Bedload"], color="red", marker="s", label="Average Bedload"
+            years, df_summary["Annual_Total_Bedload"], color="red", marker="s", label="Total Bedload"
         )[0]
-        ax2.set_ylabel("Annual Average Bedload (m³/s / m)", color="red", fontweight="bold")
+        ax2.set_ylabel("Annual Total Bedload (m³/year)", color="red", fontweight="bold")
         ax2.tick_params(axis="y", labelcolor="red")
+        
         ax1.legend([line1, line2], [line1.get_label(), line2.get_label()], loc="upper left")
         ax1.set_title("Annual Flow vs. Bedload Transport Trends", fontweight="bold", pad=15)
         fig.tight_layout()
+        
         return fig
