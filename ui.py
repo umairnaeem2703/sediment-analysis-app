@@ -8,12 +8,13 @@ import matplotlib
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.patches import Patch
 
 import pandas as pd
 
 from paths import load_raster_matrix, read_table, resource_path
 from reporter import IntegrationModule
-from rusle_enginer import SpatialProcessor, YieldCalculator
+from rusle_engine import SpatialProcessor, YieldCalculator
 from wilcock_engine import BedloadVisualizer, FractionalModel, TimeSeriesAggregator
 
 
@@ -29,6 +30,7 @@ class SedimentApp:
         self.rgb_raster = None
         self.rusle_metrics = None
         self.rusle_row_metrics = None
+        self.rusle_results_df = None
         self._cell_editor = None
         self._edit_iid = None
         self._edit_col_idx = None
@@ -52,19 +54,8 @@ class SedimentApp:
         self.setup_integration_tab()
 
     def load_startup_data(self):
-        default_basin = resource_path("inputs", "test_1_rusle.csv")
-        self.default_basin_path = str(default_basin) if default_basin.exists() else ""
-
-        default_raster = resource_path("inputs", "test_raster_matrix.csv")
-        if default_raster.exists():
-            try:
-                self.raster_array = load_raster_matrix(str(default_raster))
-                self.default_raster_path = str(default_raster)
-            except Exception as exc:
-                self.default_raster_path = ""
-                messagebox.showwarning("Raster Load", f"Could not load default raster matrix:\n\n{exc}")
-        else:
-            self.default_raster_path = ""
+        self.default_basin_path = ""
+        self.default_raster_path = ""
 
     def setup_rusle_tab(self):
         self.rusle_frame = ttk.Frame(self.notebook)
@@ -118,7 +109,7 @@ class SedimentApp:
         )
         self.btn_export_tif.pack(side=tk.LEFT, padx=6)
         self.btn_export_phase2 = ttk.Button(
-            button_row, text="Export Phase 2 CSV", command=self.export_phase2_csv, state="disabled"
+            button_row, text="Export Yield Results CSV", command=self.export_yield_results_csv, state="disabled"
         )
         self.btn_export_phase2.pack(side=tk.LEFT, padx=6)
         ttk.Button(button_row, text="Export 10-class CSV", command=self.export_10_class_csv).pack(side=tk.LEFT, padx=6)
@@ -126,14 +117,17 @@ class SedimentApp:
         results_wrap = ttk.Frame(self.rusle_frame)
         results_wrap.grid(row=4, column=0, columnspan=3, padx=10, pady=8, sticky="nsew")
 
-        cols = ("basin", "subbasin", "year", "yield_t_yr", "volume_m3_yr", "sp_yield_m3_yr_km2")
+        cols = ("basin", "subbasin", "year", "usda_scs_sio", "cem_sio", "avg_sio", "yield_t_yr", "volume_m3_yr", "sp_yield_m3_yr_km2")
         self.results_tree = ttk.Treeview(results_wrap, columns=cols, show="headings", height=8)
         self.results_tree.heading("basin", text="Basin")
         self.results_tree.heading("subbasin", text="Sub-Basin")
         self.results_tree.heading("year", text="Year")
-        self.results_tree.heading("yield_t_yr", text="Yield (t/yr)")
-        self.results_tree.heading("volume_m3_yr", text="Volume (m³/yr)")
-        self.results_tree.heading("sp_yield_m3_yr_km2", text="Sp. Yield (m³/yr/km²)")
+        self.results_tree.heading("usda_scs_sio", text="USDA-SCS SIO")
+        self.results_tree.heading("cem_sio", text="CEM SIO")
+        self.results_tree.heading("avg_sio", text="Average SIO")
+        self.results_tree.heading("yield_t_yr", text="Transported Mass (t/yr)")
+        self.results_tree.heading("volume_m3_yr", text="Transported Volume (m³/yr)")
+        self.results_tree.heading("sp_yield_m3_yr_km2", text="Specific Yield (m³/yr/km²)")
 
         # reasonable column sizing
         self.results_tree.column("basin", width=180, anchor="w")
@@ -142,6 +136,9 @@ class SedimentApp:
         self.results_tree.column("yield_t_yr", width=120, anchor="e")
         self.results_tree.column("volume_m3_yr", width=140, anchor="e")
         self.results_tree.column("sp_yield_m3_yr_km2", width=160, anchor="e")
+        self.results_tree.column("usda_scs_sio", width=120, anchor="e")
+        self.results_tree.column("cem_sio", width=100, anchor="e")
+        self.results_tree.column("avg_sio", width=110, anchor="e")
 
         results_scroll = ttk.Scrollbar(results_wrap, orient="vertical", command=self.results_tree.yview)
         self.results_tree.configure(yscrollcommand=results_scroll.set)
@@ -150,12 +147,6 @@ class SedimentApp:
         self.rusle_frame.columnconfigure(1, weight=1)
         self.rusle_frame.rowconfigure(1, weight=1)
         self.rusle_frame.rowconfigure(4, weight=1)
-
-        if getattr(self, "default_basin_path", ""):
-            try:
-                self._populate_basin_tree(self.default_basin_path, show_errors=False)
-            except Exception as exc:
-                messagebox.showwarning("Basin Load", f"Could not load default basin table:\n\n{exc}")
 
     def setup_wc_tab(self):
         self.wc_frame = ttk.Frame(self.notebook)
@@ -419,6 +410,7 @@ class SedimentApp:
                 handoff_frames.append(self.yield_calc.to_phase2_handoff(year, metrics["volume_m3"]))
 
             self.rusle_row_metrics = row_metrics
+            self.rusle_results_df = pd.DataFrame(row_metrics)
             self.rusle_metrics = row_metrics[0] if row_metrics else None
             self.phase2_df = (
                 pd.concat(handoff_frames, ignore_index=True)
@@ -447,6 +439,9 @@ class SedimentApp:
             basin = m.get("basin", "")
             subbasin = m.get("subbasin", "")
             year = m.get("year", "")
+            usda_sio = m.get("usda_scs_sio", 0.0)
+            cem_sio = m.get("cem_sio", 0.0)
+            avg_sio = m.get("avg_sio", 0.0)
             mass = m.get("yield_mass_t", 0.0)
             volume = m.get("volume_m3", 0.0)
             sp_yield = m.get("specific_yield_m3_km2", 0.0)
@@ -458,6 +453,9 @@ class SedimentApp:
                     basin,
                     subbasin,
                     year,
+                    f"{usda_sio:.4f}",
+                    f"{cem_sio:.4f}",
+                    f"{avg_sio:.4f}",
                     f"{mass:.2f}",
                     f"{volume:.2f}",
                     f"{sp_yield:.2f}",
@@ -470,10 +468,38 @@ class SedimentApp:
         if self._rusle_preview_fig is not None:
             plt.close(self._rusle_preview_fig)
 
-        self._rusle_preview_fig, ax = plt.subplots(figsize=(5, 4))
+        self._rusle_preview_fig, ax = plt.subplots(figsize=(6.5, 4.5))
         ax.imshow(self.rgb_raster)
         ax.set_title("5-class RGB preview")
         ax.axis("off")
+
+        class_labels = [
+            "Class 1: <= 1",
+            "Class 2: 1-5",
+            "Class 3: 5-10",
+            "Class 4: 10-20",
+            "Class 5: > 20",
+        ]
+        legend_handles = [
+            Patch(
+                facecolor=np.array(self.spatial.colormap_5_class[class_id]) / 255.0,
+                edgecolor="black",
+                linewidth=0.5,
+                label=label,
+            )
+            for class_id, label in zip(range(1, 6), class_labels)
+        ]
+        legend = ax.legend(
+            handles=legend_handles,
+            title="Erosion class",
+            loc="center left",
+            bbox_to_anchor=(1.0, 0.5),
+            frameon=True,
+        )
+        legend.get_frame().set_facecolor("white")
+        legend.get_frame().set_alpha(0.9)
+
+        self._rusle_preview_fig.subplots_adjust(right=0.78)
         self._rusle_preview_fig.tight_layout()
 
         self._rusle_preview_window = tk.Toplevel(self.root)
@@ -512,19 +538,48 @@ class SedimentApp:
             np.savetxt(save_path, classified, delimiter=",", fmt="%d")
             messagebox.showinfo("Success", f"10-class matrix saved to:\n{save_path}")
 
-    def export_phase2_csv(self):
-        if self.phase2_df is None:
+    def export_yield_results_csv(self):
+        if self.rusle_results_df is None or self.rusle_results_df.empty:
             messagebox.showerror("Export Error", "Run Classify & Compute Yield first.")
             return
         save_path = filedialog.asksaveasfilename(
-            title="Save Phase 2 (Suspended Yield)",
+            title="Save Yield Results CSV",
             defaultextension=".csv",
             filetypes=[("CSV", "*.csv")],
         )
         if save_path:
-            self.phase2_df.to_csv(save_path, index=False)
-            self.phase2_file_var.set(save_path)
-            messagebox.showinfo("Success", f"Phase 2 handoff saved to:\n{save_path}")
+            export_df = self.rusle_results_df[
+                [
+                    "basin",
+                    "subbasin",
+                    "year",
+                    "area_km2",
+                    "slope",
+                    "usda_scs_sio",
+                    "cem_sio",
+                    "avg_sio",
+                    "yield_mass_t",
+                    "volume_m3",
+                    "specific_yield_m3_km2",
+                ]
+            ].copy()
+            export_df = export_df.rename(
+                columns={
+                    "basin": "Basin",
+                    "subbasin": "Sub-Basin",
+                    "year": "Year",
+                    "area_km2": "Area_km2",
+                    "slope": "Slope_m_per_m",
+                    "usda_scs_sio": "USDA-SCS_SIO",
+                    "cem_sio": "CEM_SIO",
+                    "avg_sio": "Average_SIO",
+                    "yield_mass_t": "Yield_t_yr",
+                    "volume_m3": "Transported_Volume_m3_yr",
+                    "specific_yield_m3_km2": "Specific_Yield_m3_yr_km2",
+                }
+            )
+            export_df.to_csv(save_path, index=False)
+            messagebox.showinfo("Success", f"Yield results saved to:\n{save_path}")
 
     def execute_wc_analysis(self):
         if self._wc_running:

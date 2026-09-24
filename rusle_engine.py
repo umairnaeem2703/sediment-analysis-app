@@ -80,19 +80,31 @@ class YieldCalculator:
         return float(np.mean(finite))
 
     def calculate_metrics(self, raster_mean_t_ha_yr: float, area_km2: float, slope: float):
-        """Gross mass = mean (t/ha/yr) * area_ha; yield mass applies average SIO."""
+        """Gross mass = mean (t/ha/yr) * ik; yield mass applies average SIO."""
         if area_km2 <= 0:
             raise ValueError("Basin area must be greater than zero.")
+        if raster_mean_t_ha_yr < 0:
+            raise ValueError("Mean erosion rate must be non-negative.")
+        if self.bulk_density <= 0:
+            raise ValueError("Bulk density must be greater than zero.")
+        
         area_ha = area_km2 * HA_PER_KM2
         gross_mass_t = raster_mean_t_ha_yr * area_ha
+
+        usda_sio = self.calculate_usda_scs_sio(area_km2)
+        cem_sio = self.calculate_cem_sio(slope)
         avg_sio = self.calculate_average_sio(area_km2, slope)
+
         yield_mass_t = gross_mass_t * avg_sio
         volume_m3 = yield_mass_t / self.bulk_density
         specific_yield = volume_m3 / area_km2
+
         return {
             "raster_mean_t_ha_yr": raster_mean_t_ha_yr,
             "area_ha": area_ha,
             "gross_mass_t": gross_mass_t,
+            "usda_scs_sio": usda_sio,
+            "cem_sio": cem_sio,
             "avg_sio": avg_sio,
             "yield_mass_t": yield_mass_t,
             "volume_m3": volume_m3,

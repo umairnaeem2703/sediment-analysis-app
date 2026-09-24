@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from paths import load_raster_matrix, resource_path
-from rusle_enginer import HA_PER_KM2, SpatialProcessor, YieldCalculator
+from rusle_engine import HA_PER_KM2, SpatialProcessor, YieldCalculator
 
 
 def test_digitize_20_is_class_4():
