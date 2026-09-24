@@ -179,6 +179,14 @@ class SedimentApp:
             wc_buttons, text="Execute & Export Trend Graph", command=self.execute_wc_analysis
         )
         self.btn_export_png.pack(side=tk.LEFT, padx=6)
+        self.btn_show_summary = ttk.Button(
+            wc_buttons, text="Display Summary Table", command=self.display_wc_summary_table
+        )
+        self.btn_show_summary.pack(side=tk.LEFT, padx=6)
+        self.btn_export_summary = ttk.Button(
+            wc_buttons, text="Export Summary CSV", command=self.export_wc_summary_csv, state="disabled"
+        )
+        self.btn_export_summary.pack(side=tk.LEFT, padx=6)
         self.btn_export_phase3 = ttk.Button(
             wc_buttons, text="Export Phase 3 CSV", command=self.export_phase3_csv, state="disabled"
         )
@@ -190,6 +198,7 @@ class SedimentApp:
         self.wc_graph_frame = ttk.Frame(self.wc_frame)
         self.wc_graph_frame.grid(row=4, column=0, columnspan=2, sticky="nsew", padx=10, pady=6)
         self.wc_frame.rowconfigure(4, weight=1)
+
     def setup_integration_tab(self):
         self.integration_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.integration_frame, text="Integration & Handoff")
@@ -597,6 +606,103 @@ class SedimentApp:
             export_df.to_csv(save_path, index=False)
             messagebox.showinfo("Success", f"Yield results saved to:\n{save_path}")
 
+    def display_wc_summary_table(self):
+        if self.annual_summary is None or self.annual_summary.empty:
+            messagebox.showerror("Summary Error", "Run the Wilcock analysis first.")
+            return
+
+        self._clear_wc_display()
+        summary_df = BedloadVisualizer.prepare_summary_table(self.annual_summary)
+        columns = ("Year", "Annual Average Flow (m3/s)", "Annual Average Bedload (m3/s/m)")
+        tree = ttk.Treeview(self.wc_graph_frame, columns=columns, show="headings", height=max(8, min(15, len(summary_df))))
+        for col in columns:
+            tree.heading(col, text=col)
+            tree.column(col, width=200 if "Flow" in col or "Bedload" in col else 100, anchor="center")
+
+        for _, row in summary_df.iterrows():
+            tree.insert(
+                "",
+                "end",
+                values=(
+                    int(row["Year"]),
+                    f"{float(row['Annual Average Flow (m3/s)']):.4f}",
+                    f"{float(row['Annual Average Bedload (m3/s/m)']):.6f}",
+                ),
+            )
+
+        tree_scroll = ttk.Scrollbar(self.wc_graph_frame, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=tree_scroll.set)
+        tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        tree_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.btn_export_summary.config(state="normal")
+        self.wc_status_var.set("Summary table displayed.")
+
+    def _clear_wc_display(self):
+        for child in list(self.wc_graph_frame.winfo_children()):
+            try:
+                child.destroy()
+            except Exception:
+                pass
+
+        if self._wc_fig is not None:
+            try:
+                plt.close(self._wc_fig)
+            except Exception:
+                pass
+        self._wc_fig = None
+
+    def _render_wc_graph(self):
+        if self.annual_summary is None or self.annual_summary.empty:
+            messagebox.showerror("Graph Error", "Run the Wilcock analysis first.")
+            return
+
+        self._clear_wc_display()
+        try:
+            visualizer = BedloadVisualizer()
+            fig = visualizer.generate_trend_graph(self.annual_summary)
+        except Exception as exc:
+            self.wc_status_var.set("Failed")
+            messagebox.showerror("Visualization Error", f"Could not generate plot:\n\n{exc}")
+            return
+
+        self._wc_fig = fig
+        canvas = FigureCanvasTkAgg(fig, master=self.wc_graph_frame)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+        def save_fig():
+            save_path = filedialog.asksaveasfilename(
+                title="Save Trend Graph", defaultextension=".png", filetypes=[("PNG Image", "*.png")]
+            )
+            if save_path:
+                try:
+                    fig.savefig(save_path, dpi=300, bbox_inches="tight")
+                    messagebox.showinfo("Success", f"Graph successfully saved to:\n{save_path}")
+                except Exception as exc:
+                    messagebox.showerror("Export Error", str(exc))
+
+        ttk.Button(self.wc_graph_frame, text="Export as PNG", command=save_fig).pack(pady=6)
+        self.wc_status_var.set("Graph displayed.")
+
+    def export_wc_summary_csv(self):
+        if self.annual_summary is None or self.annual_summary.empty:
+            messagebox.showerror("Export Error", "Run the Wilcock analysis first.")
+            return
+
+        save_path = filedialog.asksaveasfilename(
+            title="Save Annual Summary CSV",
+            defaultextension=".csv",
+            filetypes=[("CSV", "*.csv")],
+        )
+        if save_path:
+            try:
+                BedloadVisualizer.export_summary_csv(self.annual_summary, save_path)
+                messagebox.showinfo("Success", f"Annual summary saved to:\n{save_path}")
+            except Exception as exc:
+                messagebox.showerror("Export Error", str(exc))
+
+        self.wc_status_var.set("Summary exported.")
+
     def execute_wc_analysis(self):
         if self._wc_running:
             return
@@ -609,6 +715,7 @@ class SedimentApp:
         self._wc_running = True
         self.btn_export_png.config(state="disabled")
         self.btn_export_phase3.config(state="disabled")
+        self.btn_export_summary.config(state="disabled")
         self.wc_status_var.set("Running daily bedload on a background thread...")
 
         def worker():
@@ -638,49 +745,9 @@ class SedimentApp:
         self.annual_summary = annual_summary
         self.phase3_df = phase3_df
         self.btn_export_phase3.config(state="normal")
+        self.btn_export_summary.config(state="normal")
 
-        # Embed the generated Matplotlib figure into the inline WC graph frame
-        try:
-            visualizer = BedloadVisualizer()
-            fig = visualizer.generate_trend_graph(annual_summary)
-        except Exception as exc:
-            self.wc_status_var.set("Failed")
-            messagebox.showerror("Visualization Error", f"Could not generate plot:\n\n{exc}")
-            return
-
-        # clear previous inline widgets (canvas, buttons)
-        for child in list(self.wc_graph_frame.winfo_children()):
-            try:
-                child.destroy()
-            except Exception:
-                pass
-
-        # close previous figure if present
-        if self._wc_fig is not None:
-            try:
-                plt.close(self._wc_fig)
-            except Exception:
-                pass
-
-        self._wc_fig = fig
-
-        canvas = FigureCanvasTkAgg(fig, master=self.wc_graph_frame)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-
-        def save_fig():
-            save_path = filedialog.asksaveasfilename(
-                title="Save Trend Graph", defaultextension=".png", filetypes=[("PNG Image", "*.png")]
-            )
-            if save_path:
-                try:
-                    fig.savefig(save_path, dpi=300, bbox_inches="tight")
-                    messagebox.showinfo("Success", f"Graph successfully saved to:\n{save_path}")
-                except Exception as exc:
-                    messagebox.showerror("Export Error", str(exc))
-
-        ttk.Button(self.wc_graph_frame, text="Export as PNG", command=save_fig).pack(pady=6)
-        self.wc_status_var.set("Complete — plot embedded.")
+        self._render_wc_graph()
 
     def export_phase3_csv(self):
         if self.phase3_df is None:

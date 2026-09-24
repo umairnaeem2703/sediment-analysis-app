@@ -160,6 +160,35 @@ class TimeSeriesAggregator:
 
 
 class BedloadVisualizer:
+    @staticmethod
+    def prepare_summary_table(df_summary: pd.DataFrame) -> pd.DataFrame:
+        if df_summary is None or df_summary.empty:
+            raise ValueError("Dataframe is empty. Cannot generate summary table.")
+
+        display = df_summary.reset_index().copy()
+        if "Year" not in display.columns:
+            display = display.rename(columns={display.columns[0]: "Year"})
+        required = ["Year", "Annual_Average_Flow", "Annual_Average_Bedload"]
+        missing = [col for col in required if col not in display.columns]
+        if missing:
+            raise KeyError(f"Annual summary is missing required columns: {missing}")
+
+        table = display[["Year", "Annual_Average_Flow", "Annual_Average_Bedload"]].copy()
+        table = table.rename(
+            columns={
+                "Year": "Year",
+                "Annual_Average_Flow": "Annual Average Flow (m3/s)",
+                "Annual_Average_Bedload": "Annual Average Bedload (m3/s/m)",
+            }
+        )
+        return table
+
+    @staticmethod
+    def export_summary_csv(df_summary: pd.DataFrame, save_path: str):
+        table = BedloadVisualizer.prepare_summary_table(df_summary)
+        table.to_csv(save_path, index=False)
+        return table
+
     def generate_trend_graph(self, df_summary: pd.DataFrame):
         if df_summary.empty:
             raise ValueError("Dataframe is empty. Cannot generate plot.")
