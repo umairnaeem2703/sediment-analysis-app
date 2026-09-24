@@ -72,9 +72,10 @@ class SedimentApp:
 
         tree_wrap = ttk.Frame(self.rusle_frame)
         tree_wrap.grid(row=1, column=0, columnspan=3, padx=5, pady=6, sticky="nsew")
-        columns = ("basin", "subbasin", "year", "area", "slope")
+        columns = ("dam", "basin", "subbasin", "year", "area", "slope")
         self.basin_tree = ttk.Treeview(tree_wrap, columns=columns, show="headings", height=10)
         headings = {
+            "dam": "Dam Name",
             "basin": "Basin",
             "subbasin": "Sub-Basin",
             "year": "Year",
@@ -90,13 +91,13 @@ class SedimentApp:
         tree_scroll.pack(side=tk.RIGHT, fill="y")
         self.basin_tree.bind("<Double-1>", self._on_basin_tree_double_click)
 
-        ttk.Label(self.rusle_frame, text="Raster matrix CSV:").grid(row=2, column=0, padx=5, pady=6, sticky="w")
+        # Place the raster browse button in the left column (replacing the label)
         self.raster_file_var = tk.StringVar(value=getattr(self, "default_raster_path", ""))
-        ttk.Entry(self.rusle_frame, textvariable=self.raster_file_var, width=50, state="readonly").grid(
-            row=2, column=1, padx=5, sticky="ew"
-        )
         ttk.Button(self.rusle_frame, text="Browse Raster CSV", command=self.browse_raster).grid(
-            row=2, column=2, padx=5, pady=6
+            row=2, column=0, padx=5, pady=6, sticky="w"
+        )
+        ttk.Entry(self.rusle_frame, textvariable=self.raster_file_var, width=50, state="readonly").grid(
+            row=2, column=1, padx=5, pady=6, sticky="ew"
         )
 
         button_row = ttk.Frame(self.rusle_frame)
@@ -117,8 +118,9 @@ class SedimentApp:
         results_wrap = ttk.Frame(self.rusle_frame)
         results_wrap.grid(row=4, column=0, columnspan=3, padx=10, pady=8, sticky="nsew")
 
-        cols = ("basin", "subbasin", "year", "usda_scs_sio", "cem_sio", "avg_sio", "yield_t_yr", "volume_m3_yr", "sp_yield_m3_yr_km2")
+        cols = ("dam", "basin", "subbasin", "year", "usda_scs_sio", "cem_sio", "avg_sio", "yield_t_yr", "volume_m3_yr", "sp_yield_m3_yr_km2")
         self.results_tree = ttk.Treeview(results_wrap, columns=cols, show="headings", height=8)
+        self.results_tree.heading("dam", text="Dam Name")
         self.results_tree.heading("basin", text="Basin")
         self.results_tree.heading("subbasin", text="Sub-Basin")
         self.results_tree.heading("year", text="Year")
@@ -130,6 +132,7 @@ class SedimentApp:
         self.results_tree.heading("sp_yield_m3_yr_km2", text="Specific Yield (m³/yr/km²)")
 
         # reasonable column sizing
+        self.results_tree.column("dam", width=180, anchor="w")
         self.results_tree.column("basin", width=180, anchor="w")
         self.results_tree.column("subbasin", width=180, anchor="w")
         self.results_tree.column("year", width=80, anchor="center")
@@ -279,6 +282,7 @@ class SedimentApp:
             )
 
             for idx, row in work.iterrows():
+                dam_name = row["Dam Name"] if "Dam Name" in work.columns else ""
                 basin = row["Basin Name"]
                 subbasin = row["Sub-basin Name"]
                 if pd.isna(basin) or pd.isna(subbasin):
@@ -287,7 +291,11 @@ class SedimentApp:
                 slope_val = slopes.iloc[idx] if idx < len(slopes) else pd.NA
                 area_text = "" if pd.isna(area_val) else str(float(area_val))
                 slope_text = "" if pd.isna(slope_val) else str(float(slope_val))
-                self.basin_tree.insert("", "end", values=(str(basin), str(subbasin), str(year), area_text, slope_text))
+                self.basin_tree.insert(
+                    "",
+                    "end",
+                    values=(str(dam_name), str(basin), str(subbasin), str(year), area_text, slope_text),
+                )
 
             self.basin_file_var.set(file_path)
         except Exception as exc:
@@ -345,7 +353,7 @@ class SedimentApp:
         col_idx = self._edit_col_idx
         new_value = self._cell_editor.get()
         values = list(self.basin_tree.item(iid, "values"))
-        while len(values) < 5:
+        while len(values) < 6:
             values.append("")
         values[col_idx] = new_value
         self.basin_tree.item(iid, values=values)
@@ -375,8 +383,10 @@ class SedimentApp:
 
         rows = []
         for iid in children:
-            values = self.basin_tree.item(iid, "values")
-            basin, subbasin, year_s, area_s, slope_s = (list(values) + [""] * 5)[:5]
+            values = list(self.basin_tree.item(iid, "values"))
+            while len(values) < 6:
+                values.append("")
+            dam_name, basin, subbasin, year_s, area_s, slope_s = values[:6]
             if not str(slope_s).strip():
                 raise ValueError(f"Slope (m/m) is required for {basin} / {subbasin}.")
             year = int(year_s)
@@ -384,7 +394,7 @@ class SedimentApp:
             slope = float(slope_s)
             if area_km2 <= 0:
                 raise ValueError(f"Basin area must be greater than zero for {basin} / {subbasin}.")
-            rows.append((str(basin), str(subbasin), year, area_km2, slope))
+            rows.append((str(dam_name), str(basin), str(subbasin), year, area_km2, slope))
         return rows
 
     def execute_rusle_analysis(self):
@@ -395,10 +405,11 @@ class SedimentApp:
 
             row_metrics = []
             handoff_frames = []
-            for basin, subbasin, year, area_km2, slope in basin_rows:
+            for dam_name, basin, subbasin, year, area_km2, slope in basin_rows:
                 metrics = self.yield_calc.calculate_metrics(mean_t_ha, area_km2, slope)
                 row_metrics.append(
                     {
+                        "dam": dam_name,
                         "basin": basin,
                         "subbasin": subbasin,
                         "year": year,
@@ -408,6 +419,7 @@ class SedimentApp:
                     }
                 )
                 handoff_frames.append(self.yield_calc.to_phase2_handoff(year, metrics["volume_m3"]))
+
 
             self.rusle_row_metrics = row_metrics
             self.rusle_results_df = pd.DataFrame(row_metrics)
@@ -436,6 +448,7 @@ class SedimentApp:
 
         # Insert computed rows into the grid, rounding numeric values to 2 decimals
         for m in rows:
+            dam = m.get("dam", "")
             basin = m.get("basin", "")
             subbasin = m.get("subbasin", "")
             year = m.get("year", "")
@@ -450,6 +463,7 @@ class SedimentApp:
                 "",
                 "end",
                 values=(
+                    dam,
                     basin,
                     subbasin,
                     year,
@@ -550,6 +564,7 @@ class SedimentApp:
         if save_path:
             export_df = self.rusle_results_df[
                 [
+                    "dam",
                     "basin",
                     "subbasin",
                     "year",
@@ -565,6 +580,7 @@ class SedimentApp:
             ].copy()
             export_df = export_df.rename(
                 columns={
+                    "dam": "Dam",
                     "basin": "Basin",
                     "subbasin": "Sub-Basin",
                     "year": "Year",

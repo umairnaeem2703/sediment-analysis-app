@@ -1,5 +1,5 @@
-Basin Name,Sub-basin Name,Area,Main Waterway Slope
-A,A-1,754.2,0.22
-A,A-2,309.2,0.23
-B,B-1,834.7,0.09
-B,B-2,180.2,0.16
+Dam Name,Basin Name,Sub-basin Name,Area,Main Waterway Slope
+Camlidere,A,A-1,754.2,0.22
+Kavakkaya,A,A-2,309.2,0.23
+Cubuk 1,B,B-1,834.7,0.09
+Cubuk 2,B,B-2,180.2,0.16

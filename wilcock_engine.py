@@ -107,18 +107,43 @@ class TimeSeriesAggregator:
         self.model = model
 
     def process_annual_averages(self, df_flow: pd.DataFrame) -> pd.DataFrame:
-        required = ["Date", "Flow"]
-        missing = [col for col in required if col not in df_flow.columns]
-        if missing:
-            raise KeyError(f"Flow table missing columns: {missing}")
+        if df_flow is None or df_flow.empty:
+            raise ValueError("Flow table is empty.")
+
+        normalized = {str(col).strip(): col for col in df_flow.columns}
+        lookup = {str(col).strip().lower(): col for col in df_flow.columns}
+
+        date_col = None
+        for candidate in ["date"]:
+            if candidate in lookup:
+                date_col = lookup[candidate]
+                break
+
+        flow_candidates = ["flow q (m3/s)", "flow", "flow q (m^3/s)"]
+        flow_col = None
+        for candidate in flow_candidates:
+            if candidate in lookup:
+                flow_col = lookup[candidate]
+                break
+
+        if date_col is None or flow_col is None:
+            raise KeyError(
+                "Flow table must contain the columns: Date and Flow Q (m3/s) "
+                "(or the legacy Flow column)."
+            )
 
         df = df_flow.copy()
-        df["Date"] = pd.to_datetime(df["Date"])
+        df = df.rename(columns={date_col: "Date", flow_col: "Flow Q (m3/s)"})
+        try:
+            df["Date"] = pd.to_datetime(df["Date"], format="%d/%m/%Y")
+        except (ValueError, TypeError):
+            # Fallback: allow pandas to infer common formats, with day-first preference
+            df["Date"] = pd.to_datetime(df["Date"], dayfirst=True)
         df["Year"] = df["Date"].dt.year
-        df["Daily_Bedload"] = self.model.compute_transport_series(df["Flow"].to_numpy())
+        df["Daily_Bedload"] = self.model.compute_transport_series(df["Flow Q (m3/s)"].to_numpy(dtype=float))
 
         annual_summary = df.groupby("Year", as_index=True).agg(
-            Annual_Average_Flow=("Flow", "mean"),
+            Annual_Average_Flow=("Flow Q (m3/s)", "mean"),
             Annual_Average_Bedload=("Daily_Bedload", "mean"),
         )
         return annual_summary
