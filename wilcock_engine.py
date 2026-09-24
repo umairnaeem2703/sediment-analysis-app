@@ -152,9 +152,14 @@ class TimeSeriesAggregator:
 
         annual_summary["Annual_Average_Bedload"] = annual_summary["Average_Rate_m2_s"]
 
-        # Extrapolate gap-safe mean to true total annual volume
-        annual_summary["Annual_Total_Bedload"] = (
+        # Maintain the original volume-based result for compatibility with handoff/legacy reporting.
+        annual_summary["Annual_Total_Bedload_m3_yr"] = (
             annual_summary["Average_Rate_m2_s"] * self.model.bed_width * SECONDS_PER_YEAR
+        )
+
+        # Convert the bedload volume to metric tons/year using sediment density.
+        annual_summary["Annual_Average_Bed_Load_metric_tons_yr"] = (
+            annual_summary["Annual_Total_Bedload_m3_yr"] * (self.model.rho_s / 1000.0)
         )
 
         return annual_summary
@@ -164,7 +169,7 @@ class TimeSeriesAggregator:
         if annual_summary.empty:
             raise ValueError("Annual summary is empty.")
         handoff = annual_summary.reset_index()
-        handoff["Bedload_Volume_m3"] = handoff["Annual_Total_Bedload"]
+        handoff["Bedload_Volume_m3"] = handoff["Annual_Total_Bedload_m3_yr"]
         return handoff[["Year", "Bedload_Volume_m3"]]
 
 
@@ -177,18 +182,27 @@ class BedloadVisualizer:
         display = df_summary.reset_index().copy()
         if "Year" not in display.columns:
             display = display.rename(columns={display.columns[0]: "Year"})
-            
-        required = ["Year", "Annual_Average_Flow", "Annual_Total_Bedload"]
+
+        mass_col = "Annual_Average_Bed_Load_metric_tons_yr"
+        if mass_col not in display.columns:
+            if "Annual_Total_Bedload" in display.columns:
+                display[mass_col] = display["Annual_Total_Bedload"] * 2.65
+            elif "Annual_Total_Bedload_m3_yr" in display.columns:
+                display[mass_col] = display["Annual_Total_Bedload_m3_yr"] * 2.65
+            else:
+                raise KeyError("Annual summary is missing bedload mass column.")
+
+        required = ["Year", "Annual_Average_Flow", mass_col]
         missing = [col for col in required if col not in display.columns]
         if missing:
             raise KeyError(f"Annual summary is missing required columns: {missing}")
 
-        table = display[["Year", "Annual_Average_Flow", "Annual_Total_Bedload"]].copy()
+        table = display[["Year", "Annual_Average_Flow", mass_col]].copy()
         table = table.rename(
             columns={
                 "Year": "Year",
                 "Annual_Average_Flow": "Annual Average Flow (m3/s)",
-                "Annual_Total_Bedload": "Annual Total Bedload (m3/year)",
+                mass_col: "Annual Average Bed Load (metric tons/year)",
             }
         )
         return table
@@ -202,25 +216,36 @@ class BedloadVisualizer:
     def generate_trend_graph(self, df_summary: pd.DataFrame):
         if df_summary.empty:
             raise ValueError("Dataframe is empty. Cannot generate plot.")
-            
+
         fig, ax1 = plt.subplots(figsize=(10, 6))
         years = df_summary.index
-        
+
         line1 = ax1.plot(years, df_summary["Annual_Average_Flow"], color="blue", marker="o", label="Average Flow")[0]
         ax1.set_xlabel("Year", fontweight="bold")
         ax1.set_ylabel("Annual Average Flow (m³/s)", color="blue", fontweight="bold")
         ax1.tick_params(axis="y", labelcolor="blue")
         ax1.grid(True, linestyle="--", alpha=0.6)
 
+        mass_col = "Annual_Average_Bed_Load_metric_tons_yr"
+        if mass_col not in df_summary.columns:
+            if "Annual_Total_Bedload" in df_summary.columns:
+                bedload_series = df_summary["Annual_Total_Bedload"] * 2.65
+            elif "Annual_Total_Bedload_m3_yr" in df_summary.columns:
+                bedload_series = df_summary["Annual_Total_Bedload_m3_yr"] * 2.65
+            else:
+                raise KeyError("Annual summary is missing the bedload mass series for plotting.")
+        else:
+            bedload_series = df_summary[mass_col]
+
         ax2 = ax1.twinx()
         line2 = ax2.plot(
-            years, df_summary["Annual_Total_Bedload"], color="red", marker="s", label="Total Bedload"
+            years, bedload_series, color="red", marker="s", label="Bed Load"
         )[0]
-        ax2.set_ylabel("Annual Total Bedload (m³/year)", color="red", fontweight="bold")
+        ax2.set_ylabel("Annual Average Bed Load (metric tons/year)", color="red", fontweight="bold")
         ax2.tick_params(axis="y", labelcolor="red")
-        
+
         ax1.legend([line1, line2], [line1.get_label(), line2.get_label()], loc="upper left")
-        ax1.set_title("Annual Flow vs. Bedload Transport Trends", fontweight="bold", pad=15)
+        ax1.set_title("Annual Flow vs. Bed Load Trends", fontweight="bold", pad=15)
         fig.tight_layout()
-        
+
         return fig
