@@ -3,50 +3,12 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from PIL import Image
 
 HA_PER_KM2 = 100.0
 
 
-class SpatialProcessor:
-    def __init__(self):
-        # Class 5 is strictly A > 20; 20.0 maps to class 4 with right=True (10 < A <= 20).
-        self.bins_5_class = [1, 5, 10, 20]
-        self.colormap_5_class = {
-            1: (255, 255, 128),
-            2: (250, 209, 85),
-            3: (242, 167, 46),
-            4: (173, 83, 19),
-            5: (107, 0, 0),
-        }
-        self._lut_5 = np.array(
-            [self.colormap_5_class[i] for i in range(1, 6)],
-            dtype=np.uint8,
-        )
-
-    def _finite_raster(self, raster_array: np.ndarray) -> np.ndarray:
-        raster = np.asarray(raster_array, dtype=float)
-        return np.nan_to_num(raster, nan=0.0, posinf=0.0, neginf=0.0)
-
-    def classify_5_classes(self, raster_array: np.ndarray) -> np.ndarray:
-        severity_class = np.digitize(self._finite_raster(raster_array), self.bins_5_class, right=True) + 1
-        return np.clip(severity_class, 1, 5)
-
-    def apply_5_class_colormap(self, raster_array: np.ndarray) -> np.ndarray:
-        severity_class = self.classify_5_classes(raster_array)
-        return self._lut_5[severity_class - 1]
-
-    def export_rgb_tiff(self, rgb_raster: np.ndarray, file_path: str) -> None:
-        """Write a non-georeferenced RGB TIFF or PNG via Pillow (no GDAL/rasterio)."""
-        image = Image.fromarray(np.asarray(rgb_raster, dtype=np.uint8), mode="RGB")
-        dest = Path(file_path)
-        suffix = dest.suffix.lower()
-        if suffix in {".tif", ".tiff"}:
-            image.save(dest, format="TIFF")
-        elif suffix == ".png":
-            image.save(dest, format="PNG")
-        else:
-            image.save(dest.with_suffix(".tif"), format="TIFF")
+# Spatial raster classification and RGB export removed as obsolete.
+# YieldCalculator remains the single source for RUSLE tab calculations.
 
 
 class YieldCalculator:

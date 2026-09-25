@@ -1,7 +1,7 @@
 Dam Name,Basin Name,Sub-basin Name,Area,Main Waterway Slope
-Camlidere,A,1,754.2,0.22
-Kavakkaya,A,2,309.2,0.23
-Cubuk 1,B,3,834.7,0.09
-Cubuk 2,B,4,180.2,0.16
-xyz,C,5,500,0.2
-xyz,C,6,500,0.2
+xyz,A,1,754.2,0.22
+xyz,B,2,309.2,0.23
+xyz,C,3,834.7,0.09
+xyz,D,4,180.2,0.16
+xyz,E,5,500,0.2
+xyz,F,6,500,0.2
