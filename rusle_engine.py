@@ -52,6 +52,18 @@ class SpatialProcessor:
 class YieldCalculator:
     def __init__(self):
         self.bulk_density = 1.3
+        self.reverse_lookup_10_class = {
+            1: 0.5,
+            2: 1.5,
+            3: 3.0,
+            4: 6.0,
+            5: 12.0,
+            6: 23.0,
+            7: 45.0,
+            8: 90.0,
+            9: 210.0,
+            10: 350.0,
+        }
 
     def calculate_usda_scs_sio(self, area_km2: float) -> float:
         if area_km2 <= 0:
@@ -73,20 +85,26 @@ class YieldCalculator:
         backgrounds and areas outside the provided mask.
         """
         raster = np.asarray(raster_array, dtype=float)
-        
+
         # 1. Filter out non-finite values and the specific NoData value
         valid_pixels = np.isfinite(raster) & (raster != nodata_value)
-        
+
         # 2. If a specific basin shape mask is provided, isolate only those pixels
         if basin_mask is not None:
             valid_pixels = valid_pixels & np.asarray(basin_mask, dtype=bool)
-            
+
         # 3. Extract the clean data array
         basin_data = raster[valid_pixels]
-        
+
         if basin_data.size == 0:
             return 0.0
-            
+
+        if np.max(basin_data) <= 10 and np.all(np.equal(basin_data, np.round(basin_data))):
+            mapped_basin_data = np.vectorize(
+                lambda value: self.reverse_lookup_10_class.get(int(value), float(value))
+            )(basin_data)
+            return float(np.mean(mapped_basin_data))
+
         return float(np.mean(basin_data))
 
     def calculate_metrics(self, raster_mean_t_ha_yr: float, area_km2: float, slope: float):
@@ -97,7 +115,7 @@ class YieldCalculator:
             raise ValueError("Mean erosion rate must be non-negative.")
         if self.bulk_density <= 0:
             raise ValueError("Bulk density must be greater than zero.")
-        
+
         area_ha = area_km2 * HA_PER_KM2
         gross_mass_t = raster_mean_t_ha_yr * area_ha
 
