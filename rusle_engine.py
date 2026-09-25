@@ -11,7 +11,6 @@ HA_PER_KM2 = 100.0
 class SpatialProcessor:
     def __init__(self):
         # Class 5 is strictly A > 20; 20.0 maps to class 4 with right=True (10 < A <= 20).
-        self.bins_10_class = [1, 2, 4, 8, 16, 30, 60, 120, 300]
         self.bins_5_class = [1, 5, 10, 20]
         self.colormap_5_class = {
             1: (255, 255, 128),
@@ -28,10 +27,6 @@ class SpatialProcessor:
     def _finite_raster(self, raster_array: np.ndarray) -> np.ndarray:
         raster = np.asarray(raster_array, dtype=float)
         return np.nan_to_num(raster, nan=0.0, posinf=0.0, neginf=0.0)
-
-    def classify_10_classes(self, raster_array: np.ndarray) -> np.ndarray:
-        classified = np.digitize(self._finite_raster(raster_array), self.bins_10_class, right=True) + 1
-        return np.clip(classified, 1, 10)
 
     def classify_5_classes(self, raster_array: np.ndarray) -> np.ndarray:
         severity_class = np.digitize(self._finite_raster(raster_array), self.bins_5_class, right=True) + 1

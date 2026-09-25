@@ -113,7 +113,6 @@ class SedimentApp:
             button_row, text="Export Yield Results CSV", command=self.export_yield_results_csv, state="disabled"
         )
         self.btn_export_phase2.pack(side=tk.LEFT, padx=6)
-        ttk.Button(button_row, text="Export 10-class CSV", command=self.export_10_class_csv).pack(side=tk.LEFT, padx=6)
 
         results_wrap = ttk.Frame(self.rusle_frame)
         results_wrap.grid(row=4, column=0, columnspan=3, padx=10, pady=8, sticky="nsew")
@@ -546,20 +545,6 @@ class SedimentApp:
                 messagebox.showinfo("Success", f"RGB raster saved to:\n{save_path}")
             except Exception as exc:
                 messagebox.showerror("Export Error", str(exc))
-
-    def export_10_class_csv(self):
-        if self.raster_array is None:
-            messagebox.showerror("Export Error", "Load a raster matrix first.")
-            return
-        save_path = filedialog.asksaveasfilename(
-            title="Save 10-class Matrix",
-            defaultextension=".csv",
-            filetypes=[("CSV", "*.csv")],
-        )
-        if save_path:
-            classified = self.spatial.classify_10_classes(self.raster_array)
-            np.savetxt(save_path, classified, delimiter=",", fmt="%d")
-            messagebox.showinfo("Success", f"10-class matrix saved to:\n{save_path}")
 
     def export_yield_results_csv(self):
         if self.rusle_results_df is None or self.rusle_results_df.empty:
