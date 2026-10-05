@@ -1,4 +1,7 @@
 import threading
+import math
+from datetime import datetime
+from pathlib import Path
 
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
@@ -14,7 +17,7 @@ import pandas as pd
 
 from paths import load_raster_matrix, read_table, resource_path
 from reporter import IntegrationModule
-from rusle_engine import SpatialProcessor, YieldCalculator
+from rusle_engine import YieldCalculator
 from wilcock_engine import BedloadVisualizer, FractionalModel, TimeSeriesAggregator
 
 
@@ -24,10 +27,7 @@ class SedimentApp:
         self.root.title("Automated Sediment Analysis Software")
         self.root.geometry("980x720")
 
-        self.spatial = SpatialProcessor()
         self.yield_calc = YieldCalculator()
-        self.raster_array = None
-        self.rgb_raster = None
         self.rusle_metrics = None
         self.rusle_row_metrics = None
         self.rusle_results_df = None
@@ -40,10 +40,7 @@ class SedimentApp:
         self.final_merged_df = None
         self._wc_plot_window = None
         self._wc_fig = None
-        self._rusle_preview_window = None
-        self._rusle_preview_fig = None
         self._wc_running = False
-
         self.load_startup_data()
 
         self.notebook = ttk.Notebook(self.root)
@@ -56,6 +53,7 @@ class SedimentApp:
     def load_startup_data(self):
         self.default_basin_path = ""
         self.default_raster_path = ""
+        self.default_zonal_path = ""
 
     def setup_rusle_tab(self):
         self.rusle_frame = ttk.Frame(self.notebook)
@@ -91,31 +89,30 @@ class SedimentApp:
         tree_scroll.pack(side=tk.RIGHT, fill="y")
         self.basin_tree.bind("<Double-1>", self._on_basin_tree_double_click)
 
-        # Place the raster browse button in the left column (replacing the label)
-        self.raster_file_var = tk.StringVar(value=getattr(self, "default_raster_path", ""))
-        ttk.Button(self.rusle_frame, text="Browse Raster CSV", command=self.browse_raster).grid(
+        # Zonal statistics file input
+        self.zonal_file_var = tk.StringVar(value=getattr(self, "default_zonal_path", ""))
+        ttk.Button(self.rusle_frame, text="Browse Zonal Statistics (CSV)", command=self.browse_zonal).grid(
             row=2, column=0, padx=5, pady=6, sticky="w"
         )
-        ttk.Entry(self.rusle_frame, textvariable=self.raster_file_var, width=50, state="readonly").grid(
+        ttk.Entry(self.rusle_frame, textvariable=self.zonal_file_var, width=50, state="readonly").grid(
             row=2, column=1, padx=5, pady=6, sticky="ew"
         )
 
+        # Raster browsing/preview removed — RUSLE tab focuses on tabular inputs only
+
         button_row = ttk.Frame(self.rusle_frame)
-        button_row.grid(row=3, column=0, columnspan=3, pady=12)
+        button_row.grid(row=4, column=0, columnspan=3, pady=12)
         ttk.Button(button_row, text="Classify & Compute Yield", command=self.execute_rusle_analysis).pack(
             side=tk.LEFT, padx=6
         )
-        self.btn_export_tif = ttk.Button(
-            button_row, text="Export Color-Coded .tif", command=self.export_color_tif, state="disabled"
-        )
-        self.btn_export_tif.pack(side=tk.LEFT, padx=6)
+        # Export Color-Coded .tif removed
         self.btn_export_phase2 = ttk.Button(
             button_row, text="Export Yield Results CSV", command=self.export_yield_results_csv, state="disabled"
         )
         self.btn_export_phase2.pack(side=tk.LEFT, padx=6)
 
         results_wrap = ttk.Frame(self.rusle_frame)
-        results_wrap.grid(row=4, column=0, columnspan=3, padx=10, pady=8, sticky="nsew")
+        results_wrap.grid(row=5, column=0, columnspan=3, padx=10, pady=8, sticky="nsew")
 
         cols = ("dam", "basin", "subbasin", "year", "usda_scs_sio", "cem_sio", "avg_sio", "yield_t_yr", "volume_m3_yr", "sp_yield_m3_yr_km2")
         self.results_tree = ttk.Treeview(results_wrap, columns=cols, show="headings", height=8)
@@ -148,7 +145,7 @@ class SedimentApp:
         results_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.rusle_frame.columnconfigure(1, weight=1)
         self.rusle_frame.rowconfigure(1, weight=1)
-        self.rusle_frame.rowconfigure(4, weight=1)
+        self.rusle_frame.rowconfigure(5, weight=1)
 
     def setup_wc_tab(self):
         self.wc_frame = ttk.Frame(self.notebook)
@@ -297,28 +294,16 @@ class SedimentApp:
                     continue
                 area_val = areas.iloc[idx] if idx < len(areas) else pd.NA
                 slope_val = slopes.iloc[idx] if idx < len(slopes) else pd.NA
-                area_text = "" if pd.isna(area_val) else str(float(area_val))
-                slope_text = "" if pd.isna(slope_val) else str(float(slope_val))
-                self.basin_tree.insert(
-                    "",
-                    "end",
-                    values=(str(dam_name), str(basin), str(subbasin), str(year), area_text, slope_text),
-                )
-
+                self.basin_tree.insert("", "end", values=(dam_name, basin, subbasin, year, area_val, slope_val))
             self.basin_file_var.set(file_path)
+        # Raster browsing/preview removed — RUSLE tab focuses on tabular inputs only
         except Exception as exc:
             if show_errors:
                 messagebox.showerror("Basin File Error", f"Could not load basin table:\n\n{exc}")
             else:
                 raise
-
-    def _destroy_cell_editor(self):
-        editor = self._cell_editor
-        self._cell_editor = None
-        self._edit_iid = None
-        self._edit_col_idx = None
-        if editor is not None:
-            editor.destroy()
+        # Export Color-Coded .tif removed
+        self._destroy_cell_editor()
 
     def _on_basin_tree_double_click(self, event):
         if self.basin_tree.identify_region(event.x, event.y) != "cell":
@@ -370,51 +355,178 @@ class SedimentApp:
     def _cancel_cell_edit(self, event=None):
         self._destroy_cell_editor()
 
-    def browse_raster(self):
-        filepath = filedialog.askopenfilename(filetypes=[("CSV Matrices", "*.csv"), ("All Files", "*.*")])
-        if not filepath:
-            return
+    def _destroy_cell_editor(self):
+        """Clean up and destroy the active cell editor widget."""
+        if self._cell_editor is not None:
+            try:
+                self._cell_editor.destroy()
+            except tk.TclError:
+                pass
+        self._cell_editor = None
+        self._edit_iid = None
+        self._edit_col_idx = None
+
+    def browse_zonal(self):
+        filepath = filedialog.askopenfilename(
+            filetypes=[("CSV/Excel Files", "*.csv *.xlsx *.xls"), ("All Files", "*.*")]
+        )
+        if filepath:
+            self.zonal_file_var.set(filepath)
+
+    @staticmethod
+    def _normalize_subbasin_name(value):
+        """Normalize basin IDs to a consistent key for comparison.
+
+        Handles both numeric IDs such as '1', '01', '1.0' and non-numeric names
+        like 'Sub-Basin A', 'Subbasin_01', etc., without creating false mismatches.
+        """
+        if value is None:
+            return ""
+
+        text = str(value).strip()
+        if text == "":
+            return ""
+
+        lower = text.lower()
+
         try:
-            self.raster_array = load_raster_matrix(filepath)
-            self.raster_file_var.set(filepath)
-            self.rgb_raster = None
-            self.btn_export_tif.config(state="disabled")
-        except Exception as exc:
-            messagebox.showerror("Raster Error", f"Could not load raster matrix:\n\n{exc}")
+            numeric_value = float(lower)
+        except ValueError:
+            numeric_value = None
 
-    def _iter_basin_rows(self):
-        if self.raster_array is None:
-            raise ValueError("Load a headerless raster matrix CSV first.")
-        children = self.basin_tree.get_children()
-        if not children:
-            raise ValueError("Import a basin file so the grid has at least one row.")
+        if numeric_value is not None and math.isfinite(numeric_value):
+            if numeric_value.is_integer():
+                return str(int(numeric_value))
+            return format(numeric_value, "g")
 
-        rows = []
-        for iid in children:
-            values = list(self.basin_tree.item(iid, "values"))
-            while len(values) < 6:
-                values.append("")
-            dam_name, basin, subbasin, year_s, area_s, slope_s = values[:6]
-            if not str(slope_s).strip():
-                raise ValueError(f"Slope (m/m) is required for {basin} / {subbasin}.")
-            year = int(year_s)
-            area_km2 = float(area_s)
-            slope = float(slope_s)
-            if area_km2 <= 0:
-                raise ValueError(f"Basin area must be greater than zero for {basin} / {subbasin}.")
-            rows.append((str(dam_name), str(basin), str(subbasin), year, area_km2, slope))
-        return rows
+        normalized = "".join(ch for ch in lower if ch.isalnum())
+        for prefix in ("subbasin", "basin", "sub", "sb"):
+            if normalized.startswith(prefix):
+                remainder = normalized[len(prefix):]
+                if remainder:
+                    return remainder
+        return normalized
+
+    @classmethod
+    def _subbasin_aliases(cls, value):
+        key = cls._normalize_subbasin_name(value)
+        aliases = {key}
+        if not key:
+            return aliases
+
+        digits_only = "".join(ch for ch in key if ch.isdigit())
+        if digits_only:
+            aliases.add(digits_only)
+
+        if key.startswith("subbasin"):
+            aliases.add(key[len("subbasin"):])
+        if key.startswith("basin"):
+            aliases.add(key[len("basin"):])
+        if key.startswith("sub") and len(key) > 3:
+            aliases.add(key[3:])
+        return {alias for alias in aliases if alias}
+
+    @classmethod
+    def _resolve_zonal_mean(cls, zonal_lookup, subbasin_value):
+        if subbasin_value is None:
+            return None
+
+        direct_key = cls._normalize_subbasin_name(subbasin_value)
+        if direct_key in zonal_lookup:
+            return zonal_lookup[direct_key]
+
+        for alias in cls._subbasin_aliases(subbasin_value):
+            if alias in zonal_lookup:
+                return zonal_lookup[alias]
+
+        digits_only = "".join(ch for ch in direct_key if ch.isdigit())
+        if digits_only:
+            for candidate_key, value in zonal_lookup.items():
+                candidate_digits = "".join(ch for ch in candidate_key if ch.isdigit())
+                if candidate_digits == digits_only:
+                    return value
+
+        direct_key_len = len(direct_key)
+        for candidate_key, value in zonal_lookup.items():
+            if candidate_key == direct_key:
+                return value
+            if direct_key and candidate_key and (candidate_key.endswith(direct_key) or direct_key.endswith(candidate_key)):
+                return value
+            if direct_key and candidate_key and (direct_key in candidate_key or candidate_key in direct_key):
+                return value
+            if direct_key and candidate_key and abs(len(candidate_key) - direct_key_len) <= 2 and candidate_key.replace(digits_only, "") == direct_key.replace(digits_only, ""):
+                return value
+
+        return None
+
+    def _load_zonal_statistics(self):
+        zonal_path = self.zonal_file_var.get().strip()
+        if not zonal_path:
+            raise ValueError("Select a Zonal Statistics CSV file first.")
+
+        zonal_df = read_table(zonal_path)
+        if zonal_df.empty:
+            raise ValueError("The selected zonal statistics file is empty.")
+
+        if "MEAN" not in zonal_df.columns and "mean" not in zonal_df.columns:
+            raise ValueError("Zonal statistics file must contain a MEAN column.")
+        mean_col = "MEAN" if "MEAN" in zonal_df.columns else "mean"
+
+        name_col = None
+        for candidate in zonal_df.columns:
+            normalized = candidate.strip().lower()
+            if "sub" in normalized and "basin" in normalized:
+                name_col = candidate
+                break
+        if name_col is None:
+            for candidate in zonal_df.columns:
+                normalized = candidate.strip().lower()
+                if "basin" in normalized:
+                    name_col = candidate
+                    break
+        if name_col is None:
+            raise ValueError("Zonal statistics file must include a sub-basin name column.")
+
+        lookup = {}
+        for _, row in zonal_df.iterrows():
+            name = row.get(name_col)
+            if pd.isna(name) or str(name).strip() == "":
+                continue
+            mean_value = pd.to_numeric(row.get(mean_col), errors="coerce")
+            if pd.isna(mean_value):
+                continue
+
+            normalized_name = self._normalize_subbasin_name(name)
+            if not normalized_name:
+                continue
+
+            lookup[normalized_name] = float(mean_value)
+            for alias in self._subbasin_aliases(name):
+                if alias:
+                    lookup[alias] = float(mean_value)
+
+        if not lookup:
+            raise ValueError("No valid sub-basin MEAN values were found in the zonal statistics file.")
+        return lookup
 
     def execute_rusle_analysis(self):
         try:
             basin_rows = self._iter_basin_rows()
-            mean_t_ha = self.yield_calc.raster_mean_t_ha_yr(self.raster_array)
-            self.rgb_raster = self.spatial.apply_5_class_colormap(self.raster_array)
+            zonal_lookup = self._load_zonal_statistics()
 
             row_metrics = []
             handoff_frames = []
+            missing_subbasins = []
             for dam_name, basin, subbasin, year, area_km2, slope in basin_rows:
-                metrics = self.yield_calc.calculate_metrics(mean_t_ha, area_km2, slope)
+                extracted_mean = self._resolve_zonal_mean(zonal_lookup, subbasin)
+                if extracted_mean is None:
+                    missing_subbasins.append(str(subbasin))
+                    continue
+                metrics = self.yield_calc.calculate_metrics(
+                    raster_mean_t_ha_yr=extracted_mean,
+                    area_km2=area_km2,
+                    slope=slope,
+                )
                 row_metrics.append(
                     {
                         "dam": dam_name,
@@ -428,6 +540,13 @@ class SedimentApp:
                 )
                 handoff_frames.append(self.yield_calc.to_phase2_handoff(year, metrics["volume_m3"]))
 
+            if missing_subbasins:
+                unique_missing = sorted(set(missing_subbasins))
+                keys = ", ".join(sorted(zonal_lookup.keys())[:25])
+                raise ValueError(
+                    "MEAN value missing for sub-basin(s): "
+                    f"{', '.join(unique_missing)}. Available zonal keys: {keys}"
+                )
 
             self.rusle_row_metrics = row_metrics
             self.rusle_results_df = pd.DataFrame(row_metrics)
@@ -437,114 +556,96 @@ class SedimentApp:
                 .groupby("Year", as_index=False)["Suspended_Volume_m3"]
                 .sum()
             )
-            self.btn_export_tif.config(state="normal")
             self.btn_export_phase2.config(state="normal")
             self._write_rusle_results()
-            self._show_rusle_preview()
         except Exception as exc:
             messagebox.showerror("RUSLE Error", str(exc))
 
     def _write_rusle_results(self):
-        rows = self.rusle_row_metrics or []
-        if not rows:
-            return
-        # clear existing tree rows
+        """Populate the results tree with RUSLE metrics and save to CSV."""
         try:
-            self.results_tree.delete(*self.results_tree.get_children())
-        except Exception:
-            pass
+            if self.rusle_results_df is None or self.rusle_results_df.empty:
+                return
 
-        # Insert computed rows into the grid, rounding numeric values to 2 decimals
-        for m in rows:
-            dam = m.get("dam", "")
-            basin = m.get("basin", "")
-            subbasin = m.get("subbasin", "")
-            year = m.get("year", "")
-            usda_sio = m.get("usda_scs_sio", 0.0)
-            cem_sio = m.get("cem_sio", 0.0)
-            avg_sio = m.get("avg_sio", 0.0)
-            mass = m.get("yield_mass_t", 0.0)
-            volume = m.get("volume_m3", 0.0)
-            sp_yield = m.get("specific_yield_m3_km2", 0.0)
+            # Clear existing rows from the results tree
+            for child in self.results_tree.get_children():
+                self.results_tree.delete(child)
 
-            self.results_tree.insert(
-                "",
-                "end",
-                values=(
-                    dam,
-                    basin,
-                    subbasin,
-                    year,
-                    f"{usda_sio:.4f}",
-                    f"{cem_sio:.4f}",
-                    f"{avg_sio:.4f}",
-                    f"{mass:.2f}",
-                    f"{volume:.2f}",
-                    f"{sp_yield:.2f}",
-                ),
+            # Extract display columns and format values
+            display_cols = [
+                "dam",
+                "basin",
+                "subbasin",
+                "year",
+                "usda_scs_sio",
+                "cem_sio",
+                "avg_sio",
+                "yield_mass_t",
+                "volume_m3",
+                "specific_yield_m3_km2",
+            ]
+
+            for _, row in self.rusle_results_df.iterrows():
+                values = []
+                for col in display_cols:
+                    val = row[col]
+                    if col == "year":
+                        values.append(int(val))
+                    elif col in ("usda_scs_sio", "cem_sio", "avg_sio"):
+                        # SIO indices: 4 decimal places
+                        values.append(f"{float(val):.4f}")
+                    elif col == "yield_mass_t":
+                        # Yield in tonnes: 2 decimal places
+                        values.append(f"{float(val):.2f}")
+                    elif col in ("volume_m3", "specific_yield_m3_km2"):
+                        # Volume: 2-4 decimal places
+                        values.append(f"{float(val):.2f}")
+                    else:
+                        # String identifiers
+                        values.append(str(val))
+                self.results_tree.insert("", "end", values=tuple(values))
+
+            # Save results to CSV in exports/ directory
+            export_dir = Path("exports")
+            export_dir.mkdir(exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            csv_path = export_dir / f"rusle_results_{timestamp}.csv"
+
+            export_df = self.rusle_results_df[
+                [
+                    "dam",
+                    "basin",
+                    "subbasin",
+                    "year",
+                    "area_km2",
+                    "slope",
+                    "usda_scs_sio",
+                    "cem_sio",
+                    "avg_sio",
+                    "yield_mass_t",
+                    "volume_m3",
+                    "specific_yield_m3_km2",
+                ]
+            ].copy()
+            export_df = export_df.rename(
+                columns={
+                    "dam": "Dam",
+                    "basin": "Basin",
+                    "subbasin": "Sub-Basin",
+                    "year": "Year",
+                    "area_km2": "Area_km2",
+                    "slope": "Slope_m_per_m",
+                    "usda_scs_sio": "USDA-SCS_SIO",
+                    "cem_sio": "CEM_SIO",
+                    "avg_sio": "Average_SIO",
+                    "yield_mass_t": "Yield_t_yr",
+                    "volume_m3": "Transported_Volume_m3_yr",
+                    "specific_yield_m3_km2": "Specific_Yield_m3_yr_km2",
+                }
             )
-
-    def _show_rusle_preview(self):
-        if self._rusle_preview_window is not None and self._rusle_preview_window.winfo_exists():
-            self._rusle_preview_window.destroy()
-        if self._rusle_preview_fig is not None:
-            plt.close(self._rusle_preview_fig)
-
-        self._rusle_preview_fig, ax = plt.subplots(figsize=(6.5, 4.5))
-        ax.imshow(self.rgb_raster)
-        ax.set_title("5-class RGB preview")
-        ax.axis("off")
-
-        class_labels = [
-            "Class 1: <= 1",
-            "Class 2: 1-5",
-            "Class 3: 5-10",
-            "Class 4: 10-20",
-            "Class 5: > 20",
-        ]
-        legend_handles = [
-            Patch(
-                facecolor=np.array(self.spatial.colormap_5_class[class_id]) / 255.0,
-                edgecolor="black",
-                linewidth=0.5,
-                label=label,
-            )
-            for class_id, label in zip(range(1, 6), class_labels)
-        ]
-        legend = ax.legend(
-            handles=legend_handles,
-            title="Erosion class",
-            loc="center left",
-            bbox_to_anchor=(1.0, 0.5),
-            frameon=True,
-        )
-        legend.get_frame().set_facecolor("white")
-        legend.get_frame().set_alpha(0.9)
-
-        self._rusle_preview_fig.subplots_adjust(right=0.78)
-        self._rusle_preview_fig.tight_layout()
-
-        self._rusle_preview_window = tk.Toplevel(self.root)
-        self._rusle_preview_window.title("RUSLE Color Map")
-        canvas = FigureCanvasTkAgg(self._rusle_preview_fig, master=self._rusle_preview_window)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-
-    def export_color_tif(self):
-        if self.rgb_raster is None:
-            messagebox.showerror("Export Error", "Run Classify & Compute Yield first.")
-            return
-        save_path = filedialog.asksaveasfilename(
-            title="Save Color-Coded Raster",
-            defaultextension=".tif",
-            filetypes=[("TIFF Image", "*.tif *.tiff"), ("PNG Image", "*.png")],
-        )
-        if save_path:
-            try:
-                self.spatial.export_rgb_tiff(self.rgb_raster, save_path)
-                messagebox.showinfo("Success", f"RGB raster saved to:\n{save_path}")
-            except Exception as exc:
-                messagebox.showerror("Export Error", str(exc))
+            export_df.to_csv(csv_path, index=False)
+        except Exception as exc:
+            print(f"Error writing RUSLE results: {exc}")
 
     def export_yield_results_csv(self):
         if self.rusle_results_df is None or self.rusle_results_df.empty:
@@ -810,3 +911,26 @@ class SedimentApp:
                 messagebox.showinfo("Success", f"Master Dataset saved to:\n{save_path}")
             except Exception as exc:
                 messagebox.showerror("Export Error", f"Failed to save file:\n\n{exc}")
+
+    # Raster browsing removed; RUSLE tab uses zonal CSV lookup only
+
+    def _iter_basin_rows(self):
+        children = self.basin_tree.get_children()
+        if not children:
+            raise ValueError("Import a basin file so the grid has at least one row.")
+
+        rows = []
+        for iid in children:
+            values = list(self.basin_tree.item(iid, "values"))
+            while len(values) < 6:
+                values.append("")
+            dam_name, basin, subbasin, year_s, area_s, slope_s = values[:6]
+            if not str(slope_s).strip():
+                raise ValueError(f"Slope (m/m) is required for {basin} / {subbasin}.")
+            year = int(year_s)
+            area_km2 = float(area_s)
+            slope = float(slope_s)
+            if area_km2 <= 0:
+                raise ValueError(f"Basin area must be greater than zero for {basin} / {subbasin}.")
+            rows.append((str(dam_name), str(basin), str(subbasin), year, area_km2, slope))
+        return rows
