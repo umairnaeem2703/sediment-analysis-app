@@ -7,10 +7,6 @@ import pandas as pd
 HA_PER_KM2 = 100.0
 
 
-# Spatial raster classification and RGB export removed as obsolete.
-# YieldCalculator remains the single source for RUSLE tab calculations.
-
-
 class YieldCalculator:
     def __init__(self):
         self.bulk_density = 1.3
@@ -60,7 +56,7 @@ class YieldCalculator:
         area_ha = area_km2 * HA_PER_KM2
         gross_mass_t = raster_mean_t_ha_yr * area_ha
 
-        usda_sio = self.calculate_usda_scs_sio(area_km2)
+        usda_scs_sio = self.calculate_usda_scs_sio(area_km2)
         cem_sio = self.calculate_cem_sio(slope)
         avg_sio = self.calculate_average_sio(area_km2, slope)
 
@@ -72,7 +68,7 @@ class YieldCalculator:
             "raster_mean_t_ha_yr": raster_mean_t_ha_yr,
             "area_ha": area_ha,
             "gross_mass_t": gross_mass_t,
-            "usda_scs_sio": usda_sio,
+            "usda_scs_sio": usda_scs_sio,
             "cem_sio": cem_sio,
             "avg_sio": avg_sio,
             "yield_mass_t": yield_mass_t,

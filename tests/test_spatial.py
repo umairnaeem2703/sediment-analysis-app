@@ -1,5 +1,6 @@
-from rusle_engine import HA_PER_KM2, YieldCalculator
 import numpy as np
+
+from src.core.rusle import HA_PER_KM2, YieldCalculator
 
 
 def test_cem_sio_uses_decimal_slope_not_percent():

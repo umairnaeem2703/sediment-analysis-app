@@ -10,7 +10,8 @@ def resource_path(*parts: str) -> Path:
     if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
         base = Path(sys._MEIPASS)
     else:
-        base = Path(__file__).resolve().parent
+        # Resolve to project root (two levels above src/utils)
+        base = Path(__file__).resolve().parent.parent.parent
     return base.joinpath(*parts)
 
 

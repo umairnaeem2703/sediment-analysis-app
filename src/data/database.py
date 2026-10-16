@@ -1,6 +1,6 @@
 import pandas as pd
 
-from paths import read_table, resource_path
+from src.utils.paths import read_table, resource_path
 
 
 class BasinDatabase:
@@ -47,7 +47,7 @@ class BasinDatabase:
                 return str(candidate)
 
         raise FileNotFoundError(
-            "Basin table not found. Expected inputs/TR_Basin_Subbasin_Area.csv "
+            "Basin table not found. Expected .csv "
             "or a matching .xlsx next to the application."
         )
 

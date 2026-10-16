@@ -1,1 +1,33 @@
-*.pyc
+# Python byte-compiled / cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+.venv/
+env/
+venv/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Build & Distribution artifacts
+build/
+dist/
+*.spec
+
+# Runtime Exports
+exports/
+*.tif
+*.xlsx
+*.csv
+!inputs/**/*.csv
+!inputs/**/*.xlsx
+!inputs/*.csv
+!inputs/*.xlsx
+
+# IDE / Editor configuration
+.vscode/
+.idea/
