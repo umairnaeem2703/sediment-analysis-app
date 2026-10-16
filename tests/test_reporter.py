@@ -1,8 +1,8 @@
 import pandas as pd
 import pytest
 
-from paths import read_table, resource_path
-from reporter import IntegrationModule
+from src.data.reporter import IntegrationModule
+from src.utils.paths import read_table, resource_path
 
 
 def test_phase2_fixture_overlaps_flow_years_and_locate_extremes():

@@ -1,6 +1,6 @@
 import pandas as pd
 
-from paths import read_table, resource_path
+from src.utils.paths import read_table, resource_path
 
 
 class BasinDatabase:

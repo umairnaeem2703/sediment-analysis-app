@@ -1,7 +1,8 @@
 import math
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 
 SECONDS_PER_YEAR = 365.25 * 24.0 * 3600.0
 PHI_BREAK = 1.35
@@ -138,9 +139,9 @@ class TimeSeriesAggregator:
             df["Date"] = pd.to_datetime(df["Date"], format="%d/%m/%Y")
         except (ValueError, TypeError):
             df["Date"] = pd.to_datetime(df["Date"], dayfirst=True)
-            
+
         df["Year"] = df["Date"].dt.year
-        
+
         # Calculate intermediate daily m2/s rate
         df["Daily_Bedload_Rate"] = self.model.compute_transport_series(df["Flow Q (m3/s)"].to_numpy(dtype=float))
 

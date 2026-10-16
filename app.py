@@ -1,8 +1,12 @@
 import tkinter as tk
-from ui import SedimentApp
+from src.ui import SedimentApp
 
 
-if __name__ == "__main__":
+def main():
     root = tk.Tk()
     app = SedimentApp(root)
     root.mainloop()
+
+
+if __name__ == "__main__":
+    main()

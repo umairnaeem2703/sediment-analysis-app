@@ -3,8 +3,8 @@ import math
 import numpy as np
 import pandas as pd
 
-from paths import read_table, resource_path
-from wilcock_engine import FractionalModel, TimeSeriesAggregator, SECONDS_PER_YEAR
+from src.core.wilcock import FractionalModel, SECONDS_PER_YEAR, TimeSeriesAggregator
+from src.utils.paths import read_table, resource_path
 
 
 def _model():
