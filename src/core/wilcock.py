@@ -136,7 +136,7 @@ class TimeSeriesAggregator:
                 date_col = lookup[candidate]
                 break
 
-        flow_candidates = ["flow q (m3/s)", "flow", "flow q (m^3/s)"]
+        flow_candidates = ["flow", "Flow Q (m³/s)", "Flow Q (m3/s)"]
         flow_col = None
         for candidate in flow_candidates:
             if candidate in lookup:
@@ -227,8 +227,9 @@ class BedloadVisualizer:
     @staticmethod
     def export_summary_csv(df_summary: pd.DataFrame, save_path: str):
         table = BedloadVisualizer.prepare_summary_table(df_summary)
-        table.to_csv(save_path, index=False)
+        table.to_csv(save_path, index=False, encoding="utf-8-sig")
         return table
+
 
     def generate_trend_graph(self, df_summary: pd.DataFrame):
         if df_summary.empty:

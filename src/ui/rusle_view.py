@@ -6,9 +6,10 @@ from typing import List
 
 import pandas as pd
 
-from src.core.rusle import BasinRow, ZonalMatcher
+from src.core.rusle import BasinRow, ZonalMatcher, find_basin_table_columns
 from src.ui.common import browse_open_file, browse_save_file, show_error, show_info
 from src.utils.paths import read_table
+
 
 
 class RusleView:
@@ -121,6 +122,10 @@ class RusleView:
         self.frame.rowconfigure(1, weight=1)
         self.frame.rowconfigure(5, weight=1)
 
+        default_path = self.basin_file_var.get().strip()
+        if default_path and Path(default_path).exists():
+            self._populate_basin_tree(default_path, show_errors=False)
+
     def browse_basin_file(self):
         filepath = browse_open_file(title="Select Basin File")
         if filepath:
@@ -129,32 +134,53 @@ class RusleView:
     def _populate_basin_tree(self, file_path: str, show_errors: bool = False):
         try:
             df = read_table(file_path)
-            required = ["Basin Name", "Sub-basin Name"]
-            missing = [col for col in required if col not in df.columns]
-            if missing:
-                raise KeyError(f"Basin table missing columns: {missing}")
+            col_map = find_basin_table_columns(df.columns)
+            basin_col = col_map.get("basin")
+            subbasin_col = col_map.get("subbasin")
+            if not basin_col or not subbasin_col:
+                required = ["Basin Name", "Sub-basin Name"]
+                missing = [col for col in required if col not in df.columns]
+                raise KeyError(f"Basin table missing columns: {missing or ['Basin Name', 'Sub-basin Name']}")
 
             for child in self.basin_tree.get_children():
                 self.basin_tree.delete(child)
 
-            year = 2026
+            dam_col = col_map.get("dam")
+            area_col = col_map.get("area")
+            slope_col = col_map.get("slope")
+            year_col = col_map.get("year")
+
             work = df.reset_index(drop=True)
-            areas = pd.to_numeric(work["Area"], errors="coerce") if "Area" in work.columns else pd.Series(dtype=float)
+            areas = pd.to_numeric(work[area_col], errors="coerce") if area_col else pd.Series(dtype=float)
             slopes = (
-                pd.to_numeric(work["Main Waterway Slope"], errors="coerce")
-                if "Main Waterway Slope" in work.columns
+                pd.to_numeric(work[slope_col], errors="coerce")
+                if slope_col
                 else pd.Series(dtype=float)
             )
 
             for idx, row in work.iterrows():
-                dam_name = row["Dam Name"] if "Dam Name" in work.columns else ""
-                basin = row["Basin Name"]
-                subbasin = row["Sub-basin Name"]
+                dam_name = row[dam_col] if dam_col and not pd.isna(row[dam_col]) else ""
+                basin = row[basin_col]
+                subbasin = row[subbasin_col]
                 if pd.isna(basin) or pd.isna(subbasin):
                     continue
+                dam_str = str(dam_name).strip() if pd.notna(dam_name) else ""
+                basin_str = str(basin).strip()
+                subbasin_str = str(subbasin).strip()
+                if not basin_str or not subbasin_str:
+                    continue
+
+                if year_col and not pd.isna(row[year_col]):
+                    try:
+                        row_year = int(float(row[year_col]))
+                    except (ValueError, TypeError):
+                        row_year = 2026
+                else:
+                    row_year = 2026
+
                 area_val = areas.iloc[idx] if idx < len(areas) else pd.NA
                 slope_val = slopes.iloc[idx] if idx < len(slopes) else pd.NA
-                self.basin_tree.insert("", "end", values=(dam_name, basin, subbasin, year, area_val, slope_val))
+                self.basin_tree.insert("", "end", values=(dam_str, basin_str, subbasin_str, row_year, area_val, slope_val))
             self.basin_file_var.set(file_path)
         except Exception as exc:
             if show_errors:
@@ -174,8 +200,9 @@ class RusleView:
         columns = self.basin_tree["columns"]
         if col_idx < 0 or col_idx >= len(columns):
             return
-        if columns[col_idx] not in ("year", "area", "slope"):
+        if columns[col_idx] not in ("dam", "basin", "subbasin", "year", "area", "slope"):
             return
+
 
         bbox = self.basin_tree.bbox(iid, col_id)
         if not bbox:
@@ -397,9 +424,9 @@ class RusleView:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             csv_path = export_dir / f"rusle_results_{timestamp}.csv"
             export_df = self._format_export_df()
-            export_df.to_csv(csv_path, index=False)
+            export_df.to_csv(csv_path, index=False, encoding="utf-8-sig")
         except Exception as exc:
-            print(f"Error writing RUSLE results: {exc}")
+            pass
 
     def export_yield_results_csv(self):
         if self.app.rusle_results_df is None or self.app.rusle_results_df.empty:
@@ -412,5 +439,6 @@ class RusleView:
         )
         if save_path:
             export_df = self._format_export_df()
-            export_df.to_csv(save_path, index=False)
+            export_df.to_csv(save_path, index=False, encoding="utf-8-sig")
             show_info("Success", f"Yield results saved to:\n{save_path}")
+

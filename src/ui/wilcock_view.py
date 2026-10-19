@@ -63,10 +63,6 @@ class WilcockView:
             wc_buttons, text="Export Summary CSV", command=self.export_wc_summary_csv, state="disabled"
         )
         self.btn_export_summary.pack(side=tk.LEFT, padx=6)
-        self.btn_export_phase3 = ttk.Button(
-            wc_buttons, text="Export Phase 3 CSV", command=self.export_phase3_csv, state="disabled"
-        )
-        self.btn_export_phase3.pack(side=tk.LEFT, padx=6)
 
         ttk.Label(self.frame, textvariable=self.wc_status_var).grid(row=3, column=0, columnspan=2, pady=4)
 
@@ -90,7 +86,7 @@ class WilcockView:
         tree = ttk.Treeview(self.wc_graph_frame, columns=columns, show="headings", height=max(8, min(15, len(summary_df))))
         for col in columns:
             tree.heading(col, text=col)
-            width = 180 if "Flow" in col or "Bedload" in col else 100
+            width = 180 if "Flow Q (m³/s)" in col or "Bedload" in col else 100
             tree.column(col, width=width, anchor="center")
 
         for _, row in summary_df.iterrows():
@@ -99,7 +95,7 @@ class WilcockView:
                 value = row[col_name]
                 if col_name == "Year":
                     values.append(int(value))
-                elif "Flow" in col_name:
+                elif "Flow Q (m³/s)" in col_name:
                     values.append(f"{float(value):.4f}")
                 elif "Bedload" in col_name:
                     values.append(f"{float(value):.6f}")
@@ -191,7 +187,6 @@ class WilcockView:
 
         self._wc_running = True
         self.btn_export_png.config(state="disabled")
-        self.btn_export_phase3.config(state="disabled")
         self.btn_export_summary.config(state="disabled")
         self.wc_status_var.set("Running daily bedload on a background thread...")
 
@@ -221,16 +216,4 @@ class WilcockView:
 
         run_in_background(self.app.root, computation_task, on_complete)
 
-    def export_phase3_csv(self):
-        if self.app.phase3_df is None:
-            show_error("Export Error", "Run the Wilcock analysis first.")
-            return
-        save_path = browse_save_file(
-            title="Save Phase 3 (Bedload Volume)",
-            defaultextension=".csv",
-            filetypes=[("CSV", "*.csv")],
-        )
-        if save_path:
-            self.app.phase3_df.to_csv(save_path, index=False)
-            self.app.integration_view.phase3_file_var.set(save_path)
-            show_info("Success", f"Phase 3 handoff saved to:\n{save_path}")
+

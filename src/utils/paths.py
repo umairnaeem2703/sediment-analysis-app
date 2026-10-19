@@ -16,14 +16,34 @@ def resource_path(*parts: str) -> Path:
 
 
 def read_table(file_path: str) -> pd.DataFrame:
-    """Load CSV or Excel using a case-insensitive suffix. CSV uses utf-8-sig."""
+    """Load CSV or Excel using a case-insensitive suffix. Handles UTF-8 and Turkish encodings (e.g. CP1254, ISO-8859-9)."""
     path = Path(file_path)
     suffix = path.suffix.lower()
     if suffix == ".csv":
-        return pd.read_csv(path, encoding="utf-8-sig")
+        encodings = ["utf-8-sig", "utf-8", "cp1254", "iso-8859-9", "windows-1252", "latin1"]
+        last_exc = None
+        for enc in encodings:
+            try:
+                df = pd.read_csv(path, encoding=enc)
+                # Handle semicolon-delimited CSVs commonly exported by Turkish Excel
+                if len(df.columns) == 1 and ";" in str(df.columns[0]):
+                    try:
+                        df_semi = pd.read_csv(path, encoding=enc, sep=";")
+                        if len(df_semi.columns) > 1:
+                            return df_semi
+                    except Exception:
+                        pass
+                return df
+            except (UnicodeDecodeError, UnicodeError) as exc:
+                last_exc = exc
+                continue
+        if last_exc:
+            raise last_exc
+        return pd.read_csv(path)
     if suffix in {".xlsx", ".xls"}:
         return pd.read_excel(path)
     raise ValueError(f"Unsupported table format: {path.suffix}")
+
 
 
 def load_raster_matrix(file_path: str) -> np.ndarray:

@@ -5,7 +5,80 @@ from typing import Dict, List, Optional, Set
 import numpy as np
 import pandas as pd
 
+import unicodedata
+
 HA_PER_KM2 = 100.0
+
+
+def turkish_lower(text: str) -> str:
+    """Lowercase string using Turkish character rules (I -> ı, İ -> i)."""
+    if text is None:
+        return ""
+    normalized = unicodedata.normalize("NFC", str(text))
+    tr_map = {
+        ord("I"): "ı",
+        ord("İ"): "i",
+    }
+    return normalized.translate(tr_map).lower()
+
+
+def to_ascii_turkish(text: str) -> str:
+    """Convert Turkish characters to ASCII equivalents for robust matching."""
+    if text is None:
+        return ""
+    ascii_map = {
+        ord("ç"): "c", ord("Ç"): "C",
+        ord("ğ"): "g", ord("Ğ"): "G",
+        ord("ı"): "i", ord("I"): "I",
+        ord("İ"): "I", ord("i"): "i",
+        ord("ö"): "o", ord("Ö"): "O",
+        ord("ş"): "s", ord("Ş"): "S",
+        ord("ü"): "u", ord("Ü"): "U",
+        ord("â"): "a", ord("Â"): "A",
+        ord("î"): "i", ord("Î"): "I",
+        ord("û"): "u", ord("Û"): "U",
+    }
+    return str(text).translate(ascii_map)
+
+
+
+def find_basin_table_columns(columns) -> dict:
+    """Identify column names for dam, basin, subbasin, area, slope, year across English and Turkish."""
+    cols = list(columns)
+
+    def match_col(candidates):
+        for candidate in candidates:
+            cand_norm = to_ascii_turkish(turkish_lower(candidate)).strip()
+            for col in cols:
+                c_norm = to_ascii_turkish(turkish_lower(col)).strip()
+                if c_norm == cand_norm:
+                    return col
+        return None
+
+    return {
+        "basin": match_col([
+            "Basin Name", "Basin", "Havza Adı", "Havza Adi", "Havza", "Havzası", "Havzasi"
+        ]),
+        "subbasin": match_col([
+            "Sub-basin Name", "Subbasin Name", "Sub-basin", "Subbasin",
+            "Alt Havza Adı", "Alt Havza Adi", "Alt Havza", "Alt-Havza Adı", "Alt-Havza Adi", "Alt-Havza",
+            "Alt Havzası", "Alt Havzasi"
+        ]),
+        "dam": match_col([
+            "Dam Name", "Dam", "Baraj Adı", "Baraj Adi", "Baraj", "Barajı", "Baraji"
+        ]),
+        "area": match_col([
+            "Area", "Area_km2", "Area (km2)", "Area(km2)",
+            "Alan", "Alan (km2)", "Alan(km2)", "Alan_km2"
+        ]),
+        "slope": match_col([
+            "Main Waterway Slope", "Slope", "Slope_m_per_m",
+            "Eğim", "Egim", "Ana Su Yolu Eğimi", "Ana Su Yolu Egimi", "Su Yolu Eğimi", "Su Yolu Egimi"
+        ]),
+        "year": match_col([
+            "Year", "Yıl", "Yil"
+        ]),
+    }
 
 
 @dataclass
@@ -44,7 +117,7 @@ class ZonalMatcher:
         text = str(value).strip()
         if not text:
             return ""
-        lower = text.lower()
+        lower = turkish_lower(text)
         try:
             numeric_value = float(lower)
         except ValueError:
@@ -56,30 +129,66 @@ class ZonalMatcher:
             return format(numeric_value, "g")
 
         normalized = "".join(ch for ch in lower if ch.isalnum())
-        for prefix in ("subbasin", "basin", "sub", "sb"):
+
+        # Strip prefixes (English & Turkish)
+        prefixes = (
+            "subbasin", "basin", "sub", "sb",
+            "althavzasi", "althavzası", "althavza", "havzasi", "havzası", "havza"
+        )
+        for prefix in prefixes:
             if normalized.startswith(prefix):
                 remainder = normalized[len(prefix):]
                 if remainder:
-                    return remainder
+                    normalized = remainder
+                    break
+
+        # Strip suffixes (English & Turkish)
+        suffixes = (
+            "althavzasi", "althavzası", "althavza", "havzasi", "havzası", "havza",
+            "subbasin", "basin"
+        )
+        for suffix in suffixes:
+            if normalized.endswith(suffix):
+                remainder = normalized[:-len(suffix)]
+                if remainder:
+                    normalized = remainder
+                    break
+
         return normalized
 
     @classmethod
     def get_subbasin_aliases(cls, value) -> Set[str]:
-        key = cls.normalize_subbasin_name(value)
-        aliases = {key}
-        if not key:
-            return aliases
+        if value is None:
+            return set()
+        text = str(value).strip()
+        if not text:
+            return set()
 
-        digits_only = "".join(ch for ch in key if ch.isdigit())
+        raw_tr = "".join(ch for ch in turkish_lower(text) if ch.isalnum())
+        raw_ascii = to_ascii_turkish(raw_tr)
+        key = cls.normalize_subbasin_name(value)
+        key_ascii = to_ascii_turkish(key)
+
+        aliases = {key, key_ascii, raw_tr, raw_ascii}
+        if not key:
+            return {a for a in aliases if a}
+
+        digits_only = "".join(ch for ch in key_ascii if ch.isdigit())
         if digits_only:
             aliases.add(digits_only)
 
-        if key.startswith("subbasin"):
-            aliases.add(key[len("subbasin"):])
-        if key.startswith("basin"):
-            aliases.add(key[len("basin"):])
-        if key.startswith("sub") and len(key) > 3:
-            aliases.add(key[3:])
+        for k in list(aliases):
+            for pfx in ("subbasin", "basin", "sub", "sb", "althavzasi", "althavzası", "althavza", "havzasi", "havzası", "havza"):
+                if k.startswith(pfx) and len(k) > len(pfx):
+                    aliases.add(k[len(pfx):])
+            for sfx in ("althavzasi", "althavzası", "althavza", "havzasi", "havzası", "havza", "subbasin", "basin"):
+                if k.endswith(sfx) and len(k) > len(sfx):
+                    aliases.add(k[:-len(sfx)])
+
+        # Also add ascii versions of all aliases
+        for k in list(aliases):
+            aliases.add(to_ascii_turkish(k))
+
         return {alias for alias in aliases if alias}
 
     @classmethod
@@ -87,25 +196,30 @@ class ZonalMatcher:
         if zonal_df.empty:
             raise ValueError("The selected zonal statistics file is empty.")
 
-        mean_cols = [col for col in ("MEAN", "mean") if col in zonal_df.columns]
+        mean_candidates = ("MEAN", "mean", "Mean", "ORTALAMA", "Ortalama", "ortalama")
+        mean_cols = [col for col in mean_candidates if col in zonal_df.columns]
         if not mean_cols:
             raise ValueError("Zonal statistics file must contain a MEAN column.")
         mean_col = mean_cols[0]
 
         name_col = None
         for candidate in zonal_df.columns:
-            normalized = candidate.strip().lower()
-            if "sub" in normalized and "basin" in normalized:
+            normalized = to_ascii_turkish(turkish_lower(candidate)).strip()
+            if ("sub" in normalized and "basin" in normalized) or "alt" in normalized or "havza" in normalized:
                 name_col = candidate
                 break
         if name_col is None:
             for candidate in zonal_df.columns:
-                normalized = candidate.strip().lower()
-                if "basin" in normalized:
+                normalized = to_ascii_turkish(turkish_lower(candidate)).strip()
+                if "basin" in normalized or "havza" in normalized:
                     name_col = candidate
                     break
         if name_col is None:
-            raise ValueError("Zonal statistics file must include a sub-basin name column.")
+            non_mean = [c for c in zonal_df.columns if c not in mean_candidates]
+            if non_mean:
+                name_col = non_mean[0]
+            else:
+                raise ValueError("Zonal statistics file must include a sub-basin name column.")
 
         lookup: Dict[str, float] = {}
         for _, row in zonal_df.iterrows():
@@ -116,12 +230,10 @@ class ZonalMatcher:
             if pd.isna(mean_value):
                 continue
 
-            normalized_name = cls.normalize_subbasin_name(name)
-            if not normalized_name:
-                continue
-
             float_mean = float(mean_value)
-            lookup[normalized_name] = float_mean
+            normalized_name = cls.normalize_subbasin_name(name)
+            if normalized_name:
+                lookup[normalized_name] = float_mean
             for alias in cls.get_subbasin_aliases(name):
                 if alias:
                     lookup[alias] = float_mean
@@ -139,34 +251,45 @@ class ZonalMatcher:
         if direct_key in zonal_lookup:
             return zonal_lookup[direct_key]
 
+        ascii_direct = to_ascii_turkish(direct_key)
+        if ascii_direct in zonal_lookup:
+            return zonal_lookup[ascii_direct]
+
         for alias in cls.get_subbasin_aliases(subbasin_value):
             if alias in zonal_lookup:
                 return zonal_lookup[alias]
 
-        digits_only = "".join(ch for ch in direct_key if ch.isdigit())
+        digits_only = "".join(ch for ch in ascii_direct if ch.isdigit())
         if digits_only:
             for candidate_key, value in zonal_lookup.items():
-                candidate_digits = "".join(ch for ch in candidate_key if ch.isdigit())
+                candidate_digits = "".join(ch for ch in to_ascii_turkish(candidate_key) if ch.isdigit())
                 if candidate_digits == digits_only:
                     return value
 
         direct_key_len = len(direct_key)
+        ascii_len = len(ascii_direct)
         for candidate_key, value in zonal_lookup.items():
-            if candidate_key == direct_key:
+            cand_ascii = to_ascii_turkish(candidate_key)
+            if candidate_key == direct_key or cand_ascii == ascii_direct:
                 return value
-            if direct_key and candidate_key and (candidate_key.endswith(direct_key) or direct_key.endswith(candidate_key)):
+            if direct_key and (candidate_key.endswith(direct_key) or direct_key.endswith(candidate_key)):
                 return value
-            if direct_key and candidate_key and (direct_key in candidate_key or candidate_key in direct_key):
+            if ascii_direct and (cand_ascii.endswith(ascii_direct) or ascii_direct.endswith(cand_ascii)):
+                return value
+            if direct_key and (direct_key in candidate_key or candidate_key in direct_key):
+                return value
+            if ascii_direct and (ascii_direct in cand_ascii or cand_ascii in ascii_direct):
                 return value
             if (
-                direct_key
-                and candidate_key
-                and abs(len(candidate_key) - direct_key_len) <= 2
-                and candidate_key.replace(digits_only, "") == direct_key.replace(digits_only, "")
+                ascii_direct
+                and cand_ascii
+                and abs(len(cand_ascii) - ascii_len) <= 2
+                and cand_ascii.replace(digits_only, "") == ascii_direct.replace(digits_only, "")
             ):
                 return value
 
         return None
+
 
 
 class YieldCalculator:
