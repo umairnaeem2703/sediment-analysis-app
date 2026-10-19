@@ -1,4 +1,6 @@
+from dataclasses import dataclass
 import math
+from typing import List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -6,6 +8,20 @@ import pandas as pd
 
 SECONDS_PER_YEAR = 365.25 * 24.0 * 3600.0
 PHI_BREAK = 1.35
+
+
+@dataclass
+class HydraulicParameters:
+    tau: float
+    u_star: float
+
+
+@dataclass
+class FractionRecord:
+    di: float
+    Fi: float
+    bi: float
+    tau_ri: float
 
 
 class FractionalModel:
@@ -24,7 +40,7 @@ class FractionalModel:
         self._fi = np.array([], dtype=float)
         self._tau_ri = np.array([], dtype=float)
 
-    def calculate_hydraulics(self, q_flow: float):
+    def calculate_hydraulics(self, q_flow: float) -> Tuple[float, float]:
         if q_flow <= 0:
             return 0.0, 0.0
         area = self.bed_width * self.depth

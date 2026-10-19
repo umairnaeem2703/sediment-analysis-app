@@ -25,3 +25,33 @@ def test_phase2_schema():
     df = YieldCalculator().to_phase2_handoff(2020, 123.4)
     assert list(df.columns) == ["Year", "Suspended_Volume_m3"]
     assert df.iloc[0]["Year"] == 2020
+
+
+def test_zonal_matcher_normalization_and_aliases():
+    from src.core.rusle import ZonalMatcher
+
+    assert ZonalMatcher.normalize_subbasin_name("Subbasin_12") == "12"
+    assert ZonalMatcher.normalize_subbasin_name("SB-5") == "5"
+    assert ZonalMatcher.normalize_subbasin_name("Basin 3A") == "3a"
+    assert ZonalMatcher.normalize_subbasin_name(4.0) == "4"
+
+    aliases = ZonalMatcher.get_subbasin_aliases("Subbasin 12")
+    assert "12" in aliases
+
+
+def test_zonal_matcher_build_lookup_and_resolution():
+    import pandas as pd
+    from src.core.rusle import ZonalMatcher
+
+    df = pd.DataFrame(
+        {
+            "Subbasin Name": ["Subbasin 1", "Subbasin 2", "SB-3"],
+            "MEAN": [1.25, 3.40, 2.10],
+        }
+    )
+    lookup = ZonalMatcher.build_lookup(df)
+    assert ZonalMatcher.resolve_zonal_mean(lookup, "1") == 1.25
+    assert ZonalMatcher.resolve_zonal_mean(lookup, "Subbasin 2") == 3.40
+    assert ZonalMatcher.resolve_zonal_mean(lookup, "Sub-basin 3") == 2.10
+    assert ZonalMatcher.resolve_zonal_mean(lookup, "Unknown") is None
+

@@ -1,7 +1,14 @@
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import ttk
 
 from src.data.reporter import IntegrationModule
+from src.ui.common import (
+    browse_open_file,
+    browse_save_file,
+    show_error,
+    show_info,
+    show_warning,
+)
 from src.utils.paths import read_table
 
 
@@ -67,9 +74,7 @@ class IntegrationView:
         self.btn_export_master.grid(row=5, column=0, columnspan=2, pady=10)
 
     def browse_file(self, string_var):
-        filepath = filedialog.askopenfilename(
-            filetypes=[("CSV/Excel Files", "*.csv *.xlsx *.xls"), ("All Files", "*.*")]
-        )
+        filepath = browse_open_file(title="Select Dataset File")
         if filepath:
             string_var.set(filepath)
 
@@ -79,7 +84,7 @@ class IntegrationView:
         bathy_path = self.bathy_file_var.get()
 
         if not p2_path or not p3_path:
-            messagebox.showerror("Input Error", "Phase 2 and Phase 3 datasets are required.")
+            show_error("Input Error", "Phase 2 and Phase 3 datasets are required.")
             return
 
         try:
@@ -88,8 +93,9 @@ class IntegrationView:
             df_bathy = read_table(bathy_path) if bathy_path else None
 
             integration = IntegrationModule()
-            self.app.final_merged_df, join_warning = integration.merge_sediment_data(df_p2, df_p3)
-            min_record, max_record = integration.locate_extremes(self.app.final_merged_df)
+            merged_df, join_warning = integration.merge_sediment_data(df_p2, df_p3)
+            self.app.set_integration_results(merged_df)
+            min_record, max_record = integration.locate_extremes(merged_df)
 
             interp_warnings = []
             if df_bathy is not None:
@@ -121,19 +127,21 @@ class IntegrationView:
             self.results_text.config(state="disabled")
             self.btn_export_master.config(state="normal")
             if join_warning or interp_warnings:
-                messagebox.showwarning("Integration Notes", "\n".join(filter(None, [join_warning] + interp_warnings)))
+                show_warning("Integration Notes", "\n".join(filter(None, [join_warning] + interp_warnings)))
         except Exception as exc:
-            messagebox.showerror("Integration Error", f"Failed to merge datasets:\n\n{exc}")
+            show_error("Integration Error", f"Failed to merge datasets:\n\n{exc}")
 
     def export_master_dataset(self):
         if self.app.final_merged_df is None or self.app.final_merged_df.empty:
             return
-        save_path = filedialog.asksaveasfilename(
-            title="Save Master Dataset", defaultextension=".xlsx", filetypes=[("Excel Files", "*.xlsx")]
+        save_path = browse_save_file(
+            title="Save Master Dataset",
+            defaultextension=".xlsx",
+            filetypes=[("Excel Files", "*.xlsx")],
         )
         if save_path:
             try:
                 self.app.final_merged_df.to_excel(save_path, index=False)
-                messagebox.showinfo("Success", f"Master Dataset saved to:\n{save_path}")
+                show_info("Success", f"Master Dataset saved to:\n{save_path}")
             except Exception as exc:
-                messagebox.showerror("Export Error", f"Failed to save file:\n\n{exc}")
+                show_error("Export Error", f"Failed to save file:\n\n{exc}")

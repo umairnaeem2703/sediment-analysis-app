@@ -37,6 +37,23 @@ class SedimentApp:
         self.default_raster_path = ""
         self.default_zonal_path = ""
 
+    def set_rusle_results(self, row_metrics: list, results_df, phase2_df):
+        """Set calculation results from the RUSLE Spatial Engine."""
+        self.rusle_row_metrics = row_metrics
+        self.rusle_results_df = results_df
+        self.rusle_metrics = row_metrics[0] if row_metrics else None
+        self.phase2_df = phase2_df
+
+    def set_wilcock_results(self, annual_summary, phase3_df):
+        """Set calculation results from the Wilcock & Crowe bedload model."""
+        self.annual_summary = annual_summary
+        self.phase3_df = phase3_df
+
+    def set_integration_results(self, merged_df):
+        """Set merged results from the Integration module."""
+        self.final_merged_df = merged_df
+
+
     # Backwards-compatible aliases for views/tests
     @property
     def rusle_frame(self):

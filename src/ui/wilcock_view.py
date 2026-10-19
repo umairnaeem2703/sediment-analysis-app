@@ -1,6 +1,5 @@
-import threading
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import ttk
 
 import matplotlib
 matplotlib.use("TkAgg")
@@ -8,6 +7,13 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from src.core.wilcock import BedloadVisualizer, FractionalModel, TimeSeriesAggregator
+from src.ui.common import (
+    browse_open_file,
+    browse_save_file,
+    run_in_background,
+    show_error,
+    show_info,
+)
 from src.utils.paths import read_table
 
 
@@ -69,15 +75,13 @@ class WilcockView:
         self.frame.rowconfigure(4, weight=1)
 
     def browse_file(self, string_var):
-        filepath = filedialog.askopenfilename(
-            filetypes=[("CSV/Excel Files", "*.csv *.xlsx *.xls"), ("All Files", "*.*")]
-        )
+        filepath = browse_open_file(title="Select CSV/Excel File")
         if filepath:
             string_var.set(filepath)
 
     def display_wc_summary_table(self):
         if self.app.annual_summary is None or self.app.annual_summary.empty:
-            messagebox.showerror("Summary Error", "Run the Wilcock analysis first.")
+            show_error("Summary Error", "Run the Wilcock analysis first.")
             return
 
         self._clear_wc_display()
@@ -126,7 +130,7 @@ class WilcockView:
 
     def _render_wc_graph(self):
         if self.app.annual_summary is None or self.app.annual_summary.empty:
-            messagebox.showerror("Graph Error", "Run the Wilcock analysis first.")
+            show_error("Graph Error", "Run the Wilcock analysis first.")
             return
 
         self._clear_wc_display()
@@ -135,7 +139,7 @@ class WilcockView:
             fig = visualizer.generate_trend_graph(self.app.annual_summary)
         except Exception as exc:
             self.wc_status_var.set("Failed")
-            messagebox.showerror("Visualization Error", f"Could not generate plot:\n\n{exc}")
+            show_error("Visualization Error", f"Could not generate plot:\n\n{exc}")
             return
 
         self._wc_fig = fig
@@ -144,25 +148,25 @@ class WilcockView:
         canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
         def save_fig():
-            save_path = filedialog.asksaveasfilename(
+            save_path = browse_save_file(
                 title="Save Trend Graph", defaultextension=".png", filetypes=[("PNG Image", "*.png")]
             )
             if save_path:
                 try:
                     fig.savefig(save_path, dpi=300, bbox_inches="tight")
-                    messagebox.showinfo("Success", f"Graph successfully saved to:\n{save_path}")
+                    show_info("Success", f"Graph successfully saved to:\n{save_path}")
                 except Exception as exc:
-                    messagebox.showerror("Export Error", str(exc))
+                    show_error("Export Error", str(exc))
 
         ttk.Button(self.wc_graph_frame, text="Export as PNG", command=save_fig).pack(pady=6)
         self.wc_status_var.set("Graph displayed.")
 
     def export_wc_summary_csv(self):
         if self.app.annual_summary is None or self.app.annual_summary.empty:
-            messagebox.showerror("Export Error", "Run the Wilcock analysis first.")
+            show_error("Export Error", "Run the Wilcock analysis first.")
             return
 
-        save_path = filedialog.asksaveasfilename(
+        save_path = browse_save_file(
             title="Save Annual Summary CSV",
             defaultextension=".csv",
             filetypes=[("CSV", "*.csv")],
@@ -170,9 +174,9 @@ class WilcockView:
         if save_path:
             try:
                 BedloadVisualizer.export_summary_csv(self.app.annual_summary, save_path)
-                messagebox.showinfo("Success", f"Annual summary saved to:\n{save_path}")
+                show_info("Success", f"Annual summary saved to:\n{save_path}")
             except Exception as exc:
-                messagebox.showerror("Export Error", str(exc))
+                show_error("Export Error", str(exc))
 
         self.wc_status_var.set("Summary exported.")
 
@@ -182,7 +186,7 @@ class WilcockView:
         flow_path = self.flow_file_var.get()
         frac_path = self.frac_file_var.get()
         if not flow_path or not frac_path:
-            messagebox.showerror("Input Error", "Please browse and select both the Flow and Fractional Data files.")
+            show_error("Input Error", "Please browse and select both the Flow and Fractional Data files.")
             return
 
         self._wc_running = True
@@ -191,42 +195,37 @@ class WilcockView:
         self.btn_export_summary.config(state="disabled")
         self.wc_status_var.set("Running daily bedload on a background thread...")
 
-        def worker():
-            try:
-                df_flow = read_table(flow_path)
-                df_frac = read_table(frac_path)
-                model = FractionalModel()
-                model.load_fractional_parameters(df_frac)
-                aggregator = TimeSeriesAggregator(model)
-                annual_summary = aggregator.process_annual_averages(df_flow)
-                phase3_df = aggregator.to_phase3_handoff(annual_summary)
-                payload = (annual_summary, phase3_df, None)
-            except Exception as exc:
-                payload = (None, None, exc)
-            self.app.root.after(0, lambda p=payload: self._on_wc_complete(*p))
+        def computation_task():
+            df_flow = read_table(flow_path)
+            df_frac = read_table(frac_path)
+            model = FractionalModel()
+            model.load_fractional_parameters(df_frac)
+            aggregator = TimeSeriesAggregator(model)
+            annual_summary = aggregator.process_annual_averages(df_flow)
+            phase3_df = aggregator.to_phase3_handoff(annual_summary)
+            return annual_summary, phase3_df
 
-        threading.Thread(target=worker, daemon=True).start()
+        def on_complete(result, error):
+            self._wc_running = False
+            self.btn_export_png.config(state="normal")
+            if error is not None:
+                self.wc_status_var.set("Failed")
+                show_error("Analysis Error", f"An error occurred during calculation:\n\n{error}")
+                return
 
-    def _on_wc_complete(self, annual_summary, phase3_df, error):
-        self._wc_running = False
-        self.btn_export_png.config(state="normal")
-        if error is not None:
-            self.wc_status_var.set("Failed")
-            messagebox.showerror("Analysis Error", f"An error occurred during calculation:\n\n{error}")
-            return
+            annual_summary, phase3_df = result
+            self.app.set_wilcock_results(annual_summary, phase3_df)
+            self.btn_export_phase3.config(state="normal")
+            self.btn_export_summary.config(state="normal")
+            self._render_wc_graph()
 
-        self.app.annual_summary = annual_summary
-        self.app.phase3_df = phase3_df
-        self.btn_export_phase3.config(state="normal")
-        self.btn_export_summary.config(state="normal")
-
-        self._render_wc_graph()
+        run_in_background(self.app.root, computation_task, on_complete)
 
     def export_phase3_csv(self):
         if self.app.phase3_df is None:
-            messagebox.showerror("Export Error", "Run the Wilcock analysis first.")
+            show_error("Export Error", "Run the Wilcock analysis first.")
             return
-        save_path = filedialog.asksaveasfilename(
+        save_path = browse_save_file(
             title="Save Phase 3 (Bedload Volume)",
             defaultextension=".csv",
             filetypes=[("CSV", "*.csv")],
@@ -234,4 +233,4 @@ class WilcockView:
         if save_path:
             self.app.phase3_df.to_csv(save_path, index=False)
             self.app.integration_view.phase3_file_var.set(save_path)
-            messagebox.showinfo("Success", f"Phase 3 handoff saved to:\n{save_path}")
+            show_info("Success", f"Phase 3 handoff saved to:\n{save_path}")
