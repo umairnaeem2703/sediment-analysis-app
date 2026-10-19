@@ -210,7 +210,6 @@ class WilcockView:
 
             annual_summary, phase3_df = result
             self.app.set_wilcock_results(annual_summary, phase3_df)
-            self.btn_export_phase3.config(state="normal")
             self.btn_export_summary.config(state="normal")
             self._render_wc_graph()
 
