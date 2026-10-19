@@ -4,8 +4,8 @@ from tkinter import ttk
 from app import SedimentApp
 
 
-def test_rusle_tab_uses_basin_grid_not_dropdowns():
-    root = tk.Tk()
+def test_rusle_tab_uses_basin_grid_not_dropdowns(tk_root):
+    root = tk.Toplevel(tk_root)
     try:
         app = SedimentApp(root)
         assert not hasattr(app, "basin_dropdown")

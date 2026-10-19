@@ -31,3 +31,8 @@ exports/
 # IDE / Editor configuration
 .vscode/
 .idea/
+
+# Agent tooling artifacts
+.agents/
+.claude/
+skills-lock.json

@@ -192,7 +192,7 @@ def test_zonal_matcher_turkish_normalization_and_matching():
     assert ZonalMatcher.resolve_zonal_mean(lookup_tr, "İYİDERE") == 5.12
 
 
-def test_ui_display_and_workflow_with_turkish_characters(tmp_path, sample_turkish_data):
+def test_ui_display_and_workflow_with_turkish_characters(tmp_path, sample_turkish_data, tk_root):
     basin_csv = tmp_path / "turkish_basins.csv"
     sample_turkish_data.to_csv(basin_csv, index=False, encoding="utf-8-sig")
 
@@ -211,7 +211,7 @@ def test_ui_display_and_workflow_with_turkish_characters(tmp_path, sample_turkis
         }
     ).to_csv(zonal_csv, index=False, encoding="utf-8-sig")
 
-    root = tk.Tk()
+    root = tk.Toplevel(tk_root)
     try:
         app = SedimentApp(root)
 
@@ -277,7 +277,7 @@ def test_ui_display_and_workflow_with_turkish_characters(tmp_path, sample_turkis
         root.destroy()
 
 
-def test_ui_with_turkish_column_headers(tmp_path):
+def test_ui_with_turkish_column_headers(tmp_path, tk_root):
     tr_df = pd.DataFrame(
         {
             "Baraj Adı": ["Çınarcık Barajı", "Uğurlu Barajı"],
@@ -291,7 +291,7 @@ def test_ui_with_turkish_column_headers(tmp_path):
     file_path = tmp_path / "turkish_headers.csv"
     tr_df.to_csv(file_path, index=False, encoding="utf-8-sig")
 
-    root = tk.Tk()
+    root = tk.Toplevel(tk_root)
     try:
         app = SedimentApp(root)
         app.rusle_view._populate_basin_tree(str(file_path))
@@ -314,7 +314,7 @@ def test_ui_with_turkish_column_headers(tmp_path):
         root.destroy()
 
 
-def test_real_ankara_basin_with_turkish_characters_against_zonal_file(tmp_path):
+def test_real_ankara_basin_with_turkish_characters_against_zonal_file(tmp_path, tk_root):
     basin_csv = tmp_path / "ankara_basins.csv"
     pd.DataFrame(
         {
@@ -331,7 +331,7 @@ def test_real_ankara_basin_with_turkish_characters_against_zonal_file(tmp_path):
         }
     ).to_csv(basin_csv, index=False, encoding="utf-8-sig")
 
-    root = tk.Tk()
+    root = tk.Toplevel(tk_root)
     try:
         app = SedimentApp(root)
         app.rusle_view._populate_basin_tree(str(basin_csv))
@@ -344,8 +344,12 @@ def test_real_ankara_basin_with_turkish_characters_against_zonal_file(tmp_path):
         assert app.basin_tree.item(children[2], "values")[0] == "Çubuk 1"
         assert app.basin_tree.item(children[3], "values")[0] == "Çubuk 2"
 
-        # Match against actual raw_zonal_tables.csv
-        actual_zonal_path = Path("inputs") / "raw_zonal_tables.csv"
+        # Match against actual raw_zonal_means.csv (or raw_zonal_tables.csv)
+        actual_zonal_path = (
+            Path("inputs") / "raw_zonal_means.csv"
+            if (Path("inputs") / "raw_zonal_means.csv").exists()
+            else Path("inputs") / "raw_zonal_tables.csv"
+        )
         app.rusle_view.zonal_file_var.set(str(actual_zonal_path.resolve()))
         app.rusle_view.execute_rusle_analysis()
 
