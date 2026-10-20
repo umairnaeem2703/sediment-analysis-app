@@ -1,9 +1,17 @@
 import math
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import pytest
 
-from src.core.wilcock import FractionalModel, SECONDS_PER_YEAR, TimeSeriesAggregator
+from src.core.wilcock import (
+    SECONDS_PER_YEAR,
+    WATER_YEAR_COLUMN,
+    BedloadVisualizer,
+    FractionalModel,
+    TimeSeriesAggregator,
+)
 from src.utils.paths import read_table, resource_path
 
 
@@ -48,6 +56,75 @@ def test_annual_summary_does_not_mutate_input():
     original_cols = list(df_flow.columns)
     TimeSeriesAggregator(model).process_annual_averages(df_flow)
     assert list(df_flow.columns) == original_cols
+
+
+def _water_year_flow():
+    return pd.DataFrame(
+        {"Date": ["30/09/2010", "01/10/2010"], "Flow": [10.0, 80.0], WATER_YEAR_COLUMN: [2010, 2011]}
+    )
+
+
+def test_water_year_column_drives_grouping():
+    aggregator = TimeSeriesAggregator(_model())
+
+    water = aggregator.process_annual_averages(_water_year_flow())
+    calendar = aggregator.process_annual_averages(_water_year_flow().drop(columns=[WATER_YEAR_COLUMN]))
+
+    assert water.index.name == WATER_YEAR_COLUMN
+    assert list(water.index) == [2010, 2011]
+    assert calendar.index.name == "Year"
+    assert list(calendar.index) == [2010]
+
+
+def test_missing_water_year_rows_are_dropped_with_warning():
+    df_flow = _water_year_flow().astype({WATER_YEAR_COLUMN: object})
+    df_flow.loc[1, WATER_YEAR_COLUMN] = None
+    aggregator = TimeSeriesAggregator(_model())
+
+    summary = aggregator.process_annual_averages(df_flow)
+
+    assert list(summary.index) == [2010]
+    assert any(WATER_YEAR_COLUMN in w for w in aggregator.warnings)
+
+
+def test_phase3_handoff_keeps_water_year_key():
+    aggregator = TimeSeriesAggregator(_model())
+    handoff = aggregator.to_phase3_handoff(aggregator.process_annual_averages(_water_year_flow()))
+    assert list(handoff.columns) == [WATER_YEAR_COLUMN, "Bedload_Volume_m3"]
+    assert list(handoff[WATER_YEAR_COLUMN]) == [2010, 2011]
+
+
+def test_summary_table_keeps_water_year_key():
+    summary = TimeSeriesAggregator(_model()).process_annual_averages(_water_year_flow())
+    table = BedloadVisualizer.prepare_summary_table(summary)
+    assert list(table.columns)[0] == WATER_YEAR_COLUMN
+
+
+@pytest.fixture()
+def agg_backend():
+    # Draw without a GUI. A TkAgg figure created before the session's Tk root exists
+    # breaks later Tk-based tests on Windows, so restore the previous backend afterwards.
+    previous = plt.get_backend()
+    plt.switch_backend("Agg")
+    yield
+    plt.switch_backend(previous)
+
+
+def test_trend_graph_labels_water_year_from_index_name(agg_backend):
+    summary = TimeSeriesAggregator(_model()).process_annual_averages(_water_year_flow())
+    calendar = TimeSeriesAggregator(_model()).process_annual_averages(
+        _water_year_flow().drop(columns=[WATER_YEAR_COLUMN])
+    )
+    # Re-deriving the frame (which drops .attrs) must not lose the water-year label.
+    rederived = summary.reset_index().set_index(WATER_YEAR_COLUMN)
+
+    figures = [BedloadVisualizer().generate_trend_graph(df) for df in (summary, rederived, calendar)]
+    try:
+        labels = [fig.axes[0].get_xlabel() for fig in figures]
+    finally:
+        for fig in figures:
+            plt.close(fig)
+    assert labels == ["Water Year (Oct–Sep)", "Water Year (Oct–Sep)", "Year"]
 
 
 def test_phase3_schema_and_volume_conversion():

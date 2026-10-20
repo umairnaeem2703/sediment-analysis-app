@@ -10,6 +10,7 @@ from app import SedimentApp
 from src.core.rusle import (
     ZonalMatcher,
     find_basin_table_columns,
+    normalize_header,
     to_ascii_turkish,
     turkish_lower,
 )
@@ -49,6 +50,24 @@ def sample_turkish_data():
             "Main Waterway Slope": [0.012, 0.018, 0.035, 0.015, 0.009, 0.042],
         }
     )
+
+
+@pytest.mark.parametrize(
+    "header, expected",
+    [
+        ("Flow Q (m³/s)", "flowq(m3/s)"),
+        ("Yıllar", "yillar"),
+        ("YILLAR", "yillar"),
+        ("TOP.", "top"),
+        ("ORT.", "ort"),
+        ("Ağustos", "agustos"),
+        ("Eylül", "eylul"),
+        (" Tarih ", "tarih"),
+        ("Water_Year", "water_year"),
+    ],
+)
+def test_normalize_header(header, expected):
+    assert normalize_header(header) == expected
 
 
 def test_turkish_string_helpers():

@@ -58,6 +58,12 @@ def to_ascii_turkish(text: str) -> str:
     return str(text).translate(ascii_map)
 
 
+def normalize_header(text) -> str:
+    """Normalise a column header for lookup: Turkish-aware lowercase, ASCII-folded,
+    ³ -> 3, whitespace removed, '.' and ':' stripped (e.g. 'Flow Q (m³/s)' -> 'flowq(m3/s)')."""
+    folded = to_ascii_turkish(turkish_lower(text)).replace("³", "3")
+    return "".join(folded.split()).replace(".", "").replace(":", "")
+
 
 def find_basin_table_columns(columns) -> dict:
     """Identify column names for dam, basin, subbasin, area, slope, year across English and Turkish."""

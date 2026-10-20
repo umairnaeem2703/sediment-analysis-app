@@ -6,7 +6,22 @@ matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-from src.core.wilcock import BedloadVisualizer, FractionalModel, TimeSeriesAggregator
+from src.core.monthly_flow_preprocessor import (
+    DEFAULT_SEED,
+    DEFAULT_SIGMA,
+    MonthlyFlowPreprocessor,
+    is_monthly_flow_table,
+    prepare_daily_flow,
+)
+from src.core.wilcock import (
+    BEDLOAD_COLUMN_LABEL,
+    FLOW_COLUMN_LABEL,
+    WATER_YEAR_COLUMN,
+    YEAR_COLUMN,
+    BedloadVisualizer,
+    FractionalModel,
+    TimeSeriesAggregator,
+)
 from src.ui.common import (
     browse_open_file,
     browse_save_file,
@@ -16,6 +31,17 @@ from src.ui.common import (
     show_warning,
 )
 from src.utils.paths import read_table
+
+WATER_YEAR_HEADING = "Water Year (Oct–Sep)"
+
+
+def _parse_dsi_settings(sigma_text: str, seed_text: str):
+    """Parse the DSI σ/seed fields (a decimal comma is accepted). Raises ValueError if invalid."""
+    try:
+        pre = MonthlyFlowPreprocessor(sigma=float(sigma_text.strip().replace(",", ".")), seed=int(seed_text.strip()))
+    except ValueError:
+        raise ValueError("σ must be a finite number >= 0 and seed a whole number >= 0.") from None
+    return pre.sigma, pre.seed
 
 
 class WilcockView:
@@ -36,7 +62,7 @@ class WilcockView:
     def _setup_ui(self):
         self.frame.columnconfigure(1, weight=1)
 
-        ttk.Button(self.frame, text="Browse Daily Flow CSV", command=lambda: self.browse_file(self.flow_file_var)).grid(
+        ttk.Button(self.frame, text="Browse Flow CSV (daily or DSI monthly)", command=lambda: self.browse_file(self.flow_file_var)).grid(
             row=0, column=0, padx=10, pady=10, sticky="w"
         )
         ttk.Entry(self.frame, textvariable=self.flow_file_var, width=50, state="readonly").grid(
@@ -50,8 +76,17 @@ class WilcockView:
             row=1, column=1, padx=10, pady=10, sticky="ew"
         )
 
+        settings = ttk.Frame(self.frame)
+        settings.grid(row=2, column=0, columnspan=2, pady=(0, 4))
+        ttk.Label(settings, text="DSI monthly files only — σ:").pack(side=tk.LEFT, padx=(6, 2))
+        self.sigma_var = tk.StringVar(value=str(DEFAULT_SIGMA))
+        ttk.Entry(settings, textvariable=self.sigma_var, width=6).pack(side=tk.LEFT, padx=2)
+        ttk.Label(settings, text="seed:").pack(side=tk.LEFT, padx=(12, 2))
+        self.seed_var = tk.StringVar(value=str(DEFAULT_SEED))
+        ttk.Entry(settings, textvariable=self.seed_var, width=6).pack(side=tk.LEFT, padx=2)
+
         wc_buttons = ttk.Frame(self.frame)
-        wc_buttons.grid(row=2, column=0, columnspan=2, pady=12)
+        wc_buttons.grid(row=3, column=0, columnspan=2, pady=12)
         self.btn_export_png = ttk.Button(
             wc_buttons, text="Execute & Export Trend Graph", command=self.execute_wc_analysis
         )
@@ -65,11 +100,11 @@ class WilcockView:
         )
         self.btn_export_summary.pack(side=tk.LEFT, padx=6)
 
-        ttk.Label(self.frame, textvariable=self.wc_status_var).grid(row=3, column=0, columnspan=2, pady=4)
+        ttk.Label(self.frame, textvariable=self.wc_status_var).grid(row=4, column=0, columnspan=2, pady=4)
 
         self.wc_graph_frame = ttk.Frame(self.frame)
-        self.wc_graph_frame.grid(row=4, column=0, columnspan=2, sticky="nsew", padx=10, pady=6)
-        self.frame.rowconfigure(4, weight=1)
+        self.wc_graph_frame.grid(row=5, column=0, columnspan=2, sticky="nsew", padx=10, pady=6)
+        self.frame.rowconfigure(5, weight=1)
 
     def browse_file(self, string_var):
         filepath = browse_open_file(title="Select CSV/Excel File")
@@ -86,20 +121,21 @@ class WilcockView:
         columns = list(summary_df.columns)
         tree = ttk.Treeview(self.wc_graph_frame, columns=columns, show="headings", height=max(8, min(15, len(summary_df))))
         for col in columns:
-            tree.heading(col, text=col)
-            width = 180 if "Flow Q (m³/s)" in col or "Bedload" in col else 100
+            heading = WATER_YEAR_HEADING if col == WATER_YEAR_COLUMN else col
+            tree.heading(col, text=heading)
+            width = max(100, 8 * len(heading))
             tree.column(col, width=width, anchor="center")
 
         for _, row in summary_df.iterrows():
             values = []
             for col_name in columns:
                 value = row[col_name]
-                if col_name == "Year":
+                if col_name in (YEAR_COLUMN, WATER_YEAR_COLUMN):
                     values.append(int(value))
-                elif "Flow Q (m³/s)" in col_name:
+                elif col_name == FLOW_COLUMN_LABEL:
                     values.append(f"{float(value):.4f}")
-                elif "Bedload" in col_name:
-                    values.append(f"{float(value):.6f}")
+                elif col_name == BEDLOAD_COLUMN_LABEL:
+                    values.append(f"{float(value):,.2f}")
                 else:
                     values.append(value)
             tree.insert("", "end", values=tuple(values))
@@ -186,6 +222,10 @@ class WilcockView:
             show_error("Input Error", "Please browse and select both the Flow and Fractional Data files.")
             return
 
+        # Read on the Tk thread; only parsed (and validated) if the flow file turns out to be DSI monthly.
+        sigma_text = self.sigma_var.get()
+        seed_text = self.seed_var.get()
+
         self._wc_running = True
         self.btn_export_png.config(state="disabled")
         self.btn_export_summary.config(state="disabled")
@@ -194,12 +234,17 @@ class WilcockView:
         def computation_task():
             df_flow = read_table(flow_path)
             df_frac = read_table(frac_path)
+            notes = []
+            if is_monthly_flow_table(df_flow):
+                # The converted series carries a Water_Year column, so the aggregator groups by water year.
+                sigma, seed = _parse_dsi_settings(sigma_text, seed_text)
+                df_flow, notes = prepare_daily_flow(df_flow, sigma=sigma, seed=seed)
             model = FractionalModel()
             model.load_fractional_parameters(df_frac)
             aggregator = TimeSeriesAggregator(model)
             annual_summary = aggregator.process_annual_averages(df_flow)
             phase3_df = aggregator.to_phase3_handoff(annual_summary)
-            self._wc_warnings = list(aggregator.warnings)
+            self._wc_warnings = notes + list(aggregator.warnings)
             return annual_summary, phase3_df
 
         def on_complete(result, error):

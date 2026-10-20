@@ -5,6 +5,7 @@ from tkinter import ttk
 import numpy as np
 import pandas as pd
 
+from src.core.wilcock import WATER_YEAR_COLUMN, year_column
 from src.data.reporter import IntegrationModule
 from src.ui.common import (
     browse_open_file,
@@ -212,9 +213,11 @@ class IntegrationView:
                 min_record["Interpolated_Elevation_m"] = merged_df.loc[min_idx, "Interpolated_Elevation_m"]
                 max_record["Interpolated_Elevation_m"] = merged_df.loc[max_idx, "Interpolated_Elevation_m"]
 
-            # Cast Year to int for clean display
-            min_year = int(min_record["Year"])
-            max_year = int(max_record["Year"])
+            # Bedload from a DSI monthly run is keyed by Water_Year (Oct-Sep); cast to int for clean display
+            year_key = year_column(merged_df.columns)
+            year_label = "Water Year" if year_key == WATER_YEAR_COLUMN else "Year"
+            min_year = int(min_record[year_key])
+            max_year = int(max_record[year_key])
 
             self.results_text.config(state="normal")
             self.results_text.delete(1.0, tk.END)
@@ -224,7 +227,7 @@ class IntegrationView:
                 "       SEDIMENT INTEGRATION SUMMARY REPORT        \n"
                 "==================================================\n\n"
                 "Minimum Sediment Year (Best Case):\n"
-                f"  Year: {min_year}\n"
+                f"  {year_label}: {min_year}\n"
                 f"  Total Volume: {min_record['Total_Volume_m3']:,.2f} m³\n"
             )
             if "Interpolated_Elevation_m" in min_record and pd.notna(min_record["Interpolated_Elevation_m"]):
@@ -234,7 +237,7 @@ class IntegrationView:
 
             report += (
                 "\nMaximum Sediment Year (Worst Case):\n"
-                f"  Year: {max_year}\n"
+                f"  {year_label}: {max_year}\n"
                 f"  Total Volume: {max_record['Total_Volume_m3']:,.2f} m³\n"
             )
             if "Interpolated_Elevation_m" in max_record and pd.notna(max_record["Interpolated_Elevation_m"]):
