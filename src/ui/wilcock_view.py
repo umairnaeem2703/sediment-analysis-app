@@ -13,6 +13,7 @@ from src.ui.common import (
     run_in_background,
     show_error,
     show_info,
+    show_warning,
 )
 from src.utils.paths import read_table
 
@@ -198,6 +199,7 @@ class WilcockView:
             aggregator = TimeSeriesAggregator(model)
             annual_summary = aggregator.process_annual_averages(df_flow)
             phase3_df = aggregator.to_phase3_handoff(annual_summary)
+            self._wc_warnings = list(aggregator.warnings)
             return annual_summary, phase3_df
 
         def on_complete(result, error):
@@ -212,6 +214,9 @@ class WilcockView:
             self.app.set_wilcock_results(annual_summary, phase3_df)
             self.btn_export_summary.config(state="normal")
             self._render_wc_graph()
+            warnings = getattr(self, "_wc_warnings", [])
+            if warnings:
+                show_warning("Flow Data Notes", "\n".join(warnings))
 
         run_in_background(self.app.root, computation_task, on_complete)
 

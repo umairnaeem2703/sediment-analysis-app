@@ -83,34 +83,40 @@ class IntegrationView:
             string_var.set(filepath)
 
     def _ensure_phase2_volume(self, df_p2: pd.DataFrame) -> pd.DataFrame:
+        self._zonal_notes = []
         if "Suspended_Volume_m3" in df_p2.columns or "Volume_m3_yr" in df_p2.columns:
             return df_p2
         if "volume_m3" in df_p2.columns:
             return df_p2.rename(columns={"volume_m3": "Suspended_Volume_m3"})
 
-        area_col = next((c for c in df_p2.columns if "area" in c.lower()), None)
-        slope_col = next((c for c in df_p2.columns if "slope" in c.lower()), None)
-        subbasin_col = next((c for c in df_p2.columns if "sub" in c.lower() and "basin" in c.lower()), None)
-        if area_col and slope_col:
-            from src.core.rusle import YieldCalculator, ZonalMatcher
+        from src.core.rusle import YieldCalculator, ZonalMatcher, find_basin_table_columns
 
-            zonal_path = resource_path("inputs", "raw_zonal_means.csv")
-            if not Path(zonal_path).exists():
-                zonal_path = resource_path("inputs", "raw_zonal_tables.csv")
-            lookup = {}
-            if Path(zonal_path).exists():
-                zonal_df = read_table(zonal_path)
-                lookup = ZonalMatcher.build_lookup(zonal_df)
+        col_map = find_basin_table_columns(df_p2.columns)
+        area_col, slope_col, subbasin_col = col_map.get("area"), col_map.get("slope"), col_map.get("subbasin")
+        if not (area_col and slope_col):
+            return df_p2
 
-            calc = YieldCalculator()
-            total_vol = 0.0
-            for _, row in df_p2.iterrows():
-                subbasin = str(row[subbasin_col]) if subbasin_col else ""
-                mean_val = ZonalMatcher.resolve_zonal_mean(lookup, subbasin) if lookup else 3.0
-                metrics = calc.calculate_metrics(mean_val, float(row[area_col]), float(row[slope_col]))
-                total_vol += metrics["volume_m3"]
-            return pd.DataFrame({"Suspended_Volume_m3": [total_vol]})
-        return df_p2
+        zonal_path = self.app.zonal_file_var.get().strip()
+        if not zonal_path:
+            raise ValueError(
+                "Phase 2 table has no volume column. Choose a Zonal Statistics CSV on the RUSLE tab, "
+                "or run the RUSLE analysis first."
+            )
+        if not subbasin_col:
+            raise ValueError("Phase 2 table needs a Sub-basin column to match against the zonal statistics file.")
+
+        lookup = ZonalMatcher.build_lookup(read_table(zonal_path))
+        resolution = ZonalMatcher.resolve_all(lookup, df_p2[subbasin_col])
+        if resolution.unresolved:
+            raise ZonalMatcher.unresolved_error(lookup, resolution.unresolved)
+        self._zonal_notes = [f"{name} matched approximately to zonal '{key}'" for name, key in sorted(resolution.loose.items())]
+
+        calc = YieldCalculator()
+        total_vol = sum(
+            calc.calculate_metrics(mean_val, float(area), float(slope))["volume_m3"]
+            for mean_val, area, slope in zip(resolution.means, df_p2[area_col], df_p2[slope_col])
+        )
+        return pd.DataFrame({"Suspended_Volume_m3": [total_vol]})
 
     def _load_default_phase3(self) -> pd.DataFrame:
         from src.core.wilcock import FractionalModel, TimeSeriesAggregator
@@ -244,8 +250,9 @@ class IntegrationView:
             self.results_text.insert(tk.END, report)
             self.results_text.config(state="disabled")
             self.btn_export_master.config(state="normal")
-            if join_warning or interp_warnings:
-                show_warning("Integration Notes", "\n".join(filter(None, [join_warning] + interp_warnings)))
+            notes = list(filter(None, [join_warning] + interp_warnings)) + getattr(self, "_zonal_notes", [])
+            if notes:
+                show_warning("Integration Notes", "\n".join(notes))
         except Exception as exc:
             show_error("Integration Error", f"Failed to merge datasets:\n\n{exc}")
 

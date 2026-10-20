@@ -1,6 +1,6 @@
 import math
 from dataclasses import asdict, dataclass
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, NamedTuple, Optional, Set
 
 import numpy as np
 import pandas as pd
@@ -8,6 +8,23 @@ import pandas as pd
 import unicodedata
 
 HA_PER_KM2 = 100.0
+_MIN_LOOSE_MATCH_LEN = 3
+
+
+class ZonalMatch(NamedTuple):
+    """Result of ZonalMatcher.resolve_zonal_match; method is exact, loose, ambiguous or None."""
+
+    value: Optional[float]
+    method: Optional[str]
+    candidates: List[str]
+
+
+class ZonalResolution(NamedTuple):
+    """Result of ZonalMatcher.resolve_all: per-name means, loose matches and unresolved names."""
+
+    means: List[Optional[float]]
+    loose: Dict[str, str]
+    unresolved: List[str]
 
 
 def turkish_lower(text: str) -> str:
@@ -86,7 +103,6 @@ class BasinRow:
     dam: str
     basin: str
     subbasin: str
-    year: int
     area_km2: float
     slope: float
 
@@ -244,51 +260,83 @@ class ZonalMatcher:
 
     @classmethod
     def resolve_zonal_mean(cls, zonal_lookup: Dict[str, float], subbasin_value) -> Optional[float]:
+        return cls.resolve_zonal_match(zonal_lookup, subbasin_value).value
+
+    @classmethod
+    def resolve_zonal_match(cls, zonal_lookup: Dict[str, float], subbasin_value) -> "ZonalMatch":
+        """Resolve a sub-basin to its zonal MEAN.
+
+        Exact and alias matches are returned directly. Looser matches (digits only, prefix/suffix,
+        containment) are accepted only when they point to a single value; ambiguous ones return
+        value=None with the candidate keys so the caller can report them.
+        """
         if subbasin_value is None:
-            return None
+            return ZonalMatch(None, None, [])
 
         direct_key = cls.normalize_subbasin_name(subbasin_value)
         if direct_key in zonal_lookup:
-            return zonal_lookup[direct_key]
+            return ZonalMatch(zonal_lookup[direct_key], "exact", [direct_key])
 
         ascii_direct = to_ascii_turkish(direct_key)
         if ascii_direct in zonal_lookup:
-            return zonal_lookup[ascii_direct]
+            return ZonalMatch(zonal_lookup[ascii_direct], "exact", [ascii_direct])
 
         for alias in cls.get_subbasin_aliases(subbasin_value):
             if alias in zonal_lookup:
-                return zonal_lookup[alias]
+                return ZonalMatch(zonal_lookup[alias], "exact", [alias])
 
         digits_only = "".join(ch for ch in ascii_direct if ch.isdigit())
-        if digits_only:
-            for candidate_key, value in zonal_lookup.items():
-                candidate_digits = "".join(ch for ch in to_ascii_turkish(candidate_key) if ch.isdigit())
-                if candidate_digits == digits_only:
-                    return value
-
-        direct_key_len = len(direct_key)
         ascii_len = len(ascii_direct)
-        for candidate_key, value in zonal_lookup.items():
+        candidates: List[str] = []
+        for candidate_key in zonal_lookup:
             cand_ascii = to_ascii_turkish(candidate_key)
-            if candidate_key == direct_key or cand_ascii == ascii_direct:
-                return value
-            if direct_key and (candidate_key.endswith(direct_key) or direct_key.endswith(candidate_key)):
-                return value
-            if ascii_direct and (cand_ascii.endswith(ascii_direct) or ascii_direct.endswith(cand_ascii)):
-                return value
-            if direct_key and (direct_key in candidate_key or candidate_key in direct_key):
-                return value
-            if ascii_direct and (ascii_direct in cand_ascii or cand_ascii in ascii_direct):
-                return value
+            if digits_only and "".join(ch for ch in cand_ascii if ch.isdigit()) == digits_only:
+                candidates.append(candidate_key)
+                continue
+            if not ascii_direct or not cand_ascii:
+                continue
+            shorter, longer = sorted((ascii_direct, cand_ascii), key=len)
+            if len(shorter) >= _MIN_LOOSE_MATCH_LEN and shorter in longer:
+                candidates.append(candidate_key)
+                continue
             if (
-                ascii_direct
-                and cand_ascii
+                digits_only
                 and abs(len(cand_ascii) - ascii_len) <= 2
                 and cand_ascii.replace(digits_only, "") == ascii_direct.replace(digits_only, "")
             ):
-                return value
+                candidates.append(candidate_key)
 
-        return None
+        if not candidates:
+            return ZonalMatch(None, None, [])
+        if len({zonal_lookup[k] for k in candidates}) > 1:
+            return ZonalMatch(None, "ambiguous", sorted(candidates))
+        return ZonalMatch(zonal_lookup[candidates[0]], "loose", sorted(candidates))
+
+    @classmethod
+    def resolve_all(cls, zonal_lookup: Dict[str, float], names) -> "ZonalResolution":
+        """Resolve every sub-basin name; unmatched and ambiguous names are collected, not raised."""
+        means: List[Optional[float]] = []
+        loose: Dict[str, str] = {}
+        unresolved: List[str] = []
+        for name in names:
+            match = cls.resolve_zonal_match(zonal_lookup, name)
+            means.append(match.value)
+            if match.value is None:
+                if match.method == "ambiguous":
+                    unresolved.append(f"{name} (ambiguous: {', '.join(match.candidates[:5])})")
+                else:
+                    unresolved.append(str(name))
+            elif match.method == "loose":
+                loose[str(name)] = match.candidates[0]
+        return ZonalResolution(means, loose, unresolved)
+
+    @staticmethod
+    def unresolved_error(zonal_lookup: Dict[str, float], unresolved: List[str]) -> ValueError:
+        keys = ", ".join(sorted(zonal_lookup.keys())[:25])
+        return ValueError(
+            "MEAN value missing for sub-basin(s): "
+            f"{', '.join(sorted(set(unresolved)))}. Available zonal keys: {keys}"
+        )
 
 
 

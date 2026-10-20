@@ -1,3 +1,4 @@
+import re
 import sys
 from pathlib import Path
 
@@ -15,6 +16,23 @@ def resource_path(*parts: str) -> Path:
     return base.joinpath(*parts)
 
 
+_DECIMAL_COMMA_RE = re.compile(r"^\s*-?\d+(,\d+)?\s*$")
+
+
+def _coerce_decimal_comma(df: pd.DataFrame) -> pd.DataFrame:
+    """Convert text columns that hold only decimal-comma numbers (e.g. "1,76") to floats."""
+    for col in df.columns:
+        if not (pd.api.types.is_object_dtype(df[col]) or pd.api.types.is_string_dtype(df[col])):
+            continue
+        values = df[col].dropna()
+        if values.empty:
+            continue
+        text = values.astype(str)
+        if text.map(lambda v: bool(_DECIMAL_COMMA_RE.match(v))).all() and text.str.contains(",").any():
+            df[col] = pd.to_numeric(df[col].astype(str).str.strip().str.replace(",", ".", regex=False), errors="coerce")
+    return df
+
+
 def read_table(file_path: str) -> pd.DataFrame:
     """Load CSV or Excel using a case-insensitive suffix. Handles UTF-8 and Turkish encodings (e.g. CP1254, ISO-8859-9)."""
     path = Path(file_path)
@@ -30,10 +48,10 @@ def read_table(file_path: str) -> pd.DataFrame:
                     try:
                         df_semi = pd.read_csv(path, encoding=enc, sep=";")
                         if len(df_semi.columns) > 1:
-                            return df_semi
+                            return _coerce_decimal_comma(df_semi)
                     except Exception:
                         pass
-                return df
+                return _coerce_decimal_comma(df)
             except (UnicodeDecodeError, UnicodeError) as exc:
                 last_exc = exc
                 continue
