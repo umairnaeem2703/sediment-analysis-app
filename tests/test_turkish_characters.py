@@ -285,7 +285,6 @@ def test_ui_with_turkish_column_headers(tmp_path, tk_root):
             "Alt Havza Adı": ["Çine Alt Havzası", "Dalaman Alt Havzası"],
             "Alan (km2)": [850.0, 420.5],
             "Eğim": [0.025, 0.038],
-            "Yıl": [2024, 2025],
         }
     )
     file_path = tmp_path / "turkish_headers.csv"
@@ -303,13 +302,15 @@ def test_ui_with_turkish_column_headers(tmp_path, tk_root):
         assert row1[0] == "Çınarcık Barajı"
         assert row1[1] == "Büyük Menderes Havzası"
         assert row1[2] == "Çine Alt Havzası"
-        assert int(row1[3]) == 2024
+        assert float(row1[3]) == 850.0
+        assert float(row1[4]) == 0.025
 
         row2 = app.basin_tree.item(children[1], "values")
         assert row2[0] == "Uğurlu Barajı"
         assert row2[1] == "Batı Akdeniz Havzası"
         assert row2[2] == "Dalaman Alt Havzası"
-        assert int(row2[3]) == 2025
+        assert float(row2[3]) == 420.5
+        assert float(row2[4]) == 0.038
     finally:
         root.destroy()
 
@@ -361,7 +362,7 @@ def test_real_ankara_basin_with_turkish_characters_against_zonal_file(tmp_path, 
         assert app.results_tree.item(res_children[2], "values")[0] == "Çubuk 1"
         assert app.results_tree.item(res_children[3], "values")[0] == "Çubuk 2"
         # Verify calculated volume is positive
-        assert float(app.results_tree.item(res_children[0], "values")[8]) > 0
+        assert float(app.results_tree.item(res_children[0], "values")[7]) > 0
     finally:
         root.destroy()
 

@@ -1,14 +1,13 @@
 import pandas as pd
 
 from src.core.rusle import find_basin_table_columns, to_ascii_turkish, turkish_lower
-from src.utils.paths import read_table, resource_path
+from src.utils.paths import read_table
 
 
 
 class BasinDatabase:
     def __init__(self):
         self.data_dict = {}
-        self.source_path = None
 
     def load_from_dataframe(self, df: pd.DataFrame):
         col_map = find_basin_table_columns(df.columns)
@@ -48,27 +47,9 @@ class BasinDatabase:
             }
 
 
-    def load_startup_basins(self):
-        csv_path = resource_path("inputs", "TR_Basin_Subbasin_Area.csv")
-        xlsx_path = resource_path("inputs", "TR_Basin_Subbasin_Area.xlsx")
-        cwd_xlsx = resource_path("TR_Basin_Subbasin_Area.xlsx")
-
-        for candidate in (csv_path, xlsx_path, cwd_xlsx):
-            if candidate.exists():
-                df = read_table(str(candidate))
-                self.load_from_dataframe(df)
-                self.source_path = str(candidate)
-                return str(candidate)
-
-        raise FileNotFoundError(
-            "Basin table not found. Expected .csv "
-            "or a matching .xlsx next to the application."
-        )
-
     def load_from_excel(self, file_path: str):
         df = read_table(file_path)
         self.load_from_dataframe(df)
-        self.source_path = file_path
 
     def get_area_and_slope(self, basin_name: str, subbasin_name: str):
         if basin_name in self.data_dict and subbasin_name in self.data_dict[basin_name]:

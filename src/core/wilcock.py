@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from src.core.rusle import turkish_lower
+
 SECONDS_PER_YEAR = 365.25 * 24.0 * 3600.0
 PHI_BREAK = 1.35
 
@@ -119,42 +121,68 @@ class FractionalModel:
         self._tau_ri = work["tau_ri"].to_numpy(dtype=float)
 
 
+def _normalize_header(col) -> str:
+    """Lowercase (Turkish-aware), drop whitespace and map the superscript in m³."""
+    return "".join(turkish_lower(str(col)).split()).replace("³", "3")
+
+
 class TimeSeriesAggregator:
     def __init__(self, model: FractionalModel):
         self.model = model
+        self.warnings: List[str] = []
 
     def process_annual_averages(self, df_flow: pd.DataFrame) -> pd.DataFrame:
         if df_flow is None or df_flow.empty:
             raise ValueError("Flow table is empty.")
 
-        normalized = {str(col).strip(): col for col in df_flow.columns}
-        lookup = {str(col).strip().lower(): col for col in df_flow.columns}
+        self.warnings = []
+        lookup = {_normalize_header(col): col for col in df_flow.columns}
 
         date_col = None
-        for candidate in ["date"]:
+        for candidate in ["date", "tarih"]:
             if candidate in lookup:
                 date_col = lookup[candidate]
                 break
 
-        flow_candidates = ["flow", "Flow Q (m³/s)", "Flow Q (m3/s)"]
         flow_col = None
-        for candidate in flow_candidates:
+        for candidate in ["flow", "flowq(m3/s)", "debi"]:
             if candidate in lookup:
                 flow_col = lookup[candidate]
                 break
 
         if date_col is None or flow_col is None:
             raise KeyError(
-                "Flow table must contain the columns: Date and Flow Q (m3/s) "
-                "(or the legacy Flow column)."
+                "Flow table must contain the columns: Date (or Tarih) and Flow Q (m3/s) "
+                "(or the legacy Flow / Debi column)."
             )
 
         df = df_flow.copy()
         df = df.rename(columns={date_col: "Date", flow_col: "Flow Q (m3/s)"})
-        try:
-            df["Date"] = pd.to_datetime(df["Date"], format="%d/%m/%Y")
-        except (ValueError, TypeError):
-            df["Date"] = pd.to_datetime(df["Date"], dayfirst=True)
+
+        raw_dates = df["Date"]
+        dates = pd.to_datetime(raw_dates, format="%d/%m/%Y", errors="coerce")
+        retry = dates.isna() & raw_dates.notna()
+        if retry.any():
+            # Only reached for non-dd/mm/yyyy dates (e.g. ISO); unparseable values stay NaT.
+            dates = dates.where(~retry, pd.to_datetime(raw_dates, dayfirst=True, errors="coerce"))
+        df["Date"] = dates
+        df["Flow Q (m3/s)"] = pd.to_numeric(df["Flow Q (m3/s)"], errors="coerce")
+
+        bad_dates = int(df["Date"].isna().sum())
+        bad_flows = int((df["Flow Q (m3/s)"].isna() & df["Date"].notna()).sum())
+        if bad_dates or bad_flows:
+            df = df.dropna(subset=["Date", "Flow Q (m3/s)"]).reset_index(drop=True)
+            self.warnings.append(
+                f"Dropped {bad_flows} row(s) with missing/non-numeric flow and "
+                f"{bad_dates} row(s) with unparseable dates."
+            )
+        if df.empty:
+            raise ValueError("Flow table has no rows with a valid date and flow value.")
+
+        negative = df["Flow Q (m3/s)"] < 0
+        if negative.any():
+            first = ", ".join(df.loc[negative, "Date"].dt.strftime("%Y-%m-%d").head(5))
+            raise ValueError(f"Flow values must not be negative (first offending dates: {first}).")
 
         df["Year"] = df["Date"].dt.year
 

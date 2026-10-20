@@ -1,4 +1,3 @@
-from datetime import datetime
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk
@@ -7,7 +6,7 @@ from typing import List
 import pandas as pd
 
 from src.core.rusle import BasinRow, ZonalMatcher, find_basin_table_columns
-from src.ui.common import browse_open_file, browse_save_file, show_error, show_info
+from src.ui.common import browse_open_file, browse_save_file, show_error, show_info, show_warning
 from src.utils.paths import read_table
 
 
@@ -37,13 +36,12 @@ class RusleView:
 
         tree_wrap = ttk.Frame(self.frame)
         tree_wrap.grid(row=1, column=0, columnspan=3, padx=5, pady=6, sticky="nsew")
-        columns = ("dam", "basin", "subbasin", "year", "area", "slope")
+        columns = ("dam", "basin", "subbasin", "area", "slope")
         self.basin_tree = ttk.Treeview(tree_wrap, columns=columns, show="headings", height=10)
         headings = {
             "dam": "Dam Name",
             "basin": "Basin",
             "subbasin": "Sub-Basin",
-            "year": "Year",
             "area": "Area",
             "slope": "Slope",
         }
@@ -82,7 +80,6 @@ class RusleView:
             "dam",
             "basin",
             "subbasin",
-            "year",
             "usda_scs_sio",
             "cem_sio",
             "avg_sio",
@@ -94,7 +91,6 @@ class RusleView:
         self.results_tree.heading("dam", text="Dam Name")
         self.results_tree.heading("basin", text="Basin")
         self.results_tree.heading("subbasin", text="Sub-Basin")
-        self.results_tree.heading("year", text="Year")
         self.results_tree.heading("usda_scs_sio", text="USDA-SCS SIO")
         self.results_tree.heading("cem_sio", text="CEM SIO")
         self.results_tree.heading("avg_sio", text="Average SIO")
@@ -105,7 +101,6 @@ class RusleView:
         self.results_tree.column("dam", width=180, anchor="w")
         self.results_tree.column("basin", width=180, anchor="w")
         self.results_tree.column("subbasin", width=180, anchor="w")
-        self.results_tree.column("year", width=80, anchor="center")
         self.results_tree.column("yield_t_yr", width=120, anchor="e")
         self.results_tree.column("volume_m3_yr", width=140, anchor="e")
         self.results_tree.column("sp_yield_m3_yr_km2", width=160, anchor="e")
@@ -170,18 +165,16 @@ class RusleView:
                 if not basin_str or not subbasin_str:
                     continue
 
-                if year_col and not pd.isna(row[year_col]):
-                    try:
-                        row_year = int(float(row[year_col]))
-                    except (ValueError, TypeError):
-                        row_year = 2026
-                else:
-                    row_year = 2026
-
                 area_val = areas.iloc[idx] if idx < len(areas) else pd.NA
                 slope_val = slopes.iloc[idx] if idx < len(slopes) else pd.NA
-                self.basin_tree.insert("", "end", values=(dam_str, basin_str, subbasin_str, row_year, area_val, slope_val))
+                self.basin_tree.insert("", "end", values=(dam_str, basin_str, subbasin_str, area_val, slope_val))
             self.basin_file_var.set(file_path)
+            if year_col is not None and pd.to_numeric(work[year_col], errors="coerce").nunique() > 1:
+                show_warning(
+                    "Multiple Years Found",
+                    "This file lists several years. The app no longer uses Year, so all rows will be "
+                    "summed. Remove duplicate years from the file first if that is not what you want.",
+                )
         except Exception as exc:
             if show_errors:
                 show_error("Basin File Error", f"Could not load basin table:\n\n{exc}")
@@ -200,7 +193,7 @@ class RusleView:
         columns = self.basin_tree["columns"]
         if col_idx < 0 or col_idx >= len(columns):
             return
-        if columns[col_idx] not in ("dam", "basin", "subbasin", "year", "area", "slope"):
+        if columns[col_idx] not in ("dam", "basin", "subbasin", "area", "slope"):
             return
 
 
@@ -231,7 +224,7 @@ class RusleView:
         col_idx = self._edit_col_idx
         new_value = self._cell_editor.get()
         values = list(self.basin_tree.item(iid, "values"))
-        while len(values) < 6:
+        while len(values) < 5:
             values.append("")
         values[col_idx] = new_value
         self.basin_tree.item(iid, values=values)
@@ -284,17 +277,16 @@ class RusleView:
         rows: List[BasinRow] = []
         for iid in children:
             values = list(self.basin_tree.item(iid, "values"))
-            while len(values) < 6:
+            while len(values) < 5:
                 values.append("")
-            dam_name, basin, subbasin, year_s, area_s, slope_s = values[:6]
+            dam_name, basin, subbasin, area_s, slope_s = values[:5]
             if not str(slope_s).strip():
                 raise ValueError(f"Slope (m/m) is required for {basin} / {subbasin}.")
-            year = int(year_s)
             area_km2 = float(area_s)
             slope = float(slope_s)
             if area_km2 <= 0:
                 raise ValueError(f"Basin area must be greater than zero for {basin} / {subbasin}.")
-            rows.append(BasinRow(dam=str(dam_name), basin=str(basin), subbasin=str(subbasin), year=year, area_km2=area_km2, slope=slope))
+            rows.append(BasinRow(dam=str(dam_name), basin=str(basin), subbasin=str(subbasin), area_km2=area_km2, slope=slope))
         return rows
 
     def execute_rusle_analysis(self):
@@ -302,14 +294,13 @@ class RusleView:
             basin_rows = self._iter_basin_rows()
             zonal_lookup = self._load_zonal_statistics()
 
+            resolution = ZonalMatcher.resolve_all(zonal_lookup, [b.subbasin for b in basin_rows])
+            if resolution.unresolved:
+                raise ZonalMatcher.unresolved_error(zonal_lookup, resolution.unresolved)
+            loose_matches = resolution.loose
+
             row_metrics = []
-            handoff_frames = []
-            missing_subbasins = []
-            for b in basin_rows:
-                extracted_mean = ZonalMatcher.resolve_zonal_mean(zonal_lookup, b.subbasin)
-                if extracted_mean is None:
-                    missing_subbasins.append(b.subbasin)
-                    continue
+            for b, extracted_mean in zip(basin_rows, resolution.means):
                 metrics = self.app.yield_calc.calculate_metrics(
                     raster_mean_t_ha_yr=extracted_mean,
                     area_km2=b.area_km2,
@@ -320,31 +311,24 @@ class RusleView:
                         "dam": b.dam,
                         "basin": b.basin,
                         "subbasin": b.subbasin,
-                        "year": b.year,
                         "area_km2": b.area_km2,
                         "slope": b.slope,
                         **metrics,
                     }
                 )
-                handoff_frames.append(self.app.yield_calc.to_phase2_handoff(b.year, metrics["volume_m3"]))
-
-            if missing_subbasins:
-                unique_missing = sorted(set(missing_subbasins))
-                keys = ", ".join(sorted(zonal_lookup.keys())[:25])
-                raise ValueError(
-                    "MEAN value missing for sub-basin(s): "
-                    f"{', '.join(unique_missing)}. Available zonal keys: {keys}"
-                )
 
             results_df = pd.DataFrame(row_metrics)
-            phase2_df = (
-                pd.concat(handoff_frames, ignore_index=True)
-                .groupby("Year", as_index=False)["Suspended_Volume_m3"]
-                .sum()
-            )
+            phase2_df = pd.DataFrame({"Suspended_Volume_m3": [float(results_df["volume_m3"].sum())]})
             self.app.set_rusle_results(row_metrics, results_df, phase2_df)
             self.btn_export_phase2.config(state="normal")
-            self._write_rusle_results()
+            self._render_results_tree()
+            if loose_matches:
+                lines = [f"{name} -> zonal '{key}'" for name, key in sorted(loose_matches.items())]
+                show_warning(
+                    "Approximate Zonal Matches",
+                    "These sub-basins were matched approximately to the zonal file. Please verify:\n\n"
+                    + "\n".join(lines),
+                )
         except Exception as exc:
             show_error("RUSLE Error", str(exc))
 
@@ -354,7 +338,6 @@ class RusleView:
                 "dam",
                 "basin",
                 "subbasin",
-                "year",
                 "area_km2",
                 "slope",
                 "usda_scs_sio",
@@ -370,7 +353,6 @@ class RusleView:
                 "dam": "Dam",
                 "basin": "Basin",
                 "subbasin": "Sub-Basin",
-                "year": "Year",
                 "area_km2": "Area_km2",
                 "slope": "Slope_m_per_m",
                 "usda_scs_sio": "USDA-SCS_SIO",
@@ -382,51 +364,38 @@ class RusleView:
             }
         )
 
-    def _write_rusle_results(self):
-        try:
-            if self.app.rusle_results_df is None or self.app.rusle_results_df.empty:
-                return
+    def _render_results_tree(self):
+        if self.app.rusle_results_df is None or self.app.rusle_results_df.empty:
+            return
 
-            for child in self.results_tree.get_children():
-                self.results_tree.delete(child)
+        for child in self.results_tree.get_children():
+            self.results_tree.delete(child)
 
-            display_cols = [
-                "dam",
-                "basin",
-                "subbasin",
-                "year",
-                "usda_scs_sio",
-                "cem_sio",
-                "avg_sio",
-                "yield_mass_t",
-                "volume_m3",
-                "specific_yield_m3_km2",
-            ]
+        display_cols = [
+            "dam",
+            "basin",
+            "subbasin",
+            "usda_scs_sio",
+            "cem_sio",
+            "avg_sio",
+            "yield_mass_t",
+            "volume_m3",
+            "specific_yield_m3_km2",
+        ]
 
-            for _, row in self.app.rusle_results_df.iterrows():
-                values = []
-                for col in display_cols:
-                    val = row[col]
-                    if col == "year":
-                        values.append(int(val))
-                    elif col in ("usda_scs_sio", "cem_sio", "avg_sio"):
-                        values.append(f"{float(val):.4f}")
-                    elif col == "yield_mass_t":
-                        values.append(f"{float(val):.2f}")
-                    elif col in ("volume_m3", "specific_yield_m3_km2"):
-                        values.append(f"{float(val):.2f}")
-                    else:
-                        values.append(str(val))
-                self.results_tree.insert("", "end", values=tuple(values))
-
-            export_dir = Path("exports")
-            export_dir.mkdir(exist_ok=True)
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            csv_path = export_dir / f"rusle_results_{timestamp}.csv"
-            export_df = self._format_export_df()
-            export_df.to_csv(csv_path, index=False, encoding="utf-8-sig")
-        except Exception as exc:
-            pass
+        for _, row in self.app.rusle_results_df.iterrows():
+            values = []
+            for col in display_cols:
+                val = row[col]
+                if col in ("usda_scs_sio", "cem_sio", "avg_sio"):
+                    values.append(f"{float(val):.4f}")
+                elif col == "yield_mass_t":
+                    values.append(f"{float(val):.2f}")
+                elif col in ("volume_m3", "specific_yield_m3_km2"):
+                    values.append(f"{float(val):.2f}")
+                else:
+                    values.append(str(val))
+            self.results_tree.insert("", "end", values=tuple(values))
 
     def export_yield_results_csv(self):
         if self.app.rusle_results_df is None or self.app.rusle_results_df.empty:

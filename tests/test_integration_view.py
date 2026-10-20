@@ -69,9 +69,35 @@ _UI_PATCH = {
 def test_ensure_phase2_volume_from_master_yield(app_with_root):
     """_ensure_phase2_volume turns master_yield (Area + Slope cols) into Suspended_Volume_m3."""
     master = read_table(resource_path("inputs", "master_yield.csv"))
+    app_with_root.zonal_file_var.set(str(resource_path("inputs", "raw_zonal_means.csv")))
     result = app_with_root.integration_view._ensure_phase2_volume(master)
     assert "Suspended_Volume_m3" in result.columns
     assert len(result) == 1
+    assert float(result["Suspended_Volume_m3"].iloc[0]) > 0
+
+
+def test_ensure_phase2_volume_requires_zonal_file(app_with_root):
+    master = read_table(resource_path("inputs", "master_yield.csv"))
+    app_with_root.zonal_file_var.set("")
+    with pytest.raises(ValueError, match="Zonal Statistics CSV"):
+        app_with_root.integration_view._ensure_phase2_volume(master)
+
+
+def test_ensure_phase2_volume_unmatched_subbasin_raises(app_with_root, tmp_path):
+    zonal = tmp_path / "zonal.csv"
+    pd.DataFrame({"Sub-basin": ["Other Alt Havzası"], "MEAN": [2.0]}).to_csv(zonal, index=False)
+    app_with_root.zonal_file_var.set(str(zonal))
+    raw = pd.DataFrame({"Sub-basin Name": ["Missing Alt Havzası"], "Area": [100.0], "Slope": [0.05]})
+    with pytest.raises(ValueError, match="Missing Alt Havzası"):
+        app_with_root.integration_view._ensure_phase2_volume(raw)
+
+
+def test_ensure_phase2_volume_accepts_turkish_headers(app_with_root, tmp_path):
+    zonal = tmp_path / "zonal.csv"
+    pd.DataFrame({"Alt Havza": ["Çine Alt Havzası"], "MEAN": [2.5]}).to_csv(zonal, index=False, encoding="utf-8-sig")
+    app_with_root.zonal_file_var.set(str(zonal))
+    raw = pd.DataFrame({"Alt Havza Adı": ["Çine Alt Havzası"], "Alan (km2)": [850.0], "Eğim": [0.025]})
+    result = app_with_root.integration_view._ensure_phase2_volume(raw)
     assert float(result["Suspended_Volume_m3"].iloc[0]) > 0
 
 
