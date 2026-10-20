@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -5,8 +7,11 @@ import pytest
 from src.core.monthly_flow_preprocessor import (
     HM3_TO_M3,
     SECONDS_PER_DAY,
+    WATER_YEAR_COLUMN,
     MonthlyFlowPreprocessor,
+    is_monthly_flow_table,
     main,
+    prepare_daily_flow,
 )
 from src.core.wilcock import FractionalModel, TimeSeriesAggregator
 from src.utils.paths import read_table, resource_path
@@ -47,16 +52,16 @@ def test_parses_turkish_and_ascii_headers(header):
     values = _sample_values()
     monthly = MonthlyFlowPreprocessor().parse_table(_dsi_table(values, header=header))
 
-    assert list(monthly.columns) == ["WaterYear", "Year", "Month", "Volume_hm3"]
+    assert list(monthly.columns) == [WATER_YEAR_COLUMN, "Year", "Month", "Volume_hm3"]
     assert len(monthly) == 24
     for year, vals in values.items():
-        got = monthly[monthly["WaterYear"] == year]["Volume_hm3"].sum()
+        got = monthly[monthly[WATER_YEAR_COLUMN] == year]["Volume_hm3"].sum()
         assert got == pytest.approx(sum(vals))
 
 
 def test_summary_rows_and_total_column_are_dropped():
     monthly = MonthlyFlowPreprocessor().parse_table(_dsi_table(_sample_values()))
-    assert set(monthly["WaterYear"]) == {1974, 1975}
+    assert set(monthly[WATER_YEAR_COLUMN]) == {1974, 1975}
     assert set(monthly["Month"]) == set(range(1, 13))
 
 
@@ -94,18 +99,36 @@ def test_decimal_comma_values_are_accepted():
     assert monthly["Volume_hm3"].tolist() == [1.5] * 12
 
 
-def test_top_column_mismatch_warns():
-    df = _dsi_table(_sample_values(), summary_rows=False)
-    df.loc[0, "TOP."] += 5.0
-    with pytest.warns(UserWarning, match="1974"):
+@pytest.mark.parametrize("top_value", [999.0, None, "abc"], ids=["wrong", "blank", "text"])
+def test_top_column_is_ignored(top_value):
+    clean = _dsi_table(_sample_values(), summary_rows=False)
+    df = clean.astype(object)
+    df.loc[0, "TOP."] = top_value
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        monthly = MonthlyFlowPreprocessor().parse_table(df)
+    pd.testing.assert_frame_equal(monthly, MonthlyFlowPreprocessor().parse_table(clean))
+
+
+def test_row_with_volumes_but_no_year_raises():
+    df = _dsi_table(_sample_values(), summary_rows=False).astype(object)
+    df.loc[0, "Yıllar"] = None
+    with pytest.raises(ValueError, match="no year label"):
         MonthlyFlowPreprocessor().parse_table(df)
+
+
+def test_fully_blank_row_is_still_skipped():
+    df = _dsi_table(_sample_values(), summary_rows=False).astype(object)
+    df.loc[len(df)] = [None] * len(df.columns)
+    monthly = MonthlyFlowPreprocessor().parse_table(df)
+    assert set(monthly[WATER_YEAR_COLUMN]) == {1974, 1975}
 
 
 def test_row_year_is_the_water_year_ending_in_september():
     df = _dsi_table({1974: [float(m) for m in range(1, 13)]}, summary_rows=False)
     monthly = MonthlyFlowPreprocessor().parse_table(df)
 
-    assert set(monthly["WaterYear"]) == {1974}
+    assert set(monthly[WATER_YEAR_COLUMN]) == {1974}
     calendar = dict(zip(monthly["Month"], monthly["Year"]))
     assert calendar[10] == calendar[11] == calendar[12] == 1973  # Ekim-Aralık
     assert calendar[1] == calendar[9] == 1974  # Ocak-Eylül
@@ -147,6 +170,15 @@ def test_days_per_month_and_leap_february():
     assert len(daily) == 366
     assert (daily["Date"].diff().dropna() == pd.Timedelta(days=1)).all()
     assert (daily["Date"].dt.month == 2).sum() == 29
+
+
+def test_daily_water_year_rolls_over_in_october():
+    pre, monthly = _monthly({1974: [1.0] * 12, 1975: [1.0] * 12})
+    water_year = pre.disaggregate(monthly).set_index("Date")[WATER_YEAR_COLUMN]
+
+    assert water_year[pd.Timestamp("1973-10-01")] == 1974
+    assert water_year[pd.Timestamp("1974-09-30")] == 1974
+    assert water_year[pd.Timestamp("1974-10-01")] == 1975
 
 
 def test_sigma_zero_is_uniform():
@@ -198,9 +230,10 @@ def test_month_seed_independent_of_other_years():
 def test_output_schema():
     pre, monthly = _monthly()
     daily = pre.disaggregate(monthly)
-    assert list(daily.columns) == ["Date", "Flow"]
+    assert list(daily.columns) == ["Date", "Flow", WATER_YEAR_COLUMN]
     assert pd.api.types.is_datetime64_any_dtype(daily["Date"])
     assert pd.api.types.is_float_dtype(daily["Flow"])
+    assert pd.api.types.is_integer_dtype(daily[WATER_YEAR_COLUMN])
     assert daily["Date"].is_monotonic_increasing
     assert not daily["Date"].duplicated().any()
     assert (daily["Flow"] >= 0).all()
@@ -233,8 +266,9 @@ def test_unrecognised_year_label_raises(label):
 def test_output_feeds_time_series_aggregator():
     pre, monthly = _monthly()
     summary = TimeSeriesAggregator(_model()).process_annual_averages(pre.disaggregate(monthly))
-    # Water years 1974-1975 ("end") span calendar years 1973-1975.
-    assert list(summary.index) == [1973, 1974, 1975]
+    # The series carries Water_Year, so results are grouped by water year, not calendar year.
+    assert summary.index.name == WATER_YEAR_COLUMN
+    assert list(summary.index) == [1974, 1975]
     assert summary["Annual_Total_Bedload_m3_yr"].notna().all()
 
 
@@ -256,12 +290,14 @@ def test_export_csv_roundtrip(tmp_path):
     pre.export_csv(daily, str(out))
 
     reloaded = read_table(str(out))
-    assert list(reloaded.columns) == ["Date", "Flow"]
+    assert list(reloaded.columns) == ["Date", "Flow", WATER_YEAR_COLUMN]
     assert reloaded["Date"].iloc[0] == "01/10/1973"
     np.testing.assert_allclose(reloaded["Flow"], daily["Flow"], rtol=1e-12)
 
+    # A CLI-exported CSV groups the same way as the direct DSI run.
     summary = TimeSeriesAggregator(_model()).process_annual_averages(reloaded)
-    assert list(summary.index) == [1973, 1974, 1975]
+    assert summary.index.name == WATER_YEAR_COLUMN
+    assert list(summary.index) == [1974, 1975]
 
 
 def test_cli_writes_daily_csv(tmp_path, capsys):
@@ -272,10 +308,55 @@ def test_cli_writes_daily_csv(tmp_path, capsys):
     main([str(src), str(out), "--sigma", "0.4", "--seed", "3"])
 
     assert "Wrote 730 days" in capsys.readouterr().out
-    assert len(read_table(str(out))) == 730
+    written = read_table(str(out))
+    assert len(written) == 730
+    assert WATER_YEAR_COLUMN in written.columns
+
+
+# --- GUI entry points ----------------------------------------------------------------
+
+
+@pytest.mark.parametrize("header", [TURKISH_HEADER, ASCII_HEADER], ids=["turkish", "ascii"])
+def test_is_monthly_flow_table_detects_dsi_headers(header):
+    assert is_monthly_flow_table(_dsi_table(_sample_values(), header=header))
+
+
+def test_is_monthly_flow_table_routes_malformed_dsi_table():
+    df = _dsi_table(_sample_values()).drop(columns=["Şubat"])
+    assert is_monthly_flow_table(df)
+
+
+def test_is_monthly_flow_table_rejects_daily_series():
+    assert not is_monthly_flow_table(read_table(resource_path("inputs", "daily_flow_data.csv")))
+
+
+def test_prepare_daily_flow_matches_disaggregate_and_reports_conversion():
+    df = _dsi_table(_sample_values(), summary_rows=False)
+    pre = MonthlyFlowPreprocessor()
+
+    daily, notes = prepare_daily_flow(df)
+
+    pd.testing.assert_frame_equal(daily, pre.disaggregate(pre.parse_table(df)))
+    assert len(notes) == 1
+    assert "2 water years" in notes[0]
 
 
 # --- Sample DSI data -----------------------------------------------------------------
+
+
+@pytest.mark.parametrize("name", ["cubuk_1_flow.csv", "cubuk_2_flow.csv", "kavsakkaya_flow.csv"])
+def test_sample_dam_files_give_water_year_bedload_curve(name):
+    raw = read_table(str(resource_path("inputs", "dam_flow_data", name)))
+    assert is_monthly_flow_table(raw)
+
+    daily, _ = prepare_daily_flow(raw)
+    summary = TimeSeriesAggregator(_model()).process_annual_averages(daily)
+
+    assert summary.index.name == WATER_YEAR_COLUMN
+    assert list(summary.index) == list(range(1974, 2013))
+    bedload = summary["Annual_Total_Bedload_m3_yr"]
+    assert np.isfinite(bedload).all() and (bedload >= 0).all()
+    assert (bedload > 0).any()
 
 
 @pytest.mark.parametrize("name", ["cubuk_1_flow.csv", "cubuk_2_flow.csv", "kavsakkaya_flow.csv"])
@@ -284,14 +365,14 @@ def test_parses_sample_dam_flow_files(name):
     raw = read_table(str(path))
     monthly = MonthlyFlowPreprocessor().load(str(path))
 
-    assert monthly["WaterYear"].min() == 1974
-    assert monthly["WaterYear"].max() == 2012
+    assert monthly[WATER_YEAR_COLUMN].min() == 1974
+    assert monthly[WATER_YEAR_COLUMN].max() == 2012
     assert len(monthly) == 39 * 12
 
-    # Select data rows by numeric year so TOP./ORT. summary rows never enter the comparison.
+    # The engine ignores TOP./ORT.; this checks the sample data against its own TOP. column.
     years = pd.to_numeric(raw.iloc[:, 0], errors="coerce")
     data = raw[years.notna()]
     totals = data.set_index(years[years.notna()].astype(int))["TOP."].astype(float)
-    annual = monthly.groupby("WaterYear")["Volume_hm3"].sum()
+    annual = monthly.groupby(WATER_YEAR_COLUMN)["Volume_hm3"].sum()
     assert len(totals) == 39
     np.testing.assert_allclose(annual.loc[totals.index].to_numpy(), totals.to_numpy(), atol=0.05)

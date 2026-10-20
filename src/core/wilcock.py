@@ -6,10 +6,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from src.core.rusle import turkish_lower
+from src.core.rusle import normalize_header
 
 SECONDS_PER_YEAR = 365.25 * 24.0 * 3600.0
+YEAR_COLUMN = "Year"
+WATER_YEAR_COLUMN = "Water_Year"  # Oct (Y-1) to Sep (Y), carried by DSI-derived daily series
 PHI_BREAK = 1.35
+FLOW_COLUMN_LABEL = "Annual Average Flow (m3/s)"
+BEDLOAD_COLUMN_LABEL = "Annual Average Bed Load (metric tons/year)"
 
 
 @dataclass
@@ -121,9 +125,9 @@ class FractionalModel:
         self._tau_ri = work["tau_ri"].to_numpy(dtype=float)
 
 
-def _normalize_header(col) -> str:
-    """Lowercase (Turkish-aware), drop whitespace and map the superscript in m³."""
-    return "".join(turkish_lower(str(col)).split()).replace("³", "3")
+def year_column(columns) -> str:
+    """Year key of a Wilcock table: Water_Year (DSI-derived, Oct-Sep) if present, else Year."""
+    return WATER_YEAR_COLUMN if WATER_YEAR_COLUMN in columns else YEAR_COLUMN
 
 
 class TimeSeriesAggregator:
@@ -132,11 +136,13 @@ class TimeSeriesAggregator:
         self.warnings: List[str] = []
 
     def process_annual_averages(self, df_flow: pd.DataFrame) -> pd.DataFrame:
+        """Annual summary indexed by Water_Year if the series carries that column, else by calendar Year."""
         if df_flow is None or df_flow.empty:
             raise ValueError("Flow table is empty.")
 
         self.warnings = []
-        lookup = {_normalize_header(col): col for col in df_flow.columns}
+        lookup = {normalize_header(col): col for col in df_flow.columns}
+        water_year_col = lookup.get(normalize_header(WATER_YEAR_COLUMN))
 
         date_col = None
         for candidate in ["date", "tarih"]:
@@ -153,29 +159,46 @@ class TimeSeriesAggregator:
         if date_col is None or flow_col is None:
             raise KeyError(
                 "Flow table must contain the columns: Date (or Tarih) and Flow Q (m3/s) "
-                "(or the legacy Flow / Debi column)."
+                "(or the legacy Flow / Debi column). DSI monthly tables (Yıllar, Ekim...Eylül) must first be "
+                "converted with prepare_daily_flow; the Wilcock tab does this automatically."
             )
 
+        renames = {date_col: "Date", flow_col: "Flow Q (m3/s)"}
+        if water_year_col is not None:
+            renames[water_year_col] = WATER_YEAR_COLUMN
         df = df_flow.copy()
-        df = df.rename(columns={date_col: "Date", flow_col: "Flow Q (m3/s)"})
+        df = df.rename(columns=renames)
 
         raw_dates = df["Date"]
         dates = pd.to_datetime(raw_dates, format="%d/%m/%Y", errors="coerce")
         retry = dates.isna() & raw_dates.notna()
         if retry.any():
             # Only reached for non-dd/mm/yyyy dates (e.g. ISO); unparseable values stay NaT.
-            dates = dates.where(~retry, pd.to_datetime(raw_dates, dayfirst=True, errors="coerce"))
+            dates = dates.where(~retry, pd.to_datetime(raw_dates, format="mixed", dayfirst=True, errors="coerce"))
         df["Date"] = dates
         df["Flow Q (m3/s)"] = pd.to_numeric(df["Flow Q (m3/s)"], errors="coerce")
 
+        required = ["Date", "Flow Q (m3/s)"]
+        bad_water_years = 0
+        if water_year_col is not None:
+            water_years = pd.to_numeric(df[WATER_YEAR_COLUMN], errors="coerce")
+            df[WATER_YEAR_COLUMN] = water_years.where(water_years % 1 == 0)
+            bad_water_years = int(
+                (df[WATER_YEAR_COLUMN].isna() & df["Date"].notna() & df["Flow Q (m3/s)"].notna()).sum()
+            )
+            required.append(WATER_YEAR_COLUMN)
+
         bad_dates = int(df["Date"].isna().sum())
         bad_flows = int((df["Flow Q (m3/s)"].isna() & df["Date"].notna()).sum())
-        if bad_dates or bad_flows:
-            df = df.dropna(subset=["Date", "Flow Q (m3/s)"]).reset_index(drop=True)
-            self.warnings.append(
+        if bad_dates or bad_flows or bad_water_years:
+            df = df.dropna(subset=required).reset_index(drop=True)
+            message = (
                 f"Dropped {bad_flows} row(s) with missing/non-numeric flow and "
                 f"{bad_dates} row(s) with unparseable dates."
             )
+            if bad_water_years:
+                message += f" Dropped {bad_water_years} row(s) with a missing/non-integer {WATER_YEAR_COLUMN}."
+            self.warnings.append(message)
         if df.empty:
             raise ValueError("Flow table has no rows with a valid date and flow value.")
 
@@ -184,13 +207,19 @@ class TimeSeriesAggregator:
             first = ", ".join(df.loc[negative, "Date"].dt.strftime("%Y-%m-%d").head(5))
             raise ValueError(f"Flow values must not be negative (first offending dates: {first}).")
 
-        df["Year"] = df["Date"].dt.year
+        # A DSI-derived series carries its own Water_Year (Oct (Y-1) to Sep (Y)); anything else is calendar.
+        if water_year_col is not None:
+            year_key = WATER_YEAR_COLUMN
+            df[year_key] = df[year_key].astype(int)
+        else:
+            year_key = YEAR_COLUMN
+            df[year_key] = df["Date"].dt.year
 
         # Calculate intermediate daily m2/s rate
         df["Daily_Bedload_Rate"] = self.model.compute_transport_series(df["Flow Q (m3/s)"].to_numpy(dtype=float))
 
         # Extract annual mean flow and mean transport rate
-        annual_summary = df.groupby("Year", as_index=True).agg(
+        annual_summary = df.groupby(year_key, as_index=True).agg(
             Annual_Average_Flow=("Flow Q (m3/s)", "mean"),
             Average_Rate_m2_s=("Daily_Bedload_Rate", "mean"),
         )
@@ -215,7 +244,7 @@ class TimeSeriesAggregator:
             raise ValueError("Annual summary is empty.")
         handoff = annual_summary.reset_index()
         handoff["Bedload_Volume_m3"] = handoff["Annual_Total_Bedload_m3_yr"]
-        return handoff[["Year", "Bedload_Volume_m3"]]
+        return handoff[[year_column(handoff.columns), "Bedload_Volume_m3"]]
 
 
 class BedloadVisualizer:
@@ -225,8 +254,9 @@ class BedloadVisualizer:
             raise ValueError("Dataframe is empty. Cannot generate summary table.")
 
         display = df_summary.reset_index().copy()
-        if "Year" not in display.columns:
-            display = display.rename(columns={display.columns[0]: "Year"})
+        year_key = year_column(display.columns)
+        if year_key not in display.columns:
+            display = display.rename(columns={display.columns[0]: YEAR_COLUMN})
 
         mass_col = "Annual_Average_Bed_Load_metric_tons_yr"
         if mass_col not in display.columns:
@@ -237,17 +267,16 @@ class BedloadVisualizer:
             else:
                 raise KeyError("Annual summary is missing bedload mass column.")
 
-        required = ["Year", "Annual_Average_Flow", mass_col]
+        required = [year_key, "Annual_Average_Flow", mass_col]
         missing = [col for col in required if col not in display.columns]
         if missing:
             raise KeyError(f"Annual summary is missing required columns: {missing}")
 
-        table = display[["Year", "Annual_Average_Flow", mass_col]].copy()
+        table = display[required].copy()
         table = table.rename(
             columns={
-                "Year": "Year",
-                "Annual_Average_Flow": "Annual Average Flow (m3/s)",
-                mass_col: "Annual Average Bed Load (metric tons/year)",
+                "Annual_Average_Flow": FLOW_COLUMN_LABEL,
+                mass_col: BEDLOAD_COLUMN_LABEL,
             }
         )
         return table
@@ -267,7 +296,8 @@ class BedloadVisualizer:
         years = df_summary.index
 
         line1 = ax1.plot(years, df_summary["Annual_Average_Flow"], color="blue", marker="o", label="Average Flow")[0]
-        ax1.set_xlabel("Year", fontweight="bold")
+        year_label = "Water Year (Oct–Sep)" if df_summary.index.name == WATER_YEAR_COLUMN else "Year"
+        ax1.set_xlabel(year_label, fontweight="bold")
         ax1.set_ylabel("Annual Average Flow (m³/s)", color="blue", fontweight="bold")
         ax1.tick_params(axis="y", labelcolor="blue")
         ax1.grid(True, linestyle="--", alpha=0.6)

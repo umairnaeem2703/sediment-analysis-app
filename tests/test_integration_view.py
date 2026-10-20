@@ -14,6 +14,7 @@ import pandas as pd
 import pytest
 
 from app import SedimentApp
+from src.ui.integration_view import IntegrationView
 from src.utils.paths import read_table, resource_path
 
 
@@ -136,6 +137,22 @@ def test_execute_integration_produces_merged_df(app_with_root, phase2_df, phase3
         assert row["Total_Volume_m3"] == pytest.approx(
             row["Suspended_Volume_m3"] + row["Bedload_Volume_m3"], rel=1e-6
         )
+
+
+def test_execute_integration_reports_water_year(app_with_root, phase2_df):
+    """Bedload from a DSI monthly run is keyed by Water_Year, and the report says so."""
+    df_p3 = pd.DataFrame({"Water_Year": [1980, 1981], "Bedload_Volume_m3": [10.0, 500.0]})
+    with patch(_UI_PATCH["show_warning"]), patch(_UI_PATCH["show_error"]) as show_error:
+        app_with_root.integration_view.execute_integration(
+            df_p2=phase2_df, df_p3=df_p3, df_bathy=IntegrationView._NO_BATHY
+        )
+    assert not show_error.called
+
+    report = app_with_root.integration_view.results_text.get("1.0", "end")
+    assert "Water Year: 1980" in report
+    assert "Water Year: 1981" in report
+    assert "  Year:" not in report
+    assert "Water_Year" in app_with_root.final_merged_df.columns
 
 
 def test_execute_integration_no_bathy_gives_nan_elevation(app_with_root, phase2_df, phase3_df):
