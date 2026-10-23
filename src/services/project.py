@@ -1,6 +1,7 @@
 """Project model: a folder holding project.json, a copy of every imported input, and the run outputs."""
 
 import json
+import os
 import re
 import shutil
 from dataclasses import asdict, dataclass, field
@@ -82,9 +83,9 @@ class Project:
             )
         try:
             dams = [Dam(**{**d, "flow": Flow(**d.get("flow", {}))}) for d in data.get("dams", [])]
+            inputs = {**dict.fromkeys(INPUT_KEYS), **data.get("inputs", {})}
         except TypeError as exc:
-            raise ValueError(f"{path} has an invalid dam entry ({exc}).") from exc
-        inputs = {**dict.fromkeys(INPUT_KEYS), **data.get("inputs", {})}
+            raise ValueError(f"{path} is malformed ({exc}).") from exc
         return cls(folder, data.get("name", folder.name), inputs, dams)
 
     def save(self) -> None:
@@ -95,7 +96,10 @@ class Project:
             "dams": [asdict(dam) for dam in self.dams],
         }
         text = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
-        (self.folder / PROJECT_FILE).write_text(text, encoding="utf-8", newline="\n")
+        path = self.folder / PROJECT_FILE
+        temp = path.with_name(PROJECT_FILE + ".tmp")
+        temp.write_text(text, encoding="utf-8", newline="\n")
+        os.replace(temp, path)
 
     def add_dam(self, name: str) -> Dam:
         slug = slugify(name)
@@ -121,6 +125,8 @@ class Project:
         if not Path(source).is_file():
             raise FileNotFoundError(f"Cannot import {source}: file not found.")
         target = self.folder.joinpath(*relative.parts)
+        if target.exists() and target.samefile(source):
+            return relative.as_posix()
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
         return relative.as_posix()

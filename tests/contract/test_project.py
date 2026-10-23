@@ -59,7 +59,12 @@ def test_c_m1_01_newer_schema_version_is_a_clear_error(tmp_path):
         (None, "project.json"),
         ("{not json", "not valid JSON"),
         ('{"name": "x"}', "schema_version"),
-        ('{"schema_version": 1, "name": "x", "dams": [{"slug": "a"}]}', "dam"),
+        ('{"schema_version": 1, "dams": [{"slug": "a"}]}', "malformed"),
+        ('{"schema_version": 1, "dams": ["x"]}', "malformed"),
+        ('{"schema_version": 1, "dams": [null]}', "malformed"),
+        ('{"schema_version": 1, "dams": [{"name": "a", "slug": "a", "flow": null}]}', "malformed"),
+        ('{"schema_version": 1, "inputs": null}', "malformed"),
+        ('{"schema_version": 1, "inputs": []}', "malformed"),
     ],
 )
 def test_c_m1_01_unreadable_project_errors_name_the_problem(tmp_path, content, message):
@@ -70,6 +75,13 @@ def test_c_m1_01_unreadable_project_errors_name_the_problem(tmp_path, content, m
 
     with pytest.raises(ValueError, match=message):
         Project.open(folder)
+
+
+def test_c_m1_01_save_leaves_no_temporary_file(tmp_path):
+    project = Project.new(tmp_path / "p", "x")
+    project.save()
+
+    assert sorted(p.name for p in project.folder.iterdir()) == ["inputs", "outputs", "project.json"]
 
 
 def test_c_m1_01_new_refuses_to_overwrite_an_existing_project(tmp_path):
@@ -103,6 +115,19 @@ def test_c_m1_02_import_copies_bytes_and_leaves_the_original_alone(tmp_path):
     assert relative == "inputs/basins.csv"
     assert _sha256(project.folder / relative) == before
     assert _sha256(source) == before
+
+
+def test_c_m1_02_reimporting_the_projects_own_copy_is_a_no_op(tmp_path):
+    source = tmp_path / "s.csv"
+    source.write_text("a,b\n1,2\n", encoding="utf-8")
+    project = Project.new(tmp_path / "p", "x")
+    relative = project.import_file(source, "inputs/basins.csv")
+    before = _sha256(project.folder / relative)
+
+    again = project.import_file(project.folder / relative, "inputs/basins.csv")
+
+    assert again == relative
+    assert _sha256(project.folder / relative) == before
 
 
 def test_c_m1_02_import_creates_subfolders_and_returns_a_posix_path(tmp_path):
