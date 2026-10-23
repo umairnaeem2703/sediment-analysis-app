@@ -13,14 +13,16 @@ Product requirements, target architecture, data contracts and the development pi
 
 ## Commands
 
-A virtualenv lives in `.venv` (Windows: `.venv\Scripts\Activate.ps1`). There is no README, linter, or formatter config.
+A virtualenv lives in `.venv` (Windows: `.venv\Scripts\Activate.ps1`). There is no README. Lint and format with ruff (`ruff.toml`); CI runs both.
 
 ```
 pip install -r requirements.txt
 python app.py                                   # launch the Tkinter GUI
-pytest                                          # all tests (pytest.ini sets pythonpath = .)
-pytest tests/test_reporter.py                   # one file
-pytest tests/test_wilcock.py::test_name         # one test
+ruff check . && ruff format --check .          # lint and format check
+pytest                                          # the new layout (tests/unit, contract, pipeline, ui); tests/legacy is skipped
+pytest tests/unit/test_smoke.py                 # one file
+pytest tests/unit/test_smoke.py::test_name      # one test
+pytest -o addopts="" tests/legacy               # old suite, run locally only (9 known failures from removed fixtures)
 pyinstaller ...                                 # packaging; no spec file is checked in
 ```
 
