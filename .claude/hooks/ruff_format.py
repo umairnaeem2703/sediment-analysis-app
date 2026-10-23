@@ -1,4 +1,5 @@
 """PostToolUse: format and lint an edited Python file with ruff; report what ruff cannot fix."""
+
 import json
 import subprocess
 import sys

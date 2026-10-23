@@ -1,5 +1,6 @@
 """PreToolUse: ask for confirmation on the first write/execute call of a session, so the model
 and effort can be switched before implementation starts."""
+
 import json
 import sys
 import tempfile
@@ -11,8 +12,14 @@ if marker.exists():
     sys.exit(0)
 marker.touch()
 
-print(json.dumps({"hookSpecificOutput": {
-    "hookEventName": "PreToolUse",
-    "permissionDecision": "ask",
-    "permissionDecisionReason": "Pause before implementation: switch model/effort now, then approve.",
-}}))
+print(
+    json.dumps(
+        {
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "ask",
+                "permissionDecisionReason": "Pause before implementation: switch model/effort now, then approve.",
+            }
+        }
+    )
+)

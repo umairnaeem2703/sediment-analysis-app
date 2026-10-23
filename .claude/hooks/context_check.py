@@ -3,6 +3,7 @@
 Usage is read from the last assistant turn in the transcript. Set CONTEXT_WINDOW_TOKENS if the
 window is not 200000 (for example 1000000).
 """
+
 import json
 import os
 import sys
@@ -28,9 +29,17 @@ except (KeyError, OSError, ValueError):
 if used / WINDOW < LIMIT:
     sys.exit(0)
 
-reason = f"Context is at {used / WINDOW:.0%} of {WINDOW:,} tokens (limit {LIMIT:.0%}). Start a fresh session or /compact."
+reason = (
+    f"Context is at {used / WINDOW:.0%} of {WINDOW:,} tokens (limit {LIMIT:.0%}). Start a fresh session or /compact."
+)
 if data.get("hook_event_name") == "PreToolUse":
-    out = {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": reason}}
+    out = {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": reason,
+        }
+    }
 else:
     out = {"decision": "block", "reason": reason}
 print(json.dumps(out))
