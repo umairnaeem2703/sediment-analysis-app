@@ -74,7 +74,7 @@ def test_c_m1_08_read_basin_grid_keeps_cell_text_under_canonical_headers(tmp_pat
     grid = read_basin_grid(path)
 
     assert list(grid.columns) == HEADER.split(",")
-    assert grid.loc[0].tolist() == ["A", "B", "S1", "10.5", "steep"]
+    assert grid.loc[0].tolist() == ["A", "B", "S1", "10.50", "steep"]  # text exactly as written
     assert grid.loc[1].tolist() == ["", "", "", "", ""]
 
 
@@ -374,3 +374,79 @@ def test_c_m1_08_blanking_every_cell_is_reported_as_a_problem_not_raised(tmp_pat
 
     assert data.basin_table is None
     assert "no data rows" in data.problems[0].message
+
+
+# --- review follow-ups -------------------------------------------------------------------------
+
+
+def test_c_m1_08_the_grid_keeps_leading_zeros_in_names(tmp_path, data):
+    data.import_basin_table(_csv(tmp_path, "t.csv", "007,B,01,10,0.1"))
+
+    assert data.grid.loc[0, "Dam Name"] == "007"
+    assert data.grid.loc[0, "Sub-basin Name"] == "01"
+
+
+def test_c_m1_04_identifier_clashes_are_flagged_at_the_grid_row_even_after_a_blank_row(tmp_path, project, data):
+    path = _csv(tmp_path, "t.csv", "Çubuk 1,B,S1,10,0.1", ",,,,", "Cubuk-1,B,S1,20,0.2")
+
+    data.import_basin_table(path)
+
+    assert {cell for problem in data.problems for cell in problem.cells} == {(2, "Dam Name"), (4, "Dam Name")}
+
+
+@pytest.mark.parametrize("position", [-1, 1, 99])
+def test_c_m1_08_editing_outside_the_grid_is_an_error(tmp_path, project, data, position):
+    data.import_basin_table(_csv(tmp_path, "t.csv", "A,B,S1,10,0.1"))
+    before = data.grid.copy()
+
+    with pytest.raises(ValueError, match="row"):
+        data.edit_cell(position, "Dam Name", "X")
+
+    pd.testing.assert_frame_equal(data.grid, before)
+
+
+def test_c_m1_08_editing_without_a_basin_table_is_an_error(data):
+    with pytest.raises(ValueError, match="basin table"):
+        data.edit_cell(0, "Dam Name", "X")
+
+
+def test_c_m1_08_a_failed_write_leaves_the_grid_and_the_project_unchanged(tmp_path, project, data, monkeypatch):
+    data.import_basin_table(SAMPLE_BASINS)
+    before = data.grid.copy()
+    copy_before = (project.folder / "inputs" / "basins.csv").read_bytes()
+
+    def locked(self, *args, **kwargs):
+        raise PermissionError("file is open in another program")
+
+    monkeypatch.setattr(pd.DataFrame, "to_csv", locked)
+    with pytest.raises(PermissionError):
+        data.edit_cell(0, "Main Waterway Slope", "0.99")
+
+    pd.testing.assert_frame_equal(data.grid, before)
+    assert (project.folder / "inputs" / "basins.csv").read_bytes() == copy_before
+    assert data.basin_table is not None
+
+
+def test_c_m1_07_a_zonal_file_with_another_extension_replaces_the_old_copy(tmp_path, project, data):
+    workbook = tmp_path / "zonal.xlsx"
+    pd.read_csv(SAMPLE_ZONAL, encoding="utf-8-sig").to_excel(workbook, index=False)
+    data.import_zonal_means(workbook)
+    assert project.inputs["zonal_means"] == "inputs/zonal_means.xlsx"
+
+    data.import_zonal_means(SAMPLE_ZONAL)
+
+    assert project.inputs["zonal_means"] == "inputs/zonal_means.csv"
+    assert not (project.folder / "inputs" / "zonal_means.xlsx").exists()
+
+
+def test_c_m1_05_a_dam_sheet_with_another_extension_replaces_the_old_copy(tmp_path, project, data):
+    data.import_basin_table(SAMPLE_BASINS)
+    workbook = tmp_path / "sheet.xlsx"
+    pd.read_csv(SAMPLE_SHEETS["cubuk_1"], encoding="utf-8-sig").to_excel(workbook, index=False)
+    data.import_dam_sheets([workbook])
+    assert project.dams[1].sheet == "inputs/dams/cubuk_1.xlsx"
+
+    data.import_dam_sheets([SAMPLE_SHEETS["cubuk_1"]])
+
+    assert project.dams[1].sheet == "inputs/dams/cubuk_1.csv"
+    assert not (project.folder / "inputs" / "dams" / "cubuk_1.xlsx").exists()

@@ -86,12 +86,12 @@ def name_key(text) -> str:
     return " ".join(to_ascii_turkish(turkish_lower(text)).split())
 
 
-def _read(path) -> pd.DataFrame:
+def _read(path, dtype=None) -> pd.DataFrame:
     path = Path(path)
     if not path.is_file():
         raise FileNotFoundError(f"Input file not found: {path}")
     try:
-        return read_table(path)
+        return read_table(path, dtype=dtype)
     except Exception as exc:  # empty, corrupt, locked, undecodable or unsupported: always name the file
         raise ValueError(f"{path.name}: could not be read ({exc})") from exc
 
@@ -145,7 +145,7 @@ def basin_grid(df: pd.DataFrame, source: str) -> pd.DataFrame:
 
 def read_basin_grid(path) -> pd.DataFrame:
     """Read a basin table for editing. Cell problems are allowed here; unreadable files and missing columns are not."""
-    return basin_grid(_read(path), Path(path).name)
+    return basin_grid(_read(path, dtype=str), Path(path).name)
 
 
 def validate_basin_table(df: pd.DataFrame, source: str) -> Loaded:

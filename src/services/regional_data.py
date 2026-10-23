@@ -5,6 +5,7 @@ that is unreadable or lacks required columns is refused and nothing is copied. E
 the project; the file the user picked is only read.
 """
 
+import os
 from pathlib import Path
 from typing import List, NamedTuple, Optional
 
@@ -78,17 +79,29 @@ class RegionalData:
 
     def edit_cell(self, position: int, column: str, value: str) -> List[str]:
         """Change one grid cell (position is the 0-based grid row), rewrite the project's copy and re-validate."""
+        if self.grid is None:
+            raise ValueError("There is no basin table to edit; import one first.")
         if column not in self.grid.columns:
             raise ValueError(f"The basin table has no column '{column}'.")
-        self.grid.at[position, column] = str(value).strip()
-        self.grid.to_csv(self.project.folder / BASIN_COPY, index=False, encoding="utf-8-sig")
+        if not 0 <= position < len(self.grid):
+            raise ValueError(f"The basin table has no row {position} (it has {len(self.grid)} rows).")
+        updated = self.grid.copy()
+        updated.at[position, column] = str(value).strip()
+        # Write first: if the file cannot be replaced (for example it is open in Excel) the grid stays as it was.
+        temp = self.project.folder / (BASIN_COPY + ".tmp")
+        updated.to_csv(temp, index=False, encoding="utf-8-sig")
+        os.replace(temp, self.project.folder / BASIN_COPY)
+        self.grid = updated
         self._replace_basin_copy(BASIN_COPY)
         return self._validate_and_sync()
 
-    def _replace_basin_copy(self, relative: str) -> None:
-        previous = self.project.inputs.get("basins")
+    def _drop_previous(self, previous: Optional[str], relative: str) -> None:
+        """Delete the old copy of an input when the new one has a different name (for example .xlsx then .csv)."""
         if previous and previous != relative:
             (self.project.folder / previous).unlink(missing_ok=True)
+
+    def _replace_basin_copy(self, relative: str) -> None:
+        self._drop_previous(self.project.inputs.get("basins"), relative)
         self.project.inputs["basins"] = relative
         self.project.save()
 
@@ -102,14 +115,15 @@ class RegionalData:
         except ValueError as exc:  # for example: every cell was blanked
             self.basin_table, self.problems = None, [Problem(str(exc))]
             return
-        self.problems = self._slug_problems(table)
+        self.problems = self._slug_problems()
         self.basin_table = None if self.problems else table
 
-    @staticmethod
-    def _slug_problems(table: pd.DataFrame) -> List[Problem]:
+    def _slug_problems(self) -> List[Problem]:
         """Dam names must give distinct project identifiers, or two dams would silently merge into one."""
         problems, by_slug = [], {}
-        for position, name in enumerate(table[DAM]):
+        for position, name in enumerate(self.grid[DAM]):
+            if not name:  # a blank grid row: validation has already rejected a missing name in any other row
+                continue
             row = position + 2
             try:
                 by_slug.setdefault(slugify(name), {}).setdefault(name_key(name), []).append(row)
@@ -150,9 +164,9 @@ class RegionalData:
     def import_zonal_means(self, path) -> List[str]:
         """Validate and copy the zonal means. Returns warnings; an unusable file raises and nothing is copied."""
         loaded = load_zonal_means(path)
-        self.project.inputs["zonal_means"] = self.project.import_file(
-            path, f"inputs/zonal_means{Path(path).suffix.lower()}"
-        )
+        relative = self.project.import_file(path, f"inputs/zonal_means{Path(path).suffix.lower()}")
+        self._drop_previous(self.project.inputs.get("zonal_means"), relative)
+        self.project.inputs["zonal_means"] = relative
         self.project.save()
         self.zonal, self.zonal_warnings = loaded.data, loaded.warnings
         return loaded.warnings
@@ -169,7 +183,9 @@ class RegionalData:
             try:
                 loaded = load_dam_sheet(path, self.basin_table)
                 dam = dams[slugify(loaded.data.name)]
-                dam.sheet = self.project.import_file(path, f"inputs/dams/{dam.slug}{Path(path).suffix.lower()}")
+                relative = self.project.import_file(path, f"inputs/dams/{dam.slug}{Path(path).suffix.lower()}")
+                self._drop_previous(dam.sheet, relative)
+                dam.sheet = relative
             except (ValueError, OSError) as exc:
                 errors.append(str(exc))
                 continue

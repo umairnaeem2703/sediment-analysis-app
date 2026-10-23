@@ -33,8 +33,11 @@ def _coerce_decimal_comma(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def read_table(file_path: str) -> pd.DataFrame:
-    """Load CSV or Excel using a case-insensitive suffix. Handles UTF-8 and Turkish encodings (e.g. CP1254, ISO-8859-9)."""
+def read_table(file_path: str, dtype=None) -> pd.DataFrame:
+    """Load CSV or Excel using a case-insensitive suffix. Handles UTF-8 and Turkish encodings (e.g. CP1254, ISO-8859-9).
+
+    `dtype=str` keeps every cell as written (leading zeros, trailing zeros) instead of letting pandas parse numbers.
+    """
     path = Path(file_path)
     suffix = path.suffix.lower()
     if suffix == ".csv":
@@ -42,11 +45,11 @@ def read_table(file_path: str) -> pd.DataFrame:
         last_exc = None
         for enc in encodings:
             try:
-                df = pd.read_csv(path, encoding=enc)
+                df = pd.read_csv(path, encoding=enc, dtype=dtype)
                 # Handle semicolon-delimited CSVs commonly exported by Turkish Excel
                 if len(df.columns) == 1 and ";" in str(df.columns[0]):
                     try:
-                        df_semi = pd.read_csv(path, encoding=enc, sep=";")
+                        df_semi = pd.read_csv(path, encoding=enc, sep=";", dtype=dtype)
                         if len(df_semi.columns) > 1:
                             return _coerce_decimal_comma(df_semi)
                     except Exception:
@@ -57,9 +60,9 @@ def read_table(file_path: str) -> pd.DataFrame:
                 continue
         if last_exc:
             raise last_exc
-        return pd.read_csv(path)
+        return pd.read_csv(path, dtype=dtype)
     if suffix in {".xlsx", ".xls"}:
-        return pd.read_excel(path)
+        return pd.read_excel(path, dtype=dtype)
     raise ValueError(f"Unsupported table format: {path.suffix}")
 
 
