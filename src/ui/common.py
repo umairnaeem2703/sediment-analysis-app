@@ -30,6 +30,12 @@ def browse_save_file(
     return path if path else None
 
 
+def browse_directory(title: str = "Select Folder") -> Optional[str]:
+    """Open a folder dialog; the folder may be created in the dialog."""
+    path = filedialog.askdirectory(title=title, mustexist=False)
+    return path if path else None
+
+
 def show_error(title: str, message: str) -> None:
     """Display an error messagebox."""
     messagebox.showerror(title, message)
