@@ -14,6 +14,7 @@ import pandas as pd
 from src.services.project import Dam, Project, slugify
 from src.services.regional import (
     DAM,
+    Loaded,
     Problem,
     TableError,
     load_dam_sheet,
@@ -173,6 +174,24 @@ class RegionalData:
         self.project.save()
         self.zonal, self.zonal_warnings = loaded.data, loaded.warnings
         return loaded.warnings
+
+    # --- what the dam step reads --------------------------------------------------------------
+
+    def _require_table(self) -> None:
+        if self.basin_table is None:
+            raise ValueError("The basin table is not valid yet.")
+
+    def sub_basins(self, dam: Dam) -> pd.DataFrame:
+        """The dam's rows of the validated basin table."""
+        self._require_table()
+        return self.basin_table[self.basin_table[DAM].map(name_key) == name_key(dam.name)]
+
+    def dam_sheet(self, dam: Dam) -> Loaded:
+        """The dam's sheet, re-read from the project copy and cross-checked against the current table."""
+        self._require_table()
+        if not dam.sheet:
+            raise ValueError(f"No sheet has been imported for {dam.name}.")
+        return load_dam_sheet(self.project.folder / dam.sheet, self.basin_table)
 
     # --- dam sheets ---------------------------------------------------------------------------
 

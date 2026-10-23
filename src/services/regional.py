@@ -96,24 +96,24 @@ def _read(path, dtype=None) -> pd.DataFrame:
         raise ValueError(f"{path.name}: could not be read ({exc})") from exc
 
 
-def _text(value) -> str:
+def cell_text(value) -> str:
     return "" if pd.isna(value) else str(value).strip()
 
 
-def _number(value) -> Optional[float]:
+def parse_number(value) -> Optional[float]:
     """The cell as a finite float, or None when it is blank or not a number."""
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         number = float(value)
     else:
         try:
-            number = float(_text(value).replace(",", "."))
+            number = float(cell_text(value).replace(",", "."))
         except ValueError:
             return None
     return number if math.isfinite(number) else None
 
 
-def _shown(value) -> str:
-    text = _text(value)
+def quote_cell(value) -> str:
+    text = cell_text(value)
     return repr(text) if text else "an empty cell"
 
 
@@ -123,7 +123,7 @@ def _missing_columns_error(source: str, missing: List[str], df: pd.DataFrame) ->
 
 
 def _is_blank(record) -> bool:
-    return not any(_text(value) for value in record)
+    return not any(cell_text(value) for value in record)
 
 
 # --- basin table ------------------------------------------------------------------------------
@@ -137,7 +137,7 @@ def basin_grid(df: pd.DataFrame, source: str) -> pd.DataFrame:
         raise _missing_columns_error(source, missing, df)
     grid = df[[found[key] for key in BASIN_COLUMNS]].copy()
     grid.columns = list(BASIN_COLUMNS.values())
-    grid = grid.apply(lambda column: column.map(_text)).reset_index(drop=True)
+    grid = grid.apply(lambda column: column.map(cell_text)).reset_index(drop=True)
     if all(_is_blank(record) for _, record in grid.iterrows()):
         raise ValueError(f"{source}: no data rows found.")
     return grid
@@ -158,16 +158,16 @@ def validate_basin_table(df: pd.DataFrame, source: str) -> Loaded:
         row = position + 2
         entry = {}
         for column in (DAM, BASIN, SUBBASIN):
-            entry[column] = _text(record[column])
+            entry[column] = cell_text(record[column])
             if not entry[column]:
                 problems.append(Problem(f"row {row}: '{column}' is empty.", ((row, column),)))
-        entry[AREA] = _number(record[AREA])
+        entry[AREA] = parse_number(record[AREA])
         if entry[AREA] is None or entry[AREA] <= 0:
-            message = f"row {row}: '{AREA}' must be a number greater than 0, found {_shown(record[AREA])}."
+            message = f"row {row}: '{AREA}' must be a number greater than 0, found {quote_cell(record[AREA])}."
             problems.append(Problem(message, ((row, AREA),)))
-        entry[SLOPE] = _number(record[SLOPE])
+        entry[SLOPE] = parse_number(record[SLOPE])
         if entry[SLOPE] is None:
-            message = f"row {row}: '{SLOPE}' must be a number, found {_shown(record[SLOPE])}."
+            message = f"row {row}: '{SLOPE}' must be a number, found {quote_cell(record[SLOPE])}."
             problems.append(Problem(message, ((row, SLOPE),)))
         if entry[DAM] and entry[SUBBASIN]:
             key = (name_key(entry[DAM]), name_key(entry[SUBBASIN]))
@@ -207,10 +207,10 @@ def validate_zonal_means(df: pd.DataFrame, source: str) -> Loaded:
 
     kept, skipped = [], []
     for position, (_, record) in enumerate(df.iterrows()):
-        name, mean = _text(record[name_column]), _number(record[mean_column])
+        name, mean = cell_text(record[name_column]), parse_number(record[mean_column])
         if name and mean is not None:
             kept.append((name, mean))
-        elif name or _text(record[mean_column]):  # fully blank rows are not counted
+        elif name or cell_text(record[mean_column]):  # fully blank rows are not counted
             skipped.append(position + 2)
     if not kept:
         raise ValueError(f"{source}: no valid sub-basin MEAN values found.")
@@ -256,7 +256,7 @@ def validate_dam_sheet(df: pd.DataFrame, source: str, basin_table: pd.DataFrame)
     dams = {}
     for name in basin_table[DAM]:
         dams.setdefault(name_key(name), name)  # the table's first spelling names the dam
-    sheet_name = _text(record[columns["name"]])
+    sheet_name = cell_text(record[columns["name"]])
     if name_key(sheet_name) not in dams:
         raise ValueError(
             f"{source}: dam '{sheet_name}' is not in the basin table (dams: {', '.join(sorted(set(dams.values())))})."
@@ -270,9 +270,11 @@ def validate_dam_sheet(df: pd.DataFrame, source: str, basin_table: pd.DataFrame)
             values[field] = None
             continue
         raw = record[column]
-        values[field] = _number(raw)
-        if values[field] is None and (field in _SHEET_REQUIRED or _text(raw)):
-            problems.append(Problem(f"row {row}: '{label}' must be a number, found {_shown(raw)}.", ((row, label),)))
+        values[field] = parse_number(raw)
+        if values[field] is None and (field in _SHEET_REQUIRED or cell_text(raw)):
+            problems.append(
+                Problem(f"row {row}: '{label}' must be a number, found {quote_cell(raw)}.", ((row, label),))
+            )
     if problems:
         raise TableError(source, problems)
 
