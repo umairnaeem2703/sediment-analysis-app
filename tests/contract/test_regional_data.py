@@ -450,3 +450,18 @@ def test_c_m1_05_a_dam_sheet_with_another_extension_replaces_the_old_copy(tmp_pa
 
     assert project.dams[1].sheet == "inputs/dams/cubuk_1.csv"
     assert not (project.folder / "inputs" / "dams" / "cubuk_1.xlsx").exists()
+
+
+def test_c_m1_08_a_failed_replace_leaves_no_temporary_file(tmp_path, project, data, monkeypatch):
+    data.import_basin_table(SAMPLE_BASINS)
+    before = data.grid.copy()
+
+    def locked(source, destination):
+        raise PermissionError("file is open in another program")
+
+    monkeypatch.setattr("src.services.regional_data.os.replace", locked)
+    with pytest.raises(PermissionError):
+        data.edit_cell(0, "Main Waterway Slope", "0.99")
+
+    pd.testing.assert_frame_equal(data.grid, before)
+    assert sorted(p.name for p in (project.folder / "inputs").iterdir()) == ["basins.csv"]

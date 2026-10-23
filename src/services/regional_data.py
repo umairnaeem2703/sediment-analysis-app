@@ -89,8 +89,11 @@ class RegionalData:
         updated.at[position, column] = str(value).strip()
         # Write first: if the file cannot be replaced (for example it is open in Excel) the grid stays as it was.
         temp = self.project.folder / (BASIN_COPY + ".tmp")
-        updated.to_csv(temp, index=False, encoding="utf-8-sig")
-        os.replace(temp, self.project.folder / BASIN_COPY)
+        try:
+            updated.to_csv(temp, index=False, encoding="utf-8-sig")
+            os.replace(temp, self.project.folder / BASIN_COPY)
+        finally:
+            temp.unlink(missing_ok=True)
         self.grid = updated
         self._replace_basin_copy(BASIN_COPY)
         return self._validate_and_sync()
