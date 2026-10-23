@@ -27,6 +27,8 @@ exports/
 !inputs/**/*.xlsx
 !inputs/*.csv
 !inputs/*.xlsx
+!tests/**/*.csv
+!tests/**/*.xlsx
 
 # IDE / Editor configuration
 .vscode/
