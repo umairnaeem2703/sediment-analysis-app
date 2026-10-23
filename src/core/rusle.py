@@ -108,7 +108,18 @@ def find_basin_table_columns(columns) -> dict:
         ),
         "dam": match_col(["Dam Name", "Dam", "Baraj Adı", "Baraj Adi", "Baraj", "Barajı", "Baraji"]),
         "area": match_col(
-            ["Area", "Area_km2", "Area (km2)", "Area(km2)", "Alan", "Alan (km2)", "Alan(km2)", "Alan_km2"]
+            [
+                "Drainage Area (km2)",
+                "Drainage Area",
+                "Area",
+                "Area_km2",
+                "Area (km2)",
+                "Area(km2)",
+                "Alan",
+                "Alan (km2)",
+                "Alan(km2)",
+                "Alan_km2",
+            ]
         ),
         "slope": match_col(
             [
