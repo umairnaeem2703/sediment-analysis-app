@@ -95,7 +95,7 @@ The main window is a wizard (D17, D18) with a step list on the left and Back/Nex
 
 ## A6. Functional requirements
 
-Test IDs follow `<layer>-<milestone>-<nn>`; the layers are `U` unit, `C` input contract, `P` per-dam pipeline, `W` wizard (B6). Tests are *planned*; none exist yet.
+Test IDs follow `<layer>-<milestone>-<nn>`; the layers are `U` unit, `C` input contract, `P` per-dam pipeline, `W` wizard (B6). Tests for the M1 requirements and the cross-cutting ones exist; those for M2 to M5 are still planned.
 
 ### M1: Regional data ingestion
 
@@ -104,9 +104,10 @@ Test IDs follow `<layer>-<milestone>-<nn>`; the layers are `U` unit, `C` input c
 | FR-M1-01 | New, open and save a project folder holding `project.json` | A saved project reopens with identical dams, parameters and file paths. A missing or newer `schema_version` gives a clear error. | C-M1-01, W-M1-01 |
 | FR-M1-02 | Importing a file copies it into `<project>/inputs/`; originals are never modified (D33) | Source file bytes are unchanged after an import. Edits in the grid are saved to the copy. | C-M1-02 |
 | FR-M1-03 | Load the basin table and validate it | Required columns found by EN/TR alias, including `Drainage Area (km2)`. Area > 0. Slope present and numeric. Blank rows skipped. Duplicate sub-basin names within a dam are an error. | C-M1-03, C-M1-04 |
-| FR-M1-04 | Edit the basin table in a grid | Edited cells persist to the project copy. Invalid cells are flagged before M2 runs. | W-M1-02 |
+| FR-M1-04 | Edit the basin table in a grid | Edited cells persist to the project copy (D41). Invalid cells are flagged before M2 runs, and a table with invalid cells is still imported (D38). | C-M1-08, W-M1-02 |
 | FR-M1-05 | Load a dam sheet and cross-check it | Dam name matches a basin-table dam (Turkish-aware). Sheet drainage area and slope differ from the table by more than 1%: warning. Missing required fields: error naming them. | C-M1-05, C-M1-06 |
 | FR-M1-06 | Load zonal means | `MEAN` column and a sub-basin name column found by alias; empty or non-numeric means are skipped with a count in the warnings. | C-M1-07 |
+| FR-M1-07 | Select the dam to analyse and enter its settings (D40, D42) | The dam needs a sheet. Commissioning year is optional; the analysis year is blank for the current year and not before the commissioning year; trap efficiency is above 0 and at most 100 (default 100); Hmin is optional. Choosing another dam or changing a setting resets the later steps. | C-M1-09, W-M1-03 |
 
 ### M2: Suspended sediment
 
@@ -266,6 +267,7 @@ All inputs are copied into the project (FR-M1-02). Aliases are matched with `nor
 | OI-04 | Hydrologist review of the bedload before and after D35 and D36. | M3 |
 | OI-05 | Hydrologist confirmation of the shape classes (gorge 1.25, hill 2, foothill 3, lake 4) and of the plausibility thresholds in FR-M4-01. | M4 |
 | OI-06 | Independent hand calculations for `tests/verification/` (the spreadsheet is written by the developer, reviewed by the hydrologist). | M2 |
+| OI-07 | The dam sheet is cross-checked against the sum of the dam's sub-basin areas and their area-weighted mean slope (D43). A downstream dam holds the *incremental* catchment in the table (D21) but the total drainage area in its sheet, so its area check will warn. Decide whether to compare against the cumulative upstream area. | M4 |
 
 ---
 
@@ -320,7 +322,8 @@ Three layers; imports point downward only (D16).
 | `src/services/reporting.py` | new | xlsx, png, csv, `run.json` |
 | `src/ui/wizard.py`, `src/ui/steps/` | new | Controller and one view per step |
 | `src/ui/common.py`, `src/utils/paths.py` | kept | |
-| `src/data/`, `src/ui/{app,rusle_view,wilcock_view,integration_view}.py`, back-compat shims, `BasinDatabase`, `load_raster_matrix` | removed | |
+| `src/data/database.py` (`BasinDatabase`), `src/ui/{app,rusle_view,wilcock_view,integration_view}.py`, back-compat shims, `load_raster_matrix` | removed in M1 | |
+| `src/data/reporter.py` | kept until M4 | Unused by the wizard. M4.2 replaces it with `src/core/integration.py`, then `src/data/` is removed. |
 
 ## B3. Calculation reference
 
@@ -471,37 +474,39 @@ The traceability matrix is the Tests column in A6.
 
 Each milestone is a vertical slice: services, wizard step, tests and sign-off. Exit criteria are listed; there are no dates.
 
-| Milestone | Tasks | Exit criteria |
-|---|---|---|
-| **M0 Pipeline setup** | Fast-forward local `main` to `origin/main` (it already contains `branch1`), then retire `branch1` and `branch2` (confirm before deleting remote branches). Add ruff and one formatting-only commit with no logic changes. Add the `.gitignore` exceptions. Add the CI workflow and branch protection. Move current tests to `tests/legacy/` and create the new layout with one import smoke test. Create `src/services/`. | CI is green on a pull request; `pytest` runs the new layout only |
-| **M1 Regional data** | Project model, `project.json`, import-copy. Basin and dam-sheet validators, including the `Drainage Area (km2)` alias and cross-checks. Wizard shell with steps 1 to 3. Remove the old tabs, back-compat shims, `src/data/database.py` and dead code. Update the architecture section of `CLAUDE.md`. | FR-M1-* tests pass; the three sample dams load; the app opens to the wizard |
-| **M2 Suspended** | Suspended service and step 4. Verification workbook for B3.1. Golden outputs for the three dams. | FR-M2-* tests pass; hydrologist signs off the goldens |
-| **M3 Bedload** | D35 and D36 fixes. Move plotting and file I/O out of core. Bedload service and step 5. Before and after table for the hydrologist. | FR-M3-* tests pass; OI-04 closed |
-| **M4 Reservoir and projection** | `reservoir.py`, `projection.py`, `integration.py`. Steps 6 and 7. Commissioning years and Hmin collected (OI-02). | FR-M4-* tests pass; OI-01, OI-03, OI-05 closed |
-| **M5 Reporting** | Reporting service and step 8. `run.json` with the app version. Delete `tests/legacy/`. | FR-M5-* tests pass; end-to-end sign-off for the three dams; version 1.0.0 (no build) |
+| Milestone | Tasks | Exit criteria | Status |
+|---|---|---|---|
+| **M0 Pipeline setup** | Fast-forward local `main` to `origin/main` (it already contains `branch1`), then retire `branch1` and `branch2` (confirm before deleting remote branches). Add ruff and one formatting-only commit with no logic changes. Add the `.gitignore` exceptions. Add the CI workflow and branch protection. Move current tests to `tests/legacy/` and create the new layout with one import smoke test. Create `src/services/`. | CI is green on a pull request; `pytest` runs the new layout only | Done |
+| **M1 Regional data** | Project model, `project.json`, import-copy. Basin and dam-sheet validators, including the `Drainage Area (km2)` alias and cross-checks. Wizard shell with steps 1 to 3. Remove the old tabs, back-compat shims, `src/data/database.py` and dead code. Update the architecture section of `CLAUDE.md`. | FR-M1-* tests pass; the three sample dams load; the app opens to the wizard | Done (steps 1 to 3 and the cut-over; the old UI is tagged `legacy-ui`) |
+| **M2 Suspended** | Suspended service and step 4. Verification workbook for B3.1. Golden outputs for the three dams. | FR-M2-* tests pass; hydrologist signs off the goldens | Not started |
+| **M3 Bedload** | D35 and D36 fixes. Move plotting and file I/O out of core. Bedload service and step 5. Before and after table for the hydrologist. | FR-M3-* tests pass; OI-04 closed | Not started |
+| **M4 Reservoir and projection** | `reservoir.py`, `projection.py`, `integration.py`. Steps 6 and 7. Commissioning years and Hmin collected (OI-02). | FR-M4-* tests pass; OI-01, OI-03, OI-05 closed | Not started |
+| **M5 Reporting** | Reporting service and step 8. `run.json` with the app version. Delete `tests/legacy/`. | FR-M5-* tests pass; end-to-end sign-off for the three dams; version 1.0.0 (no build) | Not started |
 
 ## B9. Gap analysis: current code vs target
 
-| Area | Current (evidence) | Target | Milestone |
-|---|---|---|---|
-| Dams mixed | The RUSLE tab sums every row, so three dams give 118,933 m³/yr (`src/ui/rusle_view.py:321`) | Per-dam total (FR-M2-03) | M2 |
-| Silent sample fallbacks | Integration loads bundled samples when nothing is chosen (`src/ui/integration_view.py:154-185`) | Error naming the missing input (FR-X-01) | M1 |
-| Logic in views | `_ensure_phase2_volume`, `_load_default_phase3`, report text (`integration_view.py:86-135, 225-251`) | Services (B2) | M1 to M4 |
-| Not a curve | `inputs/bathymetry.csv` had one row per dam; the user has since removed it. `prepare_bathymetry` treats rows as one curve. | Generated per-dam curve (FR-M4-02) | M4 |
-| No accumulation or lifespan | One year's volume is mapped to an elevation (`integration_view.py:194-205`) | FR-M4-03 to FR-M4-05 | M4 |
-| Duplicate elevation columns | `Interpolated_Elevation_m`, `Elevation_m`, `Elevation` (`integration_view.py:199-205`) | One `Elevation_m` | M4 |
-| W* high branch | Missing square root (`src/core/wilcock.py:63, 85`) | D35 | M3 |
-| tau_ri precedence | File column wins (`wilcock.py:106-115`) | D36 | M3 |
-| Plotting in core | matplotlib in `src/core/wilcock.py:5` and `BedloadVisualizer` | `services/reporting.py` | M3 |
-| File I/O in core | `MonthlyFlowPreprocessor.load/export_csv/main` | Services | M3 |
-| Area header | `find_basin_table_columns` does not match `Drainage Area (km2)`; 9 tests fail since the `inputs/` edits | Alias added (FR-M1-03) | M1 |
-| Dead code | `BasinDatabase` (`src/data/database.py`), `load_raster_matrix` (`src/utils/paths.py:67`), `raster_mean_t_ha_yr` and `to_phase2_handoff` (`rusle.py`), the "Antigravity" docstring (`src/__init__.py`) | Removed | M1 |
-| Back-compat shims | Aliases and properties on `SedimentApp` (`src/ui/app.py:58-178`) | Removed with the old UI | M1 |
-| Suspended averaging | `merge_sediment_data` averages across years before adding (`src/data/reporter.py:26-29`) | One static value per dam | M4 |
-| No CI or lint | No `.github/`, no ruff config, no README | D25 | M0 |
-| Tests | 150 tests written without a plan; 9 fail on the edited inputs | Rebuilt (D24, D28) | M0 to M5 |
-| `.gitignore` | `*.csv` and `*.xlsx` ignored outside `inputs/` | Exceptions for `tests/**` | M0 |
-| Branches | Local `main` is behind `origin/main`; `branch1` and `branch2` are stale | Single `main` flow | M0 |
+| Area | Current (evidence) | Target | Milestone | Status |
+|---|---|---|---|---|
+| Dams mixed | The RUSLE tab sums every row, so three dams give 118,933 m³/yr (`src/ui/rusle_view.py:321`) | Per-dam total (FR-M2-03) | M2 | Open |
+| Silent sample fallbacks | Integration loads bundled samples when nothing is chosen (`src/ui/integration_view.py:154-185`) | Error naming the missing input (FR-X-01) | M1 | Done (M1): the wizard loads only files the user chose |
+| Logic in views | `_ensure_phase2_volume`, `_load_default_phase3`, report text (`integration_view.py:86-135, 225-251`) | Services (B2) | M1 to M4 | Partly: the old views are gone; M2 to M4 add the services |
+| Not a curve | `inputs/bathymetry.csv` had one row per dam; the user has since removed it. `prepare_bathymetry` treats rows as one curve. | Generated per-dam curve (FR-M4-02) | M4 | Open |
+| No accumulation or lifespan | One year's volume is mapped to an elevation (`integration_view.py:194-205`) | FR-M4-03 to FR-M4-05 | M4 | Open |
+| Duplicate elevation columns | `Interpolated_Elevation_m`, `Elevation_m`, `Elevation` (`integration_view.py:199-205`) | One `Elevation_m` | M4 | Open |
+| W* high branch | Missing square root (`src/core/wilcock.py:63, 85`) | D35 | M3 | Open |
+| tau_ri precedence | File column wins (`wilcock.py:106-115`) | D36 | M3 | Open |
+| Plotting in core | matplotlib in `src/core/wilcock.py:5` and `BedloadVisualizer` | `services/reporting.py` | M3 | Open |
+| File I/O in core | `MonthlyFlowPreprocessor.load/export_csv/main` | Services | M3 | Open |
+| Area header | `find_basin_table_columns` does not match `Drainage Area (km2)`; 9 tests fail since the `inputs/` edits | Alias added (FR-M1-03) | M1 | Done (M1.1) |
+| Dead code | `BasinDatabase` (`src/data/database.py`), `load_raster_matrix` (`src/utils/paths.py:67`), `raster_mean_t_ha_yr` and `to_phase2_handoff` (`rusle.py`), the "Antigravity" docstring (`src/__init__.py`) | Removed | M1 | Done (M1.5) |
+| Back-compat shims | Aliases and properties on `SedimentApp` (`src/ui/app.py:58-178`) | Removed with the old UI | M1 | Done (M1.5) |
+| Suspended averaging | `merge_sediment_data` averages across years before adding (`src/data/reporter.py:26-29`) | One static value per dam | M4 | Open (`reporter.py` stays until M4.2) |
+| No CI or lint | No `.github/`, no ruff config, no README | D25 | M0 | Done (M0) |
+| Tests | 150 tests written without a plan; 9 fail on the edited inputs | Rebuilt (D24, D28) | M0 to M5 | In progress: the new layout is in use; `tests/legacy` has 4 failures from removed fixtures |
+| `.gitignore` | `*.csv` and `*.xlsx` ignored outside `inputs/` | Exceptions for `tests/**` | M0 | Done (M0) |
+| Branches | Local `main` is behind `origin/main`; `branch1` and `branch2` are stale | Single `main` flow | M0 | Done (M0) |
+
+The evidence column describes the code before M1. Files removed in M1.5 can be read at commit `cf06dfa`, for example `git show cf06dfa:src/ui/rusle_view.py`.
 
 ---
 
@@ -546,3 +551,10 @@ Each milestone is a vertical slice: services, wizard step, tests and sign-off. E
 | D35 | Fix the missing square root in the W&C high-transport branch | Transcription error: discontinuity at phi = 1.35 and a 3x to 6x overstatement |
 | D36 | tau_ri is always computed; a supplied value is cross-checked | The sample column is off by di / D50 |
 | D37 | Keep `0.51 · A^(-0.11)` with area in km² | Accepted (AL-04) |
+| D38 | A basin table with invalid cells is still imported and shown in the grid with the cells flagged. An unreadable file, missing columns or no data rows is refused and nothing is copied | The grid is where the data is fixed (FR-M1-04); a structural problem cannot be fixed there |
+| D39 | The project's dams follow the basin table: one per dam name, matched by identifier (slug). Settings of dams that stay are kept; dams that leave the table are dropped and named in a notice | One source of truth for which dams exist |
+| D40 | Step 2 is complete when the basin table is valid and the zonal means are loaded. A dam sheet is needed only for the dam chosen in step 3 | One dam can be analysed without every sheet |
+| D41 | Grid edits rewrite the project's copy as comma-separated UTF-8 with BOM and canonical English headers; the file the user picked is never touched | Edits persist without altering originals (D33) |
+| D42 | Step 3: commissioning year optional; analysis year blank means the current year and is not before the commissioning year; trap efficiency above 0 and at most 100, default 100; Hmin optional | Missing commissioning years (OI-02) must not block steps 4 to 6 |
+| D43 | A dam sheet is cross-checked against the sum of the dam's sub-basin areas and their area-weighted mean slope; more than 1% apart gives a warning | The spec was silent for dams with several sub-basins (OI-07) |
+| D44 | Work-package pull requests are squash-merged once CI is green and every review finding is fixed or declined in the PR description | Branch protection already requires the PR and the `ci` check |

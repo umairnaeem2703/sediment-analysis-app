@@ -21,12 +21,6 @@ def test_gross_mass_uses_hectares():
     assert np.isclose(metrics["gross_mass_t"], mean * area_km2 * HA_PER_KM2)
 
 
-def test_phase2_schema():
-    df = YieldCalculator().to_phase2_handoff(2020, 123.4)
-    assert list(df.columns) == ["Year", "Suspended_Volume_m3"]
-    assert df.iloc[0]["Year"] == 2020
-
-
 def test_zonal_matcher_normalization_and_aliases():
     from src.core.rusle import ZonalMatcher
 

@@ -2,7 +2,6 @@ import math
 from dataclasses import asdict, dataclass
 from typing import Dict, List, NamedTuple, Optional, Set
 
-import numpy as np
 import pandas as pd
 
 import unicodedata
@@ -412,22 +411,6 @@ class YieldCalculator:
         cem_sio = self.calculate_cem_sio(slope)
         return (usda_sio + cem_sio) / 2.0
 
-    def raster_mean_t_ha_yr(
-        self, raster_array: np.ndarray, nodata_value: float = -9999.0, basin_mask: np.ndarray = None
-    ) -> float:
-        """Calculate the average erosion rate from a raster array."""
-        raster = np.asarray(raster_array, dtype=float)
-        valid_pixels = np.isfinite(raster) & (raster != nodata_value)
-
-        if basin_mask is not None:
-            valid_pixels = valid_pixels & np.asarray(basin_mask, dtype=bool)
-
-        basin_data = raster[valid_pixels]
-        if basin_data.size == 0:
-            return 0.0
-
-        return float(np.mean(basin_data))
-
     def calculate_metrics(self, raster_mean_t_ha_yr: float, area_km2: float, slope: float) -> dict:
         """Compute sediment metrics from a direct mean erosion-rate value in t/ha/yr."""
         if area_km2 <= 0:
@@ -459,6 +442,3 @@ class YieldCalculator:
             volume_m3=volume_m3,
             specific_yield_m3_km2=specific_yield,
         ).to_dict()
-
-    def to_phase2_handoff(self, year: int, volume_m3: float) -> pd.DataFrame:
-        return pd.DataFrame({"Year": [int(year)], "Suspended_Volume_m3": [float(volume_m3)]})
