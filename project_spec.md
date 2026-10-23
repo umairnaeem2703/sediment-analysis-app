@@ -466,7 +466,7 @@ The traceability matrix is the Tests column in A6.
 
 **CI** (`.github/workflows/ci.yml`, D25): on push and pull request, on `windows-latest`: checkout, `setup-python` 3.14, `pip install -r requirements.txt`, `ruff check .`, `ruff format --check .`, `pytest`. A failing run blocks the merge to `main` through branch protection. There is no mypy or coverage gate.
 
-**Local tooling.** `.claude/` and `.agents/` stay untracked (D27), so CI never depends on them. `/validate-calc-engine` and `.claude/agents/explore-agent.md` are updated locally in M0 (the agent still mentions CustomTkinter and PDF output).
+**Local tooling.** Shared Claude config (`.claude/` and `.agents/`, except `.claude/settings.local.json`) is tracked (D27), so the team works with the same skills, hooks and agents. CI never depends on them. `/validate-calc-engine` and `.claude/agents/explore-agent.md` are updated locally in M0 (the agent still mentions CustomTkinter and PDF output).
 
 **Packaging and release** are out of scope (D30).
 
@@ -540,7 +540,7 @@ The evidence column describes the code before M1. Files removed in M1.5 can be r
 | D24 | Rebuild the test suite | The current tests were not planned |
 | D25 | CI on `windows-latest` with ruff and pytest; blocking | Free for a public repo; Tk tests need Windows |
 | D26 | Branch, test-first, review, squash; hydrologist sign-off for numeric changes | Small reviewable steps |
-| D27 | `.claude/` and `.agents/` stay untracked | Personal tooling |
+| D27 | Shared `.claude/` and `.agents/` config is tracked; `.claude/settings.local.json` stays untracked | Team uses the same skills and hooks; the local file holds per-machine permissions |
 | D28 | Four test layers with traceability | See B6 |
 | D29 | Old tests go to `tests/legacy/`, local only | Safety net without blocking merges |
 | D30 | Packaging and release out of scope | Deferred by the owner |

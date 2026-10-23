@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest:*)",
+      "Bash(.venv/Scripts/python -m pytest:*)",
+      "Bash(python -m ruff check:*)",
+      "Bash(python -m ruff format:*)",
+      "Bash(.venv/Scripts/python -m ruff check:*)",
+      "Bash(.venv/Scripts/python -m ruff format:*)",
+      "Bash(python app.py)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh run view:*)"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(gh pr merge:*)"
+    ]
+  }
+}
