@@ -1,7 +1,7 @@
 import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox
-from typing import Callable, Optional, Sequence, Tuple
+from typing import Callable, List, Optional, Sequence, Tuple
 
 
 def browse_open_file(
@@ -14,6 +14,17 @@ def browse_open_file(
     """Open a file dialog to pick an existing file."""
     path = filedialog.askopenfilename(title=title, filetypes=list(filetypes))
     return path if path else None
+
+
+def browse_open_files(
+    filetypes: Sequence[Tuple[str, str]] = (
+        ("CSV/Excel Files", "*.csv *.xlsx *.xls"),
+        ("All Files", "*.*"),
+    ),
+    title: str = "Select Files",
+) -> List[str]:
+    """Open a file dialog to pick several existing files; an empty list means the dialog was cancelled."""
+    return list(filedialog.askopenfilenames(title=title, filetypes=list(filetypes)))
 
 
 def browse_save_file(

@@ -5,9 +5,11 @@ from tkinter import ttk
 from typing import Callable, List, Optional, Sequence
 
 from src.services.project import Project
+from src.services.regional_data import RegionalData
 from src.ui.common import run_in_background
 from src.ui.steps.base import Step
 from src.ui.steps.project_step import ProjectStep
+from src.ui.steps.regional_step import RegionalStep
 
 
 class Wizard:
@@ -17,6 +19,7 @@ class Wizard:
         self.parent = parent
         self.steps: List[Step] = list(steps)
         self.project: Optional[Project] = None
+        self.regional: Optional[RegionalData] = None
         self.current = 0
         self.busy = False
         self.notice_var = tk.StringVar()
@@ -101,12 +104,15 @@ class Wizard:
     # --- state --------------------------------------------------------------------------------
 
     def set_project(self, project: Project) -> None:
-        unchanged = self.project == project  # re-opening the same project must not discard later results
-        self.project = project
-        if unchanged:
+        if self.project == project:  # re-opening the same project keeps the open one and its later results
             self.refresh()
-        else:
-            self.invalidate_after(0, "The project changed.")
+            return
+        self.project = project
+        self.regional = RegionalData(project)
+        self.invalidate_after(0, "The project changed.")
+
+    def add_notice(self, text: str) -> None:
+        self.notice_var.set(f"{self.notice_var.get()} {text}".strip())
 
     def invalidate_after(self, index: int, reason: str) -> None:
         """An earlier step changed: clear every later step and say which results were lost (FR-X-04)."""
@@ -153,7 +159,7 @@ class Wizard:
 
 
 def default_steps() -> List[Step]:
-    return [ProjectStep()]
+    return [ProjectStep(), RegionalStep()]
 
 
 def main() -> None:
