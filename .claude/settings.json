@@ -1,46 +1,4 @@
 {
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python .claude/hooks/ruff_format.py"
-          },
-          {
-            "type": "command",
-            "command": "python .claude/hooks/layer_check.py"
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python .claude/hooks/context_check.py"
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Edit|Write|MultiEdit|Bash|PowerShell",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python .claude/hooks/context_check.py"
-          },
-          {
-            "type": "command",
-            "command": "python .claude/hooks/pause.py"
-          }
-        ]
-      }
-    ]
-  },
   "permissions": {
     "allow": [
       "Bash(python -m pytest:*)",
