@@ -54,7 +54,6 @@ class SedimentApp:
         """Set merged results from the Integration module."""
         self.final_merged_df = merged_df
 
-
     # Backwards-compatible aliases for views/tests
     @property
     def rusle_frame(self):

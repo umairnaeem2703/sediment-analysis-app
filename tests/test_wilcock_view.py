@@ -4,6 +4,7 @@ Tests for WilcockView (src/ui/wilcock_view.py): summary-table formatting and DSI
 Show* dialogs are patched so no Tk messageboxes block. execute_wc_analysis is run with a
 synchronous stand-in for run_in_background and a no-op graph render.
 """
+
 import tkinter as tk
 from tkinter import ttk
 from types import SimpleNamespace
@@ -58,9 +59,11 @@ def _run_analysis(wc_view, flow_parts, sigma="0.6", seed="0"):
     wc_view.frac_file_var.set(str(resource_path("inputs", "fractional_parameters.csv")))
     wc_view.sigma_var.set(sigma)
     wc_view.seed_var.set(seed)
-    with patch("src.ui.wilcock_view.run_in_background", _run_inline), \
-         patch("src.ui.wilcock_view.show_error") as show_error, \
-         patch("src.ui.wilcock_view.show_warning"):
+    with (
+        patch("src.ui.wilcock_view.run_in_background", _run_inline),
+        patch("src.ui.wilcock_view.show_error") as show_error,
+        patch("src.ui.wilcock_view.show_warning"),
+    ):
         wc_view.execute_wc_analysis()
     return summaries, show_error
 

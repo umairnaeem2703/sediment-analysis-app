@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk
 
 import matplotlib
+
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -62,16 +63,18 @@ class WilcockView:
     def _setup_ui(self):
         self.frame.columnconfigure(1, weight=1)
 
-        ttk.Button(self.frame, text="Browse Flow CSV (daily or DSI monthly)", command=lambda: self.browse_file(self.flow_file_var)).grid(
-            row=0, column=0, padx=10, pady=10, sticky="w"
-        )
+        ttk.Button(
+            self.frame,
+            text="Browse Flow CSV (daily or DSI monthly)",
+            command=lambda: self.browse_file(self.flow_file_var),
+        ).grid(row=0, column=0, padx=10, pady=10, sticky="w")
         ttk.Entry(self.frame, textvariable=self.flow_file_var, width=50, state="readonly").grid(
             row=0, column=1, padx=10, pady=10, sticky="ew"
         )
 
-        ttk.Button(
-            self.frame, text="Browse Fractional CSV", command=lambda: self.browse_file(self.frac_file_var)
-        ).grid(row=1, column=0, padx=10, pady=10, sticky="w")
+        ttk.Button(self.frame, text="Browse Fractional CSV", command=lambda: self.browse_file(self.frac_file_var)).grid(
+            row=1, column=0, padx=10, pady=10, sticky="w"
+        )
         ttk.Entry(self.frame, textvariable=self.frac_file_var, width=50, state="readonly").grid(
             row=1, column=1, padx=10, pady=10, sticky="ew"
         )
@@ -119,7 +122,9 @@ class WilcockView:
         self._clear_wc_display()
         summary_df = BedloadVisualizer.prepare_summary_table(self.app.annual_summary)
         columns = list(summary_df.columns)
-        tree = ttk.Treeview(self.wc_graph_frame, columns=columns, show="headings", height=max(8, min(15, len(summary_df))))
+        tree = ttk.Treeview(
+            self.wc_graph_frame, columns=columns, show="headings", height=max(8, min(15, len(summary_df)))
+        )
         for col in columns:
             heading = WATER_YEAR_HEADING if col == WATER_YEAR_COLUMN else col
             tree.heading(col, text=heading)
@@ -264,5 +269,3 @@ class WilcockView:
                 show_warning("Flow Data Notes", "\n".join(warnings))
 
         run_in_background(self.app.root, computation_task, on_complete)
-
-

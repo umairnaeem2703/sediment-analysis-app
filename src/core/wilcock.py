@@ -51,7 +51,7 @@ class FractionalModel:
             return 0.0, 0.0
         area = self.bed_width * self.depth
         velocity = q_flow / area
-        tau = (self.rho_w * self.g * (self.manning_n ** 2) * (velocity ** 2)) / math.pow(self.depth, 1.0 / 3.0)
+        tau = (self.rho_w * self.g * (self.manning_n**2) * (velocity**2)) / math.pow(self.depth, 1.0 / 3.0)
         u_star = math.sqrt(tau / self.rho_w)
         return tau, u_star
 
@@ -73,7 +73,7 @@ class FractionalModel:
         q = np.asarray(q_flow, dtype=float).reshape(-1)
         cross_section = self.bed_width * self.depth
         velocity = np.divide(q, cross_section, out=np.zeros_like(q), where=q > 0)
-        tau = (self.rho_w * self.g * (self.manning_n ** 2) * (velocity ** 2)) / (self.depth ** (1.0 / 3.0))
+        tau = (self.rho_w * self.g * (self.manning_n**2) * (velocity**2)) / (self.depth ** (1.0 / 3.0))
         tau = np.where(q > 0, tau, 0.0)
         u_star = np.sqrt(tau / self.rho_w)
 
@@ -232,8 +232,8 @@ class TimeSeriesAggregator:
         )
 
         # Convert the bedload volume to metric tons/year using sediment density.
-        annual_summary["Annual_Average_Bed_Load_metric_tons_yr"] = (
-            annual_summary["Annual_Total_Bedload_m3_yr"] * (self.model.rho_s / 1000.0)
+        annual_summary["Annual_Average_Bed_Load_metric_tons_yr"] = annual_summary["Annual_Total_Bedload_m3_yr"] * (
+            self.model.rho_s / 1000.0
         )
 
         return annual_summary
@@ -287,7 +287,6 @@ class BedloadVisualizer:
         table.to_csv(save_path, index=False, encoding="utf-8-sig")
         return table
 
-
     def generate_trend_graph(self, df_summary: pd.DataFrame):
         if df_summary.empty:
             raise ValueError("Dataframe is empty. Cannot generate plot.")
@@ -314,9 +313,7 @@ class BedloadVisualizer:
             bedload_series = df_summary[mass_col]
 
         ax2 = ax1.twinx()
-        line2 = ax2.plot(
-            years, bedload_series, color="red", marker="s", label="Bed Load"
-        )[0]
+        line2 = ax2.plot(years, bedload_series, color="red", marker="s", label="Bed Load")[0]
         ax2.set_ylabel("Annual Average Bed Load (metric tons/year)", color="red", fontweight="bold")
         ax2.tick_params(axis="y", labelcolor="red")
 

@@ -6,6 +6,7 @@ All tests:
   - Patch show_warning / show_error / show_info so no Tk messageboxes block.
   - Use a synthetic bathymetry with volumes large enough to cover test sediment values.
 """
+
 import tkinter as tk
 from pathlib import Path
 from unittest.mock import patch
@@ -22,6 +23,7 @@ from src.utils.paths import read_table, resource_path
 # Shared fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def app_with_root(tk_root):
     window = tk.Toplevel(tk_root)
@@ -37,10 +39,12 @@ def phase2_df():
 
 @pytest.fixture()
 def phase3_df():
-    return pd.DataFrame({
-        "Year": [2012, 2013, 2014],
-        "Bedload_Volume_m3": [0.0, 114.14, 0.0],
-    })
+    return pd.DataFrame(
+        {
+            "Year": [2012, 2013, 2014],
+            "Bedload_Volume_m3": [0.0, 114.14, 0.0],
+        }
+    )
 
 
 @pytest.fixture()
@@ -49,10 +53,12 @@ def bathy_df():
     Synthetic bathymetry with volumes large enough to bracket the test sediment values
     (Total_Volume_m3 ~ 185 754 – 185 868 m³).
     """
-    return pd.DataFrame({
-        "Volume_m3": [0.0, 100_000.0, 200_000.0, 300_000.0],
-        "Elevation_m": [900.0, 950.0, 1000.0, 1050.0],
-    })
+    return pd.DataFrame(
+        {
+            "Volume_m3": [0.0, 100_000.0, 200_000.0, 300_000.0],
+            "Elevation_m": [900.0, 950.0, 1000.0, 1050.0],
+        }
+    )
 
 
 # Patch target shared by all tests that call execute_integration
@@ -66,6 +72,7 @@ _UI_PATCH = {
 # ---------------------------------------------------------------------------
 # 1. master_yield.csv ingestion via _ensure_phase2_volume
 # ---------------------------------------------------------------------------
+
 
 def test_ensure_phase2_volume_from_master_yield(app_with_root):
     """_ensure_phase2_volume turns master_yield (Area + Slope cols) into Suspended_Volume_m3."""
@@ -119,11 +126,10 @@ def test_ensure_phase2_volume_from_volume_m3_yr_field(app_with_root):
 # 2. execute_integration – merged DataFrame columns & values
 # ---------------------------------------------------------------------------
 
+
 def test_execute_integration_produces_merged_df(app_with_root, phase2_df, phase3_df, bathy_df):
     with patch(_UI_PATCH["show_warning"]), patch(_UI_PATCH["show_error"]):
-        app_with_root.integration_view.execute_integration(
-            df_p2=phase2_df, df_p3=phase3_df, df_bathy=bathy_df
-        )
+        app_with_root.integration_view.execute_integration(df_p2=phase2_df, df_p3=phase3_df, df_bathy=bathy_df)
     merged = app_with_root.final_merged_df
 
     assert merged is not None and not merged.empty
@@ -134,9 +140,7 @@ def test_execute_integration_produces_merged_df(app_with_root, phase2_df, phase3
     assert "Interpolated_Elevation_m" in merged.columns
 
     for _, row in merged.iterrows():
-        assert row["Total_Volume_m3"] == pytest.approx(
-            row["Suspended_Volume_m3"] + row["Bedload_Volume_m3"], rel=1e-6
-        )
+        assert row["Total_Volume_m3"] == pytest.approx(row["Suspended_Volume_m3"] + row["Bedload_Volume_m3"], rel=1e-6)
 
 
 def test_execute_integration_reports_water_year(app_with_root, phase2_df):
@@ -157,6 +161,7 @@ def test_execute_integration_reports_water_year(app_with_root, phase2_df):
 
 def test_execute_integration_no_bathy_gives_nan_elevation(app_with_root, phase2_df, phase3_df):
     from src.ui.integration_view import IntegrationView
+
     with patch(_UI_PATCH["show_warning"]), patch(_UI_PATCH["show_error"]):
         app_with_root.integration_view.execute_integration(
             df_p2=phase2_df, df_p3=phase3_df, df_bathy=IntegrationView._NO_BATHY
@@ -169,9 +174,7 @@ def test_execute_integration_no_bathy_gives_nan_elevation(app_with_root, phase2_
 
 def test_execute_integration_elevation_values_within_bathy_range(app_with_root, phase2_df, phase3_df, bathy_df):
     with patch(_UI_PATCH["show_warning"]), patch(_UI_PATCH["show_error"]):
-        app_with_root.integration_view.execute_integration(
-            df_p2=phase2_df, df_p3=phase3_df, df_bathy=bathy_df
-        )
+        app_with_root.integration_view.execute_integration(df_p2=phase2_df, df_p3=phase3_df, df_bathy=bathy_df)
     merged = app_with_root.final_merged_df
     elevations = merged["Interpolated_Elevation_m"].dropna()
     # All elevations should be clamped or within [900, 1050]
@@ -183,8 +186,10 @@ def test_execute_integration_elevation_values_within_bathy_range(app_with_root, 
 # 3. Formatted summary display
 # ---------------------------------------------------------------------------
 
+
 def test_summary_text_has_best_and_worst_case_headers(app_with_root, phase2_df, phase3_df):
     from src.ui.integration_view import IntegrationView
+
     with patch(_UI_PATCH["show_warning"]), patch(_UI_PATCH["show_error"]):
         app_with_root.integration_view.execute_integration(
             df_p2=phase2_df, df_p3=phase3_df, df_bathy=IntegrationView._NO_BATHY
@@ -197,13 +202,11 @@ def test_summary_text_has_best_and_worst_case_headers(app_with_root, phase2_df, 
 
 def test_summary_text_shows_year_volume_elevation(app_with_root, phase2_df, phase3_df, bathy_df):
     with patch(_UI_PATCH["show_warning"]), patch(_UI_PATCH["show_error"]):
-        app_with_root.integration_view.execute_integration(
-            df_p2=phase2_df, df_p3=phase3_df, df_bathy=bathy_df
-        )
+        app_with_root.integration_view.execute_integration(df_p2=phase2_df, df_p3=phase3_df, df_bathy=bathy_df)
     text = app_with_root.integration_view.results_text.get("1.0", tk.END)
 
     assert "2012" in text or "2014" in text  # best case (min bedload ≈ 0)
-    assert "2013" in text                    # worst case (max bedload)
+    assert "2013" in text  # worst case (max bedload)
     assert "Total Volume:" in text
     assert "Interpolated Water Elevation:" in text
 
@@ -211,9 +214,7 @@ def test_summary_text_shows_year_volume_elevation(app_with_root, phase2_df, phas
 def test_summary_text_worst_case_is_2013(app_with_root, phase2_df, phase3_df, bathy_df):
     """2013 has the largest bedload so must appear as Worst Case."""
     with patch(_UI_PATCH["show_warning"]), patch(_UI_PATCH["show_error"]):
-        app_with_root.integration_view.execute_integration(
-            df_p2=phase2_df, df_p3=phase3_df, df_bathy=bathy_df
-        )
+        app_with_root.integration_view.execute_integration(df_p2=phase2_df, df_p3=phase3_df, df_bathy=bathy_df)
     text = app_with_root.integration_view.results_text.get("1.0", tk.END)
 
     lines = text.splitlines()
@@ -230,6 +231,7 @@ def test_summary_text_worst_case_is_2013(app_with_root, phase2_df, phase3_df, ba
 
 def test_summary_text_na_elevation_when_no_bathy(app_with_root, phase2_df, phase3_df):
     from src.ui.integration_view import IntegrationView
+
     with patch(_UI_PATCH["show_warning"]), patch(_UI_PATCH["show_error"]):
         app_with_root.integration_view.execute_integration(
             df_p2=phase2_df, df_p3=phase3_df, df_bathy=IntegrationView._NO_BATHY
@@ -242,12 +244,10 @@ def test_summary_text_na_elevation_when_no_bathy(app_with_root, phase2_df, phase
 # 4. Export Master Dataset — .xlsx and .csv
 # ---------------------------------------------------------------------------
 
+
 def test_export_master_dataset_to_excel(app_with_root, phase2_df, phase3_df, bathy_df, tmp_path):
-    with patch(_UI_PATCH["show_warning"]), patch(_UI_PATCH["show_error"]), \
-            patch(_UI_PATCH["show_info"]):
-        app_with_root.integration_view.execute_integration(
-            df_p2=phase2_df, df_p3=phase3_df, df_bathy=bathy_df
-        )
+    with patch(_UI_PATCH["show_warning"]), patch(_UI_PATCH["show_error"]), patch(_UI_PATCH["show_info"]):
+        app_with_root.integration_view.execute_integration(df_p2=phase2_df, df_p3=phase3_df, df_bathy=bathy_df)
 
     xlsx_path = str(tmp_path / "master.xlsx")
     with patch(_UI_PATCH["show_info"]):
@@ -266,11 +266,8 @@ def test_export_master_dataset_to_excel(app_with_root, phase2_df, phase3_df, bat
 
 
 def test_export_master_dataset_to_csv(app_with_root, phase2_df, phase3_df, bathy_df, tmp_path):
-    with patch(_UI_PATCH["show_warning"]), patch(_UI_PATCH["show_error"]), \
-            patch(_UI_PATCH["show_info"]):
-        app_with_root.integration_view.execute_integration(
-            df_p2=phase2_df, df_p3=phase3_df, df_bathy=bathy_df
-        )
+    with patch(_UI_PATCH["show_warning"]), patch(_UI_PATCH["show_error"]), patch(_UI_PATCH["show_info"]):
+        app_with_root.integration_view.execute_integration(df_p2=phase2_df, df_p3=phase3_df, df_bathy=bathy_df)
 
     csv_path = str(tmp_path / "master.csv")
     with patch(_UI_PATCH["show_info"]):
@@ -296,12 +293,15 @@ def test_export_returns_none_when_no_data(app_with_root):
 # 5. DataFrame handoff from app.phase2_df / app.phase3_df
 # ---------------------------------------------------------------------------
 
+
 def test_execute_integration_uses_app_handoff_dfs(app_with_root):
     app_with_root.phase2_df = pd.DataFrame({"Suspended_Volume_m3": [50_000.0]})
-    app_with_root.phase3_df = pd.DataFrame({
-        "Year": [2020, 2021],
-        "Bedload_Volume_m3": [1_000.0, 3_000.0],
-    })
+    app_with_root.phase3_df = pd.DataFrame(
+        {
+            "Year": [2020, 2021],
+            "Bedload_Volume_m3": [1_000.0, 3_000.0],
+        }
+    )
     with patch(_UI_PATCH["show_warning"]), patch(_UI_PATCH["show_error"]):
         app_with_root.integration_view.execute_integration()
 
