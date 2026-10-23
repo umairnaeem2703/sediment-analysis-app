@@ -1,21 +1,23 @@
 """The per-dam settings entered in step 3: commissioning and analysis year, trap efficiency and Hmin (A5, D7)."""
 
 import datetime
-from typing import Dict, List, Optional
+import re
+from typing import Dict, List, Optional, Tuple
 
 from src.services.project import Dam, Project
-from src.services.regional import _number, _shown, _text
+from src.services.regional import cell_text, parse_number, quote_cell
+
+_YEAR = re.compile(r"[0-9]{4}(?:[.,]0+)?")  # ASCII digits only: 1965 or 1965.0
 
 
-def _year(label: str, value, problems: List[str]) -> Optional[int]:
-    """A four-digit whole-number year, or None when blank or invalid (invalid ones add a problem)."""
-    if not _text(value):
-        return None
-    number = _number(value)
-    if number is None or number != int(number) or not 1000 <= number <= 9999:
-        problems.append(f"{label} must be a four-digit whole number, found {_shown(value)}.")
-        return None
-    return int(number)
+def _year(label: str, value) -> Tuple[Optional[int], Optional[str]]:
+    """(year, None) for a valid or blank entry, or (None, problem) for an invalid one."""
+    text = cell_text(value)
+    if not text:
+        return None, None
+    if not _YEAR.fullmatch(text):
+        return None, f"{label} must be a four-digit whole number, found {quote_cell(value)}."
+    return int(text[:4]), None
 
 
 def validate_dam_settings(
@@ -23,25 +25,23 @@ def validate_dam_settings(
 ) -> Dict[str, Optional[float]]:
     """Convert the entered texts. A blank analysis year (None) means the current year; Hmin and the
     commissioning year are optional. Raises ValueError listing every problem."""
-    problems: List[str] = []
-    commissioning = _year("Commissioning year", commissioning_year, problems)
-    years_valid = len(problems) == 0
-    analysis = _year("Analysis year", analysis_year, problems)
-    years_valid = years_valid and len(problems) == 0
+    commissioning, commissioning_problem = _year("Commissioning year", commissioning_year)
+    analysis, analysis_problem = _year("Analysis year", analysis_year)
+    problems: List[str] = [p for p in (commissioning_problem, analysis_problem) if p]
 
-    efficiency = _number(trap_efficiency_pct)
+    efficiency = parse_number(trap_efficiency_pct)
     if efficiency is None or not 0 < efficiency <= 100:
         problems.append(
-            f"Trap efficiency (%) must be a number above 0 and at most 100, found {_shown(trap_efficiency_pct)}."
+            f"Trap efficiency (%) must be a number above 0 and at most 100, found {quote_cell(trap_efficiency_pct)}."
         )
 
     h_min = None
-    if _text(h_min_m):
-        h_min = _number(h_min_m)
+    if cell_text(h_min_m):
+        h_min = parse_number(h_min_m)
         if h_min is None:
-            problems.append(f"Minimum operating level (Hmin, m) must be a number, found {_shown(h_min_m)}.")
+            problems.append(f"Minimum operating level (Hmin, m) must be a number, found {quote_cell(h_min_m)}.")
 
-    if years_valid and commissioning is not None:
+    if commissioning is not None and not (commissioning_problem or analysis_problem):
         this_year = datetime.date.today().year
         if (analysis if analysis is not None else this_year) < commissioning:
             label = "Analysis year" if analysis is not None else f"Analysis year (the current year, {this_year})"
@@ -58,7 +58,14 @@ def validate_dam_settings(
 
 
 def apply_dam_settings(project: Project, dam: Dam, **entered) -> None:
-    """Validate the entered texts and, only if they are all valid, store them on the dam and save the project."""
-    for name, value in validate_dam_settings(**entered).items():
+    """Validate the entered texts and, only if they are all valid and saved, keep them on the dam."""
+    values = validate_dam_settings(**entered)
+    previous = {name: getattr(dam, name) for name in values}
+    for name, value in values.items():
         setattr(dam, name, value)
-    project.save()
+    try:
+        project.save()
+    except OSError:
+        for name, value in previous.items():
+            setattr(dam, name, value)
+        raise

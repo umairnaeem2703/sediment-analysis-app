@@ -104,3 +104,27 @@ def test_c_m1_09_applying_settings_saves_them_and_a_refusal_changes_nothing(tmp_
 
     assert (dam.commissioning_year, dam.trap_efficiency_pct) == (1965, 80.0)
     assert Project.open(project.folder).dams[0].trap_efficiency_pct == 80.0
+
+
+# --- review follow-ups -------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("year", ["2e3", "1e3", "0x7d0", "20 25", "٢٠٢٥"])
+def test_c_m1_09_years_must_be_plain_digits(year):
+    with pytest.raises(ValueError, match="four-digit"):
+        validate_dam_settings(**_valid(commissioning_year=year))
+
+
+def test_c_m1_09_a_failed_save_leaves_the_dam_as_it_was(tmp_path, monkeypatch):
+    project = Project.new(tmp_path / "p", "x")
+    dam = project.add_dam("Çubuk 1")
+    apply_dam_settings(project, dam, **_valid())
+
+    def locked():
+        raise PermissionError("project.json is open in another program")
+
+    monkeypatch.setattr(project, "save", locked)
+    with pytest.raises(PermissionError):
+        apply_dam_settings(project, dam, **_valid(trap_efficiency_pct="50"))
+
+    assert dam.trap_efficiency_pct == 80.0

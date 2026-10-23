@@ -1,12 +1,17 @@
 import tkinter as tk
 from tkinter import ttk
-from typing import Optional
+from typing import Optional, Tuple
 
 from src.services.dam_settings import apply_dam_settings
 from src.services.project import Dam
 from src.services.regional import AREA, SLOPE, SUBBASIN
 from src.ui.common import show_error
 from src.ui.steps.base import Step
+
+
+def _fmt(value: float) -> str:
+    """A stored number as text without losing digits (100.0 -> '100', 93.456789 -> '93.456789')."""
+    return f"{value:.12g}"
 
 
 class DamStep(Step):
@@ -17,6 +22,7 @@ class DamStep(Step):
     def build(self, frame):
         self._selected_slug: Optional[str] = None
         self.confirmed: Optional[str] = None  # slug of the dam the user has chosen with "Use this dam"
+        self._confirmed_entries: Optional[Tuple[str, ...]] = None  # the field texts at that moment
         self.sheet_var = tk.StringVar()
         self.warning_var = tk.StringVar()
         self.status_var = tk.StringVar()
@@ -24,6 +30,8 @@ class DamStep(Step):
         self.analysis_var = tk.StringVar()
         self.efficiency_var = tk.StringVar(value="100")
         self.h_min_var = tk.StringVar()
+        for variable in (self.commissioning_var, self.analysis_var, self.efficiency_var, self.h_min_var):
+            variable.trace_add("write", lambda *_: self.wizard.refresh())  # editing the fields un-confirms the dam
         frame.columnconfigure(1, weight=1)
         frame.rowconfigure(0, weight=1)
 
@@ -77,19 +85,25 @@ class DamStep(Step):
     def _dam(self, slug: Optional[str]) -> Optional[Dam]:
         return next((dam for dam in self.wizard.project.dams if dam.slug == slug), None) if slug else None
 
+    def _entries(self) -> Tuple[str, ...]:
+        variables = (self.commissioning_var, self.analysis_var, self.efficiency_var, self.h_min_var)
+        return tuple(variable.get().strip() for variable in variables)
+
     def is_complete(self) -> bool:
+        """True while the confirmed dam has a sheet and the fields still show what was confirmed."""
         dam = self._dam(self.confirmed)
-        return dam is not None and bool(dam.sheet)
+        return dam is not None and bool(dam.sheet) and self._entries() == self._confirmed_entries
 
     def on_show(self):
         self._render_list()
-        self._show_dam()
+        self._show_dam(reload_fields=False)  # keep what the user has typed
 
     def reset(self):
-        self.confirmed = None
+        self.confirmed = self._confirmed_entries = None
         self.status_var.set("")
         if self.wizard.project is not None:
-            self.on_show()
+            self._render_list()
+            self._show_dam(reload_fields=True)
 
     # --- actions ------------------------------------------------------------------------------
 
@@ -99,14 +113,14 @@ class DamStep(Step):
             self.select_dam(self.wizard.project.dams[chosen[0]].slug)
 
     def select_dam(self, slug: str) -> None:
-        changed = self.confirmed is not None and self.confirmed != slug
+        different = slug != self._selected_slug
         self._selected_slug = slug
-        if changed:
-            self.confirmed = None
+        if self.confirmed is not None and self.confirmed != slug:
+            self.confirmed = self._confirmed_entries = None
             self.status_var.set("")
             self.wizard.invalidate_after(self.index, "A different dam was selected.")
         self._render_list()
-        self._show_dam()
+        self._show_dam(reload_fields=different)  # choosing the same dam again keeps the typed text
         self.wizard.refresh()
 
     def use_dam(self) -> None:
@@ -116,6 +130,11 @@ class DamStep(Step):
             return
         if not dam.sheet:
             show_error("Dam sheet", f"{dam.name} has no dam sheet. Import it in step 2 (Regional data) first.")
+            return
+        try:
+            self.wizard.regional.dam_sheet(dam)
+        except (ValueError, OSError) as exc:
+            show_error("Dam sheet", f"The sheet of {dam.name} cannot be used: {exc}")
             return
         before = (dam.commissioning_year, dam.analysis_year, dam.trap_efficiency_pct, dam.h_min_m)
         try:
@@ -130,55 +149,60 @@ class DamStep(Step):
         except (ValueError, OSError) as exc:
             show_error("Dam settings", str(exc))
             return
-        changed = self.confirmed != dam.slug or before != (
-            dam.commissioning_year,
-            dam.analysis_year,
-            dam.trap_efficiency_pct,
-            dam.h_min_m,
-        )
+        after = (dam.commissioning_year, dam.analysis_year, dam.trap_efficiency_pct, dam.h_min_m)
+        changed = self.confirmed != dam.slug or before != after
         self.confirmed = dam.slug
         if changed:
             self.wizard.invalidate_after(self.index, "The dam settings changed.")
         self.status_var.set(f"{dam.name} will be analysed.")
-        self._show_dam()
+        self._show_dam(reload_fields=True)  # show the values as stored
+        self._confirmed_entries = self._entries()
         self.wizard.refresh()
 
     # --- drawing ------------------------------------------------------------------------------
 
     def _render_list(self) -> None:
-        dams = self.wizard.project.dams
         if self.selected is None:
             self._selected_slug = None
         self.dam_list.delete(0, tk.END)
-        for position, dam in enumerate(dams):
+        for position, dam in enumerate(self.wizard.project.dams):
             self.dam_list.insert(tk.END, dam.name)
             if dam.slug == self._selected_slug:
                 self.dam_list.selection_set(position)
 
-    def _show_dam(self) -> None:
+    def _show_dam(self, reload_fields: bool) -> None:
         self.sub_basin_tree.delete(*self.sub_basin_tree.get_children())
         self.warning_var.set("")
-        dam = self.selected
-        if dam is None:
-            self.sheet_var.set("Select a dam in the list.")
-            for variable, text in ((self.commissioning_var, ""), (self.analysis_var, ""), (self.h_min_var, "")):
-                variable.set(text)
-            self.efficiency_var.set("100")
+        dam, regional = self.selected, self.wizard.regional
+        if dam is None or regional is None or regional.basin_table is None:
+            self.sheet_var.set(
+                "Select a dam in the list." if dam is None else "Complete step 2 (Regional data) to see this dam."
+            )
+            if reload_fields:
+                self._set_fields("", "", "100", "")
             return
-        regional = self.wizard.regional
         for _, row in regional.sub_basins(dam).iterrows():
             self.sub_basin_tree.insert("", "end", values=(row[SUBBASIN], row[AREA], row[SLOPE]))
         try:
             loaded = regional.dam_sheet(dam)
-        except ValueError as exc:
+        except (ValueError, OSError) as exc:
             self.sheet_var.set(f"No sheet is available for this dam: {exc} Import it in step 2 (Regional data).")
         else:
             self.sheet_var.set(self._sheet_text(loaded.data))
             self.warning_var.set("\n".join(loaded.warnings))
-        self.commissioning_var.set("" if dam.commissioning_year is None else str(dam.commissioning_year))
-        self.analysis_var.set("" if dam.analysis_year is None else str(dam.analysis_year))
-        self.efficiency_var.set(f"{dam.trap_efficiency_pct:g}")
-        self.h_min_var.set("" if dam.h_min_m is None else f"{dam.h_min_m:g}")
+        if reload_fields:
+            self._set_fields(
+                "" if dam.commissioning_year is None else str(dam.commissioning_year),
+                "" if dam.analysis_year is None else str(dam.analysis_year),
+                _fmt(dam.trap_efficiency_pct),
+                "" if dam.h_min_m is None else _fmt(dam.h_min_m),
+            )
+
+    def _set_fields(self, commissioning: str, analysis: str, efficiency: str, h_min: str) -> None:
+        self.commissioning_var.set(commissioning)
+        self.analysis_var.set(analysis)
+        self.efficiency_var.set(efficiency)
+        self.h_min_var.set(h_min)
 
     @staticmethod
     def _sheet_text(sheet) -> str:

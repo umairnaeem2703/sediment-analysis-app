@@ -197,3 +197,78 @@ def test_w_m1_03_the_list_follows_the_dams_of_the_project(app):
     wizard.go_to(2)
 
     assert list(step.dam_list.get(0, tk.END)) == ["Çubuk 1"]
+
+
+# --- review follow-ups -------------------------------------------------------------------------
+
+
+def test_w_m1_03_a_missing_sheet_copy_is_shown_not_raised(app):
+    wizard, step, _, _ = app
+    (wizard.project.folder / "inputs" / "dams" / "cubuk_1.csv").unlink()
+
+    step.select_dam("cubuk_1")
+
+    assert "No sheet is available" in step.sheet_var.get()
+
+
+def test_w_m1_03_an_invalid_basin_table_clears_the_step_instead_of_crashing(app):
+    wizard, step, _, _ = app
+    step.select_dam("cubuk_1")
+    step.use_dam()
+    assert step.is_complete()
+
+    wizard.steps[1].commit_edit(1, "Drainage Area (km2)", "oops")
+
+    assert not step.is_complete()
+    assert "step 2" in step.sheet_var.get()
+    assert step.sub_basin_tree.get_children() == ()
+
+
+def test_w_m1_03_a_dam_whose_sheet_cannot_be_read_cannot_be_used(app, errors):
+    wizard, step, _, _ = app
+    step.select_dam("cubuk_1")
+    (wizard.project.folder / "inputs" / "dams" / "cubuk_1.csv").unlink()
+
+    step.use_dam()
+
+    assert not step.is_complete()
+    assert len(errors) == 1 and "Dam sheet" in errors[0][0]
+
+
+def test_w_m1_03_editing_the_fields_after_using_a_dam_makes_the_step_incomplete_until_reconfirmed(app):
+    wizard, step, _, _ = app
+    step.select_dam("cubuk_1")
+    step.use_dam()
+    wizard.refresh()
+    assert step.is_complete() and not wizard.next_button.instate(["disabled"])
+
+    step.efficiency_var.set("60")
+
+    assert not step.is_complete()
+    assert wizard.next_button.instate(["disabled"])
+    step.use_dam()
+    assert step.is_complete() and wizard.project.dams[1].trap_efficiency_pct == 60.0
+
+
+def test_w_m1_03_typed_values_survive_leaving_and_returning_to_the_step(app):
+    wizard, step, _, _ = app
+    step.select_dam("cubuk_1")
+    step.efficiency_var.set("70")
+
+    step.on_show()
+    step.select_dam("cubuk_1")  # clicking the same dam again
+
+    assert step.efficiency_var.get() == "70"
+
+
+def test_w_m1_03_stored_values_are_shown_with_full_precision(app):
+    wizard, step, _, _ = app
+    step.select_dam("cubuk_1")
+    _fill(step, efficiency="93.456789", h_min="1234.5678")
+    step.use_dam()
+
+    step.select_dam("cubuk_2")
+    step.select_dam("cubuk_1")
+
+    assert step.efficiency_var.get() == "93.456789"
+    assert step.h_min_var.get() == "1234.5678"
