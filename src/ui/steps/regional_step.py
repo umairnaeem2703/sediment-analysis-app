@@ -42,16 +42,23 @@ class RegionalStep(Step):
             self.tree.column(column, width=150, anchor="w")
         self.tree.tag_configure("invalid", background="#fbe3e3", foreground="black")
         self.tree.grid(row=0, column=0, sticky="nsew")
-        scroll = ttk.Scrollbar(grid_frame, orient="vertical", command=self.tree.yview)
+        scroll = ttk.Scrollbar(grid_frame, orient="vertical", command=self._on_scroll)
         scroll.grid(row=0, column=1, sticky="ns")
         self.tree.configure(yscrollcommand=scroll.set)
         self.tree.bind("<Double-1>", self._begin_edit)
+        self.tree.bind("<MouseWheel>", lambda _event: self._end_edit(), add="+")  # the editor does not follow the rows
         ttk.Label(grid_frame, text="Double-click a cell to edit it; Enter saves, Escape cancels.").grid(
             row=1, column=0, sticky="w", pady=(2, 0)
         )
 
-        self.problem_list = tk.Listbox(frame, height=5, activestyle="none", foreground="firebrick")
-        self.problem_list.grid(row=3, column=0, sticky="ew", padx=10, pady=(0, 8))
+        problems = ttk.Frame(frame)
+        problems.grid(row=3, column=0, sticky="ew", padx=10, pady=(0, 8))
+        problems.columnconfigure(0, weight=1)
+        self.problem_list = tk.Listbox(problems, height=5, activestyle="none", foreground="firebrick")
+        self.problem_list.grid(row=0, column=0, sticky="ew")
+        problem_scroll = ttk.Scrollbar(problems, orient="vertical", command=self.problem_list.yview)
+        problem_scroll.grid(row=0, column=1, sticky="ns")
+        self.problem_list.configure(yscrollcommand=problem_scroll.set)
 
     # --- Step contract ------------------------------------------------------------------------
 
@@ -103,7 +110,7 @@ class RegionalStep(Step):
     def import_dam_sheets(self, paths: List[str]) -> None:
         try:
             result = self.wizard.regional.import_dam_sheets(paths)
-        except ValueError as exc:
+        except (ValueError, OSError) as exc:
             show_error("Dam sheets", str(exc))
             return
         if result.imported:
@@ -159,6 +166,10 @@ class RegionalStep(Step):
         self._end_edit()
         self.commit_edit(position, column, value)
 
+    def _on_scroll(self, *args) -> None:
+        self._end_edit()
+        self.tree.yview(*args)
+
     def _end_edit(self) -> None:
         editor, self._editor = self._editor, None
         if editor is not None:
@@ -183,6 +194,8 @@ class RegionalStep(Step):
             self.problem_list.insert(tk.END, problem.message)
         for message in regional.load_errors:
             self.problem_list.insert(tk.END, f"Not loaded: {message}")
+        for warning in regional.zonal_warnings:
+            self.problem_list.insert(tk.END, f"Warning: {warning}")
         self.status_vars["basin"].set(self._basin_status(regional))
         self.status_vars["zonal"].set(self._zonal_status(regional))
         self.status_vars["sheets"].set(self._sheet_status(regional))

@@ -7,7 +7,7 @@ from src.ui.steps.project_step import ProjectStep
 from src.ui.steps.regional_step import RegionalStep
 from src.ui.wizard import Wizard
 from src.utils.paths import resource_path
-from tests.ui.test_wizard_shell import FakeStep
+from tests.ui.fakes import FakeStep
 
 HEADER = "Dam Name,Basin Name,Sub-basin Name,Drainage Area (km2),Main Waterway Slope"
 SAMPLE_BASINS = resource_path("inputs", "master_yield.csv")
@@ -309,3 +309,61 @@ def test_w_m1_02_double_clicking_the_header_or_empty_space_does_nothing(app):
     top.update()
 
     assert step._editor is None
+
+
+# --- review follow-ups -------------------------------------------------------------------------
+
+
+def test_w_m1_02_a_disk_error_while_saving_dam_sheets_is_shown_not_raised(app, dialogs, monkeypatch):
+    wizard, step, _, _ = app
+    step.import_basin_table(str(SAMPLE_BASINS))
+
+    def full_disk(self, paths):
+        raise OSError("disk is full")
+
+    monkeypatch.setattr(type(wizard.regional), "import_dam_sheets", full_disk)
+    step.import_dam_sheets([str(SAMPLE_SHEETS[0])])
+
+    assert len(dialogs["error"]) == 1 and "disk is full" in dialogs["error"][0][1]
+
+
+def test_w_m1_02_zonal_warnings_stay_visible_and_survive_reopening(app, tk_root, dialogs):
+    wizard, step, _, tmp_path = app
+    z = tmp_path / "z.csv"
+    z.write_text("Sub-basin,MEAN\nA,1.5\nB,\n", encoding="utf-8")
+    step.import_zonal_means(str(z))
+    assert any("skipped 1 row(s)" in step.problem_list.get(i) for i in range(step.problem_list.size()))
+
+    top = tk.Toplevel(tk_root)
+    try:
+        other_project, other_step = ProjectStep(), RegionalStep()
+        Wizard(top, [other_project, other_step])
+        other_project.open_project(str(wizard.project.folder))
+        other_step.on_show()
+
+        assert any("skipped 1 row(s)" in other_step.problem_list.get(i) for i in range(other_step.problem_list.size()))
+    finally:
+        top.destroy()
+
+
+def test_w_m1_02_the_problem_list_can_scroll(app):
+    wizard, step, _, tmp_path = app
+    rows = [f"A,B,S{i},-1,0.1" for i in range(12)]
+
+    step.import_basin_table(str(_csv(tmp_path, "many.csv", *rows)))
+
+    assert step.problem_list.size() == 12
+    assert step.problem_list.cget("yscrollcommand")  # a scrollbar is attached
+
+
+def test_w_m1_02_scrolling_the_grid_closes_the_cell_editor(app):
+    wizard, step, _, tmp_path = app
+    step.import_basin_table(str(_csv(tmp_path, "bad.csv", "A,B,S1,10,0.1", "A,B,S2,-1,0.2")))
+    top = wizard.frame.winfo_toplevel()
+    _double_click_cell(step, top, "1", "#4")
+    assert step._editor is not None
+
+    step._on_scroll("scroll", "1", "units")
+
+    assert step._editor is None
+    assert wizard.regional.grid.at[1, "Drainage Area (km2)"] == "-1"
