@@ -2,7 +2,6 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import ttk
 
-import numpy as np
 import pandas as pd
 
 from src.core.wilcock import WATER_YEAR_COLUMN, year_column
