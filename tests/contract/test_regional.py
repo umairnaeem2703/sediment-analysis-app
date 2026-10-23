@@ -8,6 +8,8 @@ from src.services.regional import (
     load_zonal_means,
     name_key,
     validate_basin_table,
+    validate_dam_sheet,
+    validate_zonal_means,
 )
 from src.utils.paths import resource_path
 
@@ -371,3 +373,69 @@ def test_c_x_02_encodings_and_decimal_commas_load_identically(tmp_path, encoding
 def test_c_x_03_name_key_folds_turkish_case_and_spacing():
     assert name_key("  ÇUBUK   1 ") == name_key("Çubuk 1") == name_key("cubuk 1")
     assert name_key("İznik Barajı") == name_key("IZNIK BARAJI") == name_key("iznik baraji")
+
+
+# --- review follow-ups ------------------------------------------------------------------------
+
+
+def test_c_x_02_an_excel_table_loads_like_the_csv(tmp_path):
+    reference = load_basin_table(SAMPLE_BASINS).data
+    path = tmp_path / "basins.xlsx"
+    pd.read_csv(SAMPLE_BASINS, encoding="utf-8-sig").to_excel(path, index=False)
+
+    loaded = load_basin_table(path).data
+
+    pd.testing.assert_frame_equal(loaded, reference)
+
+
+@pytest.mark.parametrize("name", ["corrupt.xlsx", "corrupt.xls"])
+def test_c_x_01_a_corrupt_excel_file_is_an_error_naming_it(tmp_path, name):
+    path = tmp_path / name
+    path.write_bytes(b"this is not a spreadsheet")
+
+    with pytest.raises(ValueError, match=name):
+        load_basin_table(path)
+
+
+def test_c_m1_07_validate_zonal_means_accepts_an_in_memory_table():
+    grid = pd.DataFrame({"Sub-basin": ["A", "B"], "MEAN": [1.5, None]})
+
+    loaded = validate_zonal_means(grid, "grid")
+
+    assert loaded.data["Sub-basin Name"].tolist() == ["A"]
+    assert "skipped 1 row(s)" in loaded.warnings[0]
+
+
+def test_c_m1_05_validate_dam_sheet_accepts_an_in_memory_table(sample_table):
+    grid = pd.read_csv(resource_path("inputs", "bathymetry", "cubuk_1_bathymetry.csv"), encoding="utf-8-sig")
+
+    loaded = validate_dam_sheet(grid, "grid", sample_table)
+
+    assert loaded.data == EXPECTED_SHEETS["cubuk_1"]
+
+
+def test_c_m1_06_a_sheet_covering_only_part_of_the_dams_area_is_flagged(tmp_path):
+    table = load_basin_table(_basins(tmp_path, "A,B,S1,100,0.2", "A,B,S2,300,0.2")).data
+    row = "A,100,1,1,1,0.2,2,2,1,2,1"  # the table holds 400 km2 for dam A
+
+    warnings = load_dam_sheet(_sheet(tmp_path, row), table).warnings
+
+    assert len(warnings) == 1
+    assert "drainage area" in warnings[0]
+    assert "400" in warnings[0]
+
+
+def test_c_m1_05_the_first_spelling_of_a_dam_in_the_table_names_it(tmp_path):
+    table = load_basin_table(_basins(tmp_path, "Çubuk 1,B,S1,100,0.2", "CUBUK 1,B,S2,300,0.2")).data
+    row = "cubuk 1,400,1,1,1,0.2,2,2,1,2,1"
+
+    assert load_dam_sheet(_sheet(tmp_path, row), table).data.name == "Çubuk 1"
+
+
+def test_c_x_01_a_truncated_workbook_is_an_error_naming_it(tmp_path):
+    path = tmp_path / "truncated.xlsx"
+    pd.read_csv(SAMPLE_BASINS, encoding="utf-8-sig").to_excel(path, index=False)
+    path.write_bytes(path.read_bytes()[:300])
+
+    with pytest.raises(ValueError, match="truncated.xlsx"):
+        load_basin_table(path)

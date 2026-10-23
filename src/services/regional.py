@@ -1,6 +1,7 @@
 """Load and validate the regional inputs: basin table, zonal means and dam sheets (FR-M1-03, FR-M1-05, FR-M1-06).
 
-Row numbers in messages follow a spreadsheet: the header is row 1 and the first data row is row 2.
+Row numbers in messages count the rows of the loaded table with the header as row 1, so the first data row
+is row 2. Completely empty lines in a CSV are dropped on reading and are not counted.
 Each `load_*` function reads a file; each `validate_*` function checks an in-memory table, so an edited
 grid can be re-validated without a file.
 """
@@ -73,7 +74,7 @@ def _read(path) -> pd.DataFrame:
         raise FileNotFoundError(f"Input file not found: {path}")
     try:
         return read_table(path)
-    except ValueError as exc:  # empty, unparsable, undecodable or unsupported file
+    except Exception as exc:  # empty, corrupt, locked, undecodable or unsupported: always name the file
         raise ValueError(f"{path.name}: could not be read ({exc})") from exc
 
 
@@ -225,7 +226,9 @@ def validate_dam_sheet(df: pd.DataFrame, source: str, basin_table: pd.DataFrame)
         raise ValueError(f"{source}: a dam sheet must hold exactly one dam row; found {len(records)}.")
     row, record = records[0]
 
-    dams = {name_key(name): name for name in basin_table[DAM]}
+    dams = {}
+    for name in basin_table[DAM]:
+        dams.setdefault(name_key(name), name)  # the table's first spelling names the dam
     sheet_name = _text(record[columns["name"]])
     if name_key(sheet_name) not in dams:
         raise ValueError(
