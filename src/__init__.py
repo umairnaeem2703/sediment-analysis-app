@@ -1,1 +1,1 @@
-"""Antigravity Sediment Analysis Package."""
+"""Sediment analysis for reservoir sedimentation studies."""

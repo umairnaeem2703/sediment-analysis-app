@@ -2,7 +2,6 @@ import re
 import sys
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 
@@ -64,11 +63,3 @@ def read_table(file_path: str, dtype=None) -> pd.DataFrame:
     if suffix in {".xlsx", ".xls"}:
         return pd.read_excel(path, dtype=dtype)
     raise ValueError(f"Unsupported table format: {path.suffix}")
-
-
-def load_raster_matrix(file_path: str) -> np.ndarray:
-    """Load a headerless numeric CSV as a 2D raster array."""
-    raster = np.loadtxt(file_path, delimiter=",", dtype=float)
-    if raster.ndim == 1:
-        raster = raster.reshape(1, -1)
-    return raster
