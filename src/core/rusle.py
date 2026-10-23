@@ -44,16 +44,26 @@ def to_ascii_turkish(text: str) -> str:
     if text is None:
         return ""
     ascii_map = {
-        ord("ç"): "c", ord("Ç"): "C",
-        ord("ğ"): "g", ord("Ğ"): "G",
-        ord("ı"): "i", ord("I"): "I",
-        ord("İ"): "I", ord("i"): "i",
-        ord("ö"): "o", ord("Ö"): "O",
-        ord("ş"): "s", ord("Ş"): "S",
-        ord("ü"): "u", ord("Ü"): "U",
-        ord("â"): "a", ord("Â"): "A",
-        ord("î"): "i", ord("Î"): "I",
-        ord("û"): "u", ord("Û"): "U",
+        ord("ç"): "c",
+        ord("Ç"): "C",
+        ord("ğ"): "g",
+        ord("Ğ"): "G",
+        ord("ı"): "i",
+        ord("I"): "I",
+        ord("İ"): "I",
+        ord("i"): "i",
+        ord("ö"): "o",
+        ord("Ö"): "O",
+        ord("ş"): "s",
+        ord("Ş"): "S",
+        ord("ü"): "u",
+        ord("Ü"): "U",
+        ord("â"): "a",
+        ord("Â"): "A",
+        ord("î"): "i",
+        ord("Î"): "I",
+        ord("û"): "u",
+        ord("Û"): "U",
     }
     return str(text).translate(ascii_map)
 
@@ -79,28 +89,41 @@ def find_basin_table_columns(columns) -> dict:
         return None
 
     return {
-        "basin": match_col([
-            "Basin Name", "Basin", "Havza Adı", "Havza Adi", "Havza", "Havzası", "Havzasi"
-        ]),
-        "subbasin": match_col([
-            "Sub-basin Name", "Subbasin Name", "Sub-basin", "Subbasin",
-            "Alt Havza Adı", "Alt Havza Adi", "Alt Havza", "Alt-Havza Adı", "Alt-Havza Adi", "Alt-Havza",
-            "Alt Havzası", "Alt Havzasi"
-        ]),
-        "dam": match_col([
-            "Dam Name", "Dam", "Baraj Adı", "Baraj Adi", "Baraj", "Barajı", "Baraji"
-        ]),
-        "area": match_col([
-            "Area", "Area_km2", "Area (km2)", "Area(km2)",
-            "Alan", "Alan (km2)", "Alan(km2)", "Alan_km2"
-        ]),
-        "slope": match_col([
-            "Main Waterway Slope", "Slope", "Slope_m_per_m",
-            "Eğim", "Egim", "Ana Su Yolu Eğimi", "Ana Su Yolu Egimi", "Su Yolu Eğimi", "Su Yolu Egimi"
-        ]),
-        "year": match_col([
-            "Year", "Yıl", "Yil"
-        ]),
+        "basin": match_col(["Basin Name", "Basin", "Havza Adı", "Havza Adi", "Havza", "Havzası", "Havzasi"]),
+        "subbasin": match_col(
+            [
+                "Sub-basin Name",
+                "Subbasin Name",
+                "Sub-basin",
+                "Subbasin",
+                "Alt Havza Adı",
+                "Alt Havza Adi",
+                "Alt Havza",
+                "Alt-Havza Adı",
+                "Alt-Havza Adi",
+                "Alt-Havza",
+                "Alt Havzası",
+                "Alt Havzasi",
+            ]
+        ),
+        "dam": match_col(["Dam Name", "Dam", "Baraj Adı", "Baraj Adi", "Baraj", "Barajı", "Baraji"]),
+        "area": match_col(
+            ["Area", "Area_km2", "Area (km2)", "Area(km2)", "Alan", "Alan (km2)", "Alan(km2)", "Alan_km2"]
+        ),
+        "slope": match_col(
+            [
+                "Main Waterway Slope",
+                "Slope",
+                "Slope_m_per_m",
+                "Eğim",
+                "Egim",
+                "Ana Su Yolu Eğimi",
+                "Ana Su Yolu Egimi",
+                "Su Yolu Eğimi",
+                "Su Yolu Egimi",
+            ]
+        ),
+        "year": match_col(["Year", "Yıl", "Yil"]),
     }
 
 
@@ -154,24 +177,29 @@ class ZonalMatcher:
 
         # Strip prefixes (English & Turkish)
         prefixes = (
-            "subbasin", "basin", "sub", "sb",
-            "althavzasi", "althavzası", "althavza", "havzasi", "havzası", "havza"
+            "subbasin",
+            "basin",
+            "sub",
+            "sb",
+            "althavzasi",
+            "althavzası",
+            "althavza",
+            "havzasi",
+            "havzası",
+            "havza",
         )
         for prefix in prefixes:
             if normalized.startswith(prefix):
-                remainder = normalized[len(prefix):]
+                remainder = normalized[len(prefix) :]
                 if remainder:
                     normalized = remainder
                     break
 
         # Strip suffixes (English & Turkish)
-        suffixes = (
-            "althavzasi", "althavzası", "althavza", "havzasi", "havzası", "havza",
-            "subbasin", "basin"
-        )
+        suffixes = ("althavzasi", "althavzası", "althavza", "havzasi", "havzası", "havza", "subbasin", "basin")
         for suffix in suffixes:
             if normalized.endswith(suffix):
-                remainder = normalized[:-len(suffix)]
+                remainder = normalized[: -len(suffix)]
                 if remainder:
                     normalized = remainder
                     break
@@ -200,12 +228,23 @@ class ZonalMatcher:
             aliases.add(digits_only)
 
         for k in list(aliases):
-            for pfx in ("subbasin", "basin", "sub", "sb", "althavzasi", "althavzası", "althavza", "havzasi", "havzası", "havza"):
+            for pfx in (
+                "subbasin",
+                "basin",
+                "sub",
+                "sb",
+                "althavzasi",
+                "althavzası",
+                "althavza",
+                "havzasi",
+                "havzası",
+                "havza",
+            ):
                 if k.startswith(pfx) and len(k) > len(pfx):
-                    aliases.add(k[len(pfx):])
+                    aliases.add(k[len(pfx) :])
             for sfx in ("althavzasi", "althavzası", "althavza", "havzasi", "havzası", "havza", "subbasin", "basin"):
                 if k.endswith(sfx) and len(k) > len(sfx):
-                    aliases.add(k[:-len(sfx)])
+                    aliases.add(k[: -len(sfx)])
 
         # Also add ascii versions of all aliases
         for k in list(aliases):
@@ -340,10 +379,8 @@ class ZonalMatcher:
     def unresolved_error(zonal_lookup: Dict[str, float], unresolved: List[str]) -> ValueError:
         keys = ", ".join(sorted(zonal_lookup.keys())[:25])
         return ValueError(
-            "MEAN value missing for sub-basin(s): "
-            f"{', '.join(sorted(set(unresolved)))}. Available zonal keys: {keys}"
+            f"MEAN value missing for sub-basin(s): {', '.join(sorted(set(unresolved)))}. Available zonal keys: {keys}"
         )
-
 
 
 class YieldCalculator:
@@ -364,7 +401,9 @@ class YieldCalculator:
         cem_sio = self.calculate_cem_sio(slope)
         return (usda_sio + cem_sio) / 2.0
 
-    def raster_mean_t_ha_yr(self, raster_array: np.ndarray, nodata_value: float = -9999.0, basin_mask: np.ndarray = None) -> float:
+    def raster_mean_t_ha_yr(
+        self, raster_array: np.ndarray, nodata_value: float = -9999.0, basin_mask: np.ndarray = None
+    ) -> float:
         """Calculate the average erosion rate from a raster array."""
         raster = np.asarray(raster_array, dtype=float)
         valid_pixels = np.isfinite(raster) & (raster != nodata_value)

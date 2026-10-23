@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Product requirements, target architecture, data contracts and the development pipeline are defined in `project_spec.md`; it is the source of truth for planned changes.
+
 ## Working principles
 
 - **Surface confusion and trade-offs.** When a request is ambiguous or two approaches differ materially, say so and name the trade-off rather than silently picking one. Don't hide uncertainty behind a confident answer.
@@ -11,14 +13,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-A virtualenv lives in `.venv` (Windows: `.venv\Scripts\Activate.ps1`). There is no README, linter, or formatter config.
+A virtualenv lives in `.venv` (Windows: `.venv\Scripts\Activate.ps1`). There is no README. Lint and format with ruff (`ruff.toml`); CI runs both.
 
 ```
 pip install -r requirements.txt
 python app.py                                   # launch the Tkinter GUI
-pytest                                          # all tests (pytest.ini sets pythonpath = .)
-pytest tests/test_reporter.py                   # one file
-pytest tests/test_wilcock.py::test_name         # one test
+ruff check . && ruff format --check .          # lint and format check
+pytest                                          # the new layout (tests/unit, contract, pipeline, ui); tests/legacy is skipped
+pytest tests/unit/test_smoke.py                 # one file
+pytest tests/unit/test_smoke.py::test_name      # one test
+pytest -o addopts="" tests/legacy               # old suite, run locally only (9 known failures from removed fixtures)
 pyinstaller ...                                 # packaging; no spec file is checked in
 ```
 

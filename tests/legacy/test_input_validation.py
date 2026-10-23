@@ -18,6 +18,7 @@ def _aggregator():
 
 # --- read_table: decimal commas -------------------------------------------------
 
+
 def test_read_table_semicolon_decimal_comma(tmp_path):
     path = tmp_path / "flow.csv"
     path.write_text("Date;Flow;Station\n01/01/2000;1,76;Göksu\n02/01/2000;2,5;Çoruh\n", encoding="utf-8-sig")
@@ -34,6 +35,7 @@ def test_read_table_dot_decimal_unchanged(tmp_path):
 
 
 # --- Wilcock flow headers and validation ----------------------------------------
+
 
 @pytest.mark.parametrize("flow_header", ["Flow", "Flow Q (m3/s)", "Flow Q (m³/s)", "FLOW Q (M³/S)", "Debi"])
 def test_flow_header_variants_accepted(flow_header):
@@ -78,6 +80,7 @@ def test_all_invalid_rows_raises():
 
 # --- Zonal matching ------------------------------------------------------------
 
+
 def test_short_key_does_not_match_longer_number():
     lookup = {"112": 9.0}
     assert ZonalMatcher.resolve_zonal_mean(lookup, "12") is None
@@ -105,6 +108,7 @@ def test_exact_match_is_flagged_exact():
 
 
 # --- Basin grid: Year is not used in the RUSLE tab --------------------------------
+
 
 def _grid_app(tk_root, basin_csv):
     root = tk.Toplevel(tk_root)

@@ -59,9 +59,7 @@ def test_annual_summary_does_not_mutate_input():
 
 
 def _water_year_flow():
-    return pd.DataFrame(
-        {"Date": ["30/09/2010", "01/10/2010"], "Flow": [10.0, 80.0], WATER_YEAR_COLUMN: [2010, 2011]}
-    )
+    return pd.DataFrame({"Date": ["30/09/2010", "01/10/2010"], "Flow": [10.0, 80.0], WATER_YEAR_COLUMN: [2010, 2011]})
 
 
 def test_water_year_column_drives_grouping():

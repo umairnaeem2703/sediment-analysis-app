@@ -26,10 +26,18 @@ DEFAULT_SEED = 0
 
 # Water-year order (Ekim -> Eylül) mapped to calendar month numbers.
 WATER_YEAR_MONTHS = (
-    ("ekim", 10), ("kasim", 11), ("aralik", 12),
-    ("ocak", 1), ("subat", 2), ("mart", 3),
-    ("nisan", 4), ("mayis", 5), ("haziran", 6),
-    ("temmuz", 7), ("agustos", 8), ("eylul", 9),
+    ("ekim", 10),
+    ("kasim", 11),
+    ("aralik", 12),
+    ("ocak", 1),
+    ("subat", 2),
+    ("mart", 3),
+    ("nisan", 4),
+    ("mayis", 5),
+    ("haziran", 6),
+    ("temmuz", 7),
+    ("agustos", 8),
+    ("eylul", 9),
 )
 YEAR_HEADER = "yillar"
 SUMMARY_LABELS = {"top", "ort"}
@@ -117,7 +125,7 @@ class MonthlyFlowPreprocessor:
         if monthly is None or monthly.empty:
             raise ValueError("Monthly volume table is empty.")
 
-        mu = -0.5 * self.sigma ** 2  # gives the multiplier a mean of one
+        mu = -0.5 * self.sigma**2  # gives the multiplier a mean of one
         frames = []
         columns = [WATER_YEAR_COLUMN, "Year", "Month", "Volume_hm3"]
         for water_year, year, month, volume_hm3 in monthly[columns].itertuples(index=False):

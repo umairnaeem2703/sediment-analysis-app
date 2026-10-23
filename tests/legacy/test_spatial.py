@@ -54,4 +54,3 @@ def test_zonal_matcher_build_lookup_and_resolution():
     assert ZonalMatcher.resolve_zonal_mean(lookup, "Subbasin 2") == 3.40
     assert ZonalMatcher.resolve_zonal_mean(lookup, "Sub-basin 3") == 2.10
     assert ZonalMatcher.resolve_zonal_mean(lookup, "Unknown") is None
-

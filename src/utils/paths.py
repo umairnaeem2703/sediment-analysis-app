@@ -63,7 +63,6 @@ def read_table(file_path: str) -> pd.DataFrame:
     raise ValueError(f"Unsupported table format: {path.suffix}")
 
 
-
 def load_raster_matrix(file_path: str) -> np.ndarray:
     """Load a headerless numeric CSV as a 2D raster array."""
     raster = np.loadtxt(file_path, delimiter=",", dtype=float)

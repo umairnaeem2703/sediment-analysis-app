@@ -1,5 +1,3 @@
-import os
-import tempfile
 import tkinter as tk
 from pathlib import Path
 
@@ -384,5 +382,3 @@ def test_real_ankara_basin_with_turkish_characters_against_zonal_file(tmp_path, 
         assert float(app.results_tree.item(res_children[0], "values")[7]) > 0
     finally:
         root.destroy()
-
-

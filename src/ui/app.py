@@ -1,4 +1,3 @@
-from pathlib import Path
 import tkinter as tk
 from tkinter import ttk
 
@@ -53,7 +52,6 @@ class SedimentApp:
     def set_integration_results(self, merged_df):
         """Set merged results from the Integration module."""
         self.final_merged_df = merged_df
-
 
     # Backwards-compatible aliases for views/tests
     @property

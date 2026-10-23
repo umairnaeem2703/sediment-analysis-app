@@ -10,7 +10,6 @@ from src.ui.common import browse_open_file, browse_save_file, show_error, show_i
 from src.utils.paths import read_table
 
 
-
 class RusleView:
     def __init__(self, parent_notebook: ttk.Notebook, app_controller):
         self.notebook = parent_notebook
@@ -147,11 +146,7 @@ class RusleView:
 
             work = df.reset_index(drop=True)
             areas = pd.to_numeric(work[area_col], errors="coerce") if area_col else pd.Series(dtype=float)
-            slopes = (
-                pd.to_numeric(work[slope_col], errors="coerce")
-                if slope_col
-                else pd.Series(dtype=float)
-            )
+            slopes = pd.to_numeric(work[slope_col], errors="coerce") if slope_col else pd.Series(dtype=float)
 
             for idx, row in work.iterrows():
                 dam_name = row[dam_col] if dam_col and not pd.isna(row[dam_col]) else ""
@@ -195,7 +190,6 @@ class RusleView:
             return
         if columns[col_idx] not in ("dam", "basin", "subbasin", "area", "slope"):
             return
-
 
         bbox = self.basin_tree.bbox(iid, col_id)
         if not bbox:
@@ -286,7 +280,9 @@ class RusleView:
             slope = float(slope_s)
             if area_km2 <= 0:
                 raise ValueError(f"Basin area must be greater than zero for {basin} / {subbasin}.")
-            rows.append(BasinRow(dam=str(dam_name), basin=str(basin), subbasin=str(subbasin), area_km2=area_km2, slope=slope))
+            rows.append(
+                BasinRow(dam=str(dam_name), basin=str(basin), subbasin=str(subbasin), area_km2=area_km2, slope=slope)
+            )
         return rows
 
     def execute_rusle_analysis(self):
@@ -410,4 +406,3 @@ class RusleView:
             export_df = self._format_export_df()
             export_df.to_csv(save_path, index=False, encoding="utf-8-sig")
             show_info("Success", f"Yield results saved to:\n{save_path}")
-

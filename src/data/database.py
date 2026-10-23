@@ -4,7 +4,6 @@ from src.core.rusle import find_basin_table_columns, to_ascii_turkish, turkish_l
 from src.utils.paths import read_table
 
 
-
 class BasinDatabase:
     def __init__(self):
         self.data_dict = {}
@@ -46,7 +45,6 @@ class BasinDatabase:
                 "Slope": float(slope_val) if pd.notna(slope_val) else "",
             }
 
-
     def load_from_excel(self, file_path: str):
         df = read_table(file_path)
         self.load_from_dataframe(df)
@@ -70,4 +68,3 @@ class BasinDatabase:
                     if sb_norm == norm_sb or to_ascii_turkish(sb_norm) == ascii_sb:
                         return sb_data["Area"], sb_data["Slope"]
         return None, None
-

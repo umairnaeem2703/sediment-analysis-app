@@ -2,7 +2,6 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import ttk
 
-import numpy as np
 import pandas as pd
 
 from src.core.wilcock import WATER_YEAR_COLUMN, year_column
@@ -110,7 +109,9 @@ class IntegrationView:
         resolution = ZonalMatcher.resolve_all(lookup, df_p2[subbasin_col])
         if resolution.unresolved:
             raise ZonalMatcher.unresolved_error(lookup, resolution.unresolved)
-        self._zonal_notes = [f"{name} matched approximately to zonal '{key}'" for name, key in sorted(resolution.loose.items())]
+        self._zonal_notes = [
+            f"{name} matched approximately to zonal '{key}'" for name, key in sorted(resolution.loose.items())
+        ]
 
         calc = YieldCalculator()
         total_vol = sum(
@@ -168,7 +169,10 @@ class IntegrationView:
                     df_p3 = read_table(p3_path)
                 elif getattr(self.app, "phase3_df", None) is not None and not self.app.phase3_df.empty:
                     df_p3 = self.app.phase3_df
-                elif Path(resource_path("inputs", "daily_flow_data.csv")).exists() or Path("inputs/daily_flow_data.csv").exists():
+                elif (
+                    Path(resource_path("inputs", "daily_flow_data.csv")).exists()
+                    or Path("inputs/daily_flow_data.csv").exists()
+                ):
                     df_p3 = self._load_default_phase3()
 
             if df_p3 is None or df_p3.empty:

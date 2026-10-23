@@ -16,10 +16,38 @@ from src.core.monthly_flow_preprocessor import (
 from src.core.wilcock import FractionalModel, TimeSeriesAggregator
 from src.utils.paths import read_table, resource_path
 
-TURKISH_HEADER = ["Yıllar", "Ekim", "Kasım", "Aralık", "Ocak", "Şubat", "Mart",
-                  "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "TOP."]
-ASCII_HEADER = ["Yillar", "Ekim", "Kasim", "Aralik", "Ocak", "Subat", "Mart",
-                "Nisan", "Mayis", "Haziran", "Temmuz", "Agustos", "Eylul", "TOP."]
+TURKISH_HEADER = [
+    "Yıllar",
+    "Ekim",
+    "Kasım",
+    "Aralık",
+    "Ocak",
+    "Şubat",
+    "Mart",
+    "Nisan",
+    "Mayıs",
+    "Haziran",
+    "Temmuz",
+    "Ağustos",
+    "Eylül",
+    "TOP.",
+]
+ASCII_HEADER = [
+    "Yillar",
+    "Ekim",
+    "Kasim",
+    "Aralik",
+    "Ocak",
+    "Subat",
+    "Mart",
+    "Nisan",
+    "Mayis",
+    "Haziran",
+    "Temmuz",
+    "Agustos",
+    "Eylul",
+    "TOP.",
+]
 
 
 def _dsi_table(values_by_year, header=TURKISH_HEADER, summary_rows=True):
