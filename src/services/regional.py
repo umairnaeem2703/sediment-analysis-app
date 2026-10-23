@@ -9,7 +9,7 @@ grid can be re-validated without a file.
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, List, NamedTuple, Optional
+from typing import Any, List, NamedTuple, Optional, Tuple
 
 import pandas as pd
 
@@ -30,6 +30,24 @@ class Loaded(NamedTuple):
 
     data: Any
     warnings: List[str]
+
+
+class Problem(NamedTuple):
+    """One thing wrong with a table. `cells` are (row, column) pairs a grid can flag; rows count from the header = 1."""
+
+    message: str
+    cells: Tuple[Tuple[int, str], ...] = ()
+
+
+class TableError(ValueError):
+    """A table with invalid cells. The text lists them; `problems` locates them."""
+
+    def __init__(self, source: str, problems: List[Problem]):
+        listed = "\n".join(f"- {problem.message}" for problem in problems[:MAX_LISTED])
+        more = f"\n- ... and {len(problems) - MAX_LISTED} more" if len(problems) > MAX_LISTED else ""
+        super().__init__(f"{source}: {len(problems)} problem(s) found:\n{listed}{more}")
+        self.source = source
+        self.problems = problems
 
 
 @dataclass(frozen=True)
@@ -99,12 +117,6 @@ def _shown(value) -> str:
     return repr(text) if text else "an empty cell"
 
 
-def _problems_error(source: str, problems: List[str]) -> ValueError:
-    listed = "\n".join(f"- {problem}" for problem in problems[:MAX_LISTED])
-    more = f"\n- ... and {len(problems) - MAX_LISTED} more" if len(problems) > MAX_LISTED else ""
-    return ValueError(f"{source}: {len(problems)} problem(s) found:\n{listed}{more}")
-
-
 def _missing_columns_error(source: str, missing: List[str], df: pd.DataFrame) -> ValueError:
     present = ", ".join(str(column) for column in df.columns)
     return ValueError(f"{source}: required column(s) not found: {', '.join(missing)}. Columns present: {present}.")
@@ -117,13 +129,27 @@ def _is_blank(record) -> bool:
 # --- basin table ------------------------------------------------------------------------------
 
 
-def validate_basin_table(df: pd.DataFrame, source: str) -> Loaded:
+def basin_grid(df: pd.DataFrame, source: str) -> pd.DataFrame:
+    """The basin table's five columns under their canonical names, every cell as text and not yet checked."""
     found = find_basin_table_columns(df.columns)
     missing = [label for key, label in BASIN_COLUMNS.items() if found[key] is None]
     if missing:
         raise _missing_columns_error(source, missing, df)
-    table = df[[found[key] for key in BASIN_COLUMNS]]
-    table.columns = list(BASIN_COLUMNS.values())
+    grid = df[[found[key] for key in BASIN_COLUMNS]].copy()
+    grid.columns = list(BASIN_COLUMNS.values())
+    grid = grid.apply(lambda column: column.map(_text)).reset_index(drop=True)
+    if all(_is_blank(record) for _, record in grid.iterrows()):
+        raise ValueError(f"{source}: no data rows found.")
+    return grid
+
+
+def read_basin_grid(path) -> pd.DataFrame:
+    """Read a basin table for editing. Cell problems are allowed here; unreadable files and missing columns are not."""
+    return basin_grid(_read(path), Path(path).name)
+
+
+def validate_basin_table(df: pd.DataFrame, source: str) -> Loaded:
+    table = basin_grid(df, source)
 
     rows, problems, first_seen = [], [], {}
     for position, (_, record) in enumerate(table.iterrows()):
@@ -134,28 +160,29 @@ def validate_basin_table(df: pd.DataFrame, source: str) -> Loaded:
         for column in (DAM, BASIN, SUBBASIN):
             entry[column] = _text(record[column])
             if not entry[column]:
-                problems.append(f"row {row}: '{column}' is empty.")
+                problems.append(Problem(f"row {row}: '{column}' is empty.", ((row, column),)))
         entry[AREA] = _number(record[AREA])
         if entry[AREA] is None or entry[AREA] <= 0:
-            problems.append(f"row {row}: '{AREA}' must be a number greater than 0, found {_shown(record[AREA])}.")
+            message = f"row {row}: '{AREA}' must be a number greater than 0, found {_shown(record[AREA])}."
+            problems.append(Problem(message, ((row, AREA),)))
         entry[SLOPE] = _number(record[SLOPE])
         if entry[SLOPE] is None:
-            problems.append(f"row {row}: '{SLOPE}' must be a number, found {_shown(record[SLOPE])}.")
+            message = f"row {row}: '{SLOPE}' must be a number, found {_shown(record[SLOPE])}."
+            problems.append(Problem(message, ((row, SLOPE),)))
         if entry[DAM] and entry[SUBBASIN]:
             key = (name_key(entry[DAM]), name_key(entry[SUBBASIN]))
             if key in first_seen:
-                problems.append(
+                message = (
                     f"rows {first_seen[key]} and {row}: sub-basin '{entry[SUBBASIN]}' appears twice "
                     f"for dam '{entry[DAM]}'."
                 )
+                problems.append(Problem(message, ((first_seen[key], SUBBASIN), (row, SUBBASIN))))
             else:
                 first_seen[key] = row
         rows.append(entry)
 
     if problems:
-        raise _problems_error(source, problems)
-    if not rows:
-        raise ValueError(f"{source}: no data rows found.")
+        raise TableError(source, problems)
     return Loaded(pd.DataFrame(rows, columns=list(BASIN_COLUMNS.values())), [])
 
 
@@ -245,9 +272,9 @@ def validate_dam_sheet(df: pd.DataFrame, source: str, basin_table: pd.DataFrame)
         raw = record[column]
         values[field] = _number(raw)
         if values[field] is None and (field in _SHEET_REQUIRED or _text(raw)):
-            problems.append(f"row {row}: '{label}' must be a number, found {_shown(raw)}.")
+            problems.append(Problem(f"row {row}: '{label}' must be a number, found {_shown(raw)}.", ((row, label),)))
     if problems:
-        raise _problems_error(source, problems)
+        raise TableError(source, problems)
 
     warnings = []
     own = basin_table[basin_table[DAM].map(name_key) == name_key(dam)]
