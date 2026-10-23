@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Product requirements, target architecture, data contracts and the development pipeline are defined in `project_spec.md`; it is the source of truth for planned changes.
+
 ## Working principles
 
 - **Surface confusion and trade-offs.** When a request is ambiguous or two approaches differ materially, say so and name the trade-off rather than silently picking one. Don't hide uncertainty behind a confident answer.

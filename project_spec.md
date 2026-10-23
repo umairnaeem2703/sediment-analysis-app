@@ -1,0 +1,548 @@
+# Project Specification: Sediment Analysis App
+
+| | |
+|---|---|
+| **Version** | 0.1 (draft for hydrologist review) |
+| **Date** | 2026-10-23 |
+| **Source brief** | `brief/goals_milestones.md` |
+| **Status of code** | Working 3-tab Tkinter prototype. This spec defines the target and the pipeline to get there. |
+| **Roles** | *Developer* builds. *Hydrologist* is the domain reviewer who signs off every numerical change. *GIS analyst* supplies zonal RUSLE means and produces the 5-class RGB maps outside the app. |
+
+**How to change this spec.** Edit it on a branch with the same pull request flow as code (B7). A change to a calculation, a data contract or a decision gets a new entry in the decision log (Appendix) and a hydrologist sign-off.
+
+---
+
+# Part A: Product requirements (what to build and why)
+
+## A1. Purpose
+
+Reservoirs fill with sediment. The goal of this project, in the brief's words, is *to calculate total suspended and bedload sediment volumes to analyze existing sediment accumulation, its impact on reservoir fill rates, and the resulting effects on the dam's operational lifespan.*
+
+For each dam in a region, the app must answer four questions:
+
+1. How much suspended sediment reaches the reservoir each year?
+2. How much bedload reaches it in each year of the flow record?
+3. How much sediment has accumulated since commissioning, and at what elevation does it sit?
+4. At the mean, best-year and worst-year rates, in which year does sediment reach the dead-storage level?
+
+**Success measures**
+
+- Each sample dam in `inputs/` runs M1 to M5 end to end with no manual spreadsheet work.
+- Every number the hydrologist reviews can be traced to an input, a parameter and an equation in B3.
+- Every figure in the report has a stored `run.json` that reproduces it.
+- Results are deterministic for the same inputs and seed.
+
+## A2. Users and context
+
+Hydrologists and engineers (DSİ-style studies) using one Windows machine, offline. Input data is Turkish-origin: headers, basin names and encodings vary (D1, D15). The UI and reports are in English.
+
+## A3. Scope
+
+**In scope**
+
+| Milestone | Capability |
+|---|---|
+| M1 | Regional data ingestion into a project |
+| M2 | Suspended sediment yield (RUSLE gross erosion x sediment delivery ratio) per dam |
+| M3 | Bedload (Wilcock & Crowe fractional model) per dam |
+| M4 | Reservoir elevation-volume curve, integration of suspended and bedload, accumulation and lifespan |
+| M5 | Final analysis and reporting: min and max years, workbook, charts, CSV, `run.json` |
+
+**Out of scope** (each is a decision, so revisit it by changing the decision, not by drifting)
+
+| Item | Decision |
+|---|---|
+| Raster handling and the 5-class RGB maps (the GIS analyst's deliverable) | brief |
+| A database | D4 |
+| Web or multi-user delivery | D1 |
+| PDF reports | D14 |
+| Installer or release builds (code stays PyInstaller-compatible) | D30 |
+| Cascade routing between dams | D21 |
+| Computed trap efficiency (Brune curve) | D7 |
+| Flow-dependent depth in the Wilcock hydraulics | D9 |
+| Translation of the UI | D15 |
+
+**Could-have later:** a batch run over all dams in a project (D3); release builds (D30).
+
+## A4. Glossary and symbols
+
+| Term | Meaning |
+|---|---|
+| SIO | *Sediment İletim Oranı*, the sediment delivery ratio (SDR) |
+| USDA-SCS SIO, ÇEM SIO | The two empirical SIO formulas; the app averages them |
+| Water year | Oct (Y-1) to Sep (Y), labelled Y. DSİ monthly tables use it. |
+| Hbed, Hmin, Hmax, Hcrest | Riverbed elevation at the dam axis, minimum operating level, maximum reservoir level, crest level (m) |
+| Vmax, Vactive, Vdead | Volume at Hmax, active volume, dead volume = Vmax - Vactive (hm³) |
+| TE | Trap efficiency, the share of delivered sediment that stays in the reservoir (%) |
+| Commissioning year, analysis year | First year of operation; the year the projection starts from |
+| Level-pool fill | Sediment is assumed to fill the reservoir from the bed up, as a horizontal surface |
+| D50, Fs | Median grain size (m) and sand fraction of the bed in the Wilcock model |
+
+## A5. Workflow
+
+The main window is a wizard (D17, D18) with a step list on the left and Back/Next at the bottom. Next is enabled only when the step is valid and computed. The step list allows jumping back to completed steps. Editing an earlier step invalidates every later result and says so. "Analyse another dam" returns to step 3.
+
+| # | Step | The user... | The app shows |
+|---|---|---|---|
+| 1 | Project | Creates or opens a project folder | Project name and folder |
+| 2 | Regional data (M1) | Imports the basin table, zonal means and dam sheets (each is copied into the project) | Editable basin grid, validation messages |
+| 3 | Select dam | Picks a dam; enters commissioning year, analysis year, TE and optionally Hmin | The dam's sub-basins and sheet values |
+| 4 | Suspended (M2) | Presses Compute | Per sub-basin SIO, mass, volume; the dam total |
+| 5 | Bedload (M3) | Picks the flow file (daily or DSİ monthly) and the fractions file | Annual flow and bedload table, trend chart, "synthetic daily flow" flag |
+| 6 | Reservoir curve (M4a) | Confirms or edits the prefilled curve inputs | Curve table and chart, plausibility warnings |
+| 7 | Integration & projection (M4b) | Presses Compute | Annual totals and elevations, accumulation to date, projection and lifespan chart |
+| 8 | Report (M5) | Presses Export | Min and max years; paths of the written files |
+
+## A6. Functional requirements
+
+Test IDs follow `<layer>-<milestone>-<nn>`; the layers are `U` unit, `C` input contract, `P` per-dam pipeline, `W` wizard (B6). Tests are *planned*; none exist yet.
+
+### M1: Regional data ingestion
+
+| ID | Requirement | Acceptance criteria | Tests |
+|---|---|---|---|
+| FR-M1-01 | New, open and save a project folder holding `project.json` | A saved project reopens with identical dams, parameters and file paths. A missing or newer `schema_version` gives a clear error. | C-M1-01, W-M1-01 |
+| FR-M1-02 | Importing a file copies it into `<project>/inputs/`; originals are never modified (D33) | Source file bytes are unchanged after an import. Edits in the grid are saved to the copy. | C-M1-02 |
+| FR-M1-03 | Load the basin table and validate it | Required columns found by EN/TR alias, including `Drainage Area (km2)`. Area > 0. Slope present and numeric. Blank rows skipped. Duplicate sub-basin names within a dam are an error. | C-M1-03, C-M1-04 |
+| FR-M1-04 | Edit the basin table in a grid | Edited cells persist to the project copy. Invalid cells are flagged before M2 runs. | W-M1-02 |
+| FR-M1-05 | Load a dam sheet and cross-check it | Dam name matches a basin-table dam (Turkish-aware). Sheet drainage area and slope differ from the table by more than 1%: warning. Missing required fields: error naming them. | C-M1-05, C-M1-06 |
+| FR-M1-06 | Load zonal means | `MEAN` column and a sub-basin name column found by alias; empty or non-numeric means are skipped with a count in the warnings. | C-M1-07 |
+
+### M2: Suspended sediment
+
+| ID | Requirement | Acceptance criteria | Tests |
+|---|---|---|---|
+| FR-M2-01 | Match each of the dam's sub-basins to a zonal mean | Exact or alias matches are accepted. A loose match is accepted only when all candidates carry one value, and is listed in the warnings. An ambiguous or missing match is an error naming the sub-basin. | U-M2-01, C-M2-01 |
+| FR-M2-02 | Compute per sub-basin metrics (B3.1) | Gross mass, both SIOs, average SIO, yield mass, volume and specific yield agree with the hand calculations in `tests/verification/` to 1e-9 relative. | U-M2-02, U-M2-03 |
+| FR-M2-03 | The dam's suspended volume is the sum of **its own** sub-basins only | A project with three dams gives three different totals. No total ever mixes dams. | P-M2-01 |
+| FR-M2-04 | Show and export the results | Grid in the UI; `suspended.csv` in the run folder | W-M2-01, P-M2-02 |
+
+### M3: Bedload
+
+| ID | Requirement | Acceptance criteria | Tests |
+|---|---|---|---|
+| FR-M3-01 | Ingest flow as a daily series or as a DSİ monthly table (D10) | Daily: `Date` or `Tarih` and `Flow`, `Flow Q (m3/s)` or `Debi`. Monthly: detected automatically and converted by the log-normal split with sigma and seed from the wizard. Monthly volumes are conserved exactly, and the result is flagged synthetic. | U-M3-01, C-M3-01, C-M3-02 |
+| FR-M3-02 | Load grain fractions (D36) | `di` (m) and `Fi` required; `Fi` sums to 1 within 0.02. tau_ri is always computed from the formula. A supplied `tau_ri` or `bi` is cross-checked; a difference above 1% adds a warning. | U-M3-02, C-M3-03 |
+| FR-M3-03 | Compute daily transport with the published Wilcock & Crowe function (D35) | W* is continuous at phi = 1.35 (relative jump below 1e-6). Values match hand calculations at phi = 0.5, 1.0, 1.35, 2, 4 and 10. | U-M3-03, U-M3-04 |
+| FR-M3-04 | Summarise by water year when the series carries `Water_Year`, otherwise by calendar year | Group keys, annual mean flow, mean transport, annual volume (m³/yr) and mass (t/yr). Rows with bad dates or flows are dropped with a count in the warnings. Negative flow is an error. | U-M3-05, C-M3-04 |
+| FR-M3-05 | Show and export the results | Table, trend chart (PNG), `bedload.csv` | W-M3-01, P-M3-01 |
+
+### M4: Reservoir curve, integration, lifespan
+
+| ID | Requirement | Acceptance criteria | Tests |
+|---|---|---|---|
+| FR-M4-01 | Curve inputs are prefilled from the dam sheet and validated | Hbed < Hmin < Hmax <= Hcrest and 0 < Vactive < Vmax. Hmin may be empty (shape class used). Warnings: fitted m outside [1, 4.5]; Hmax - Hbed below 10 m; computed surface area at Hmax above the sheet's drainage area. | U-M4-01, C-M4-01 |
+| FR-M4-02 | Generate the curve (D19, B3.3) | The curve passes through (Hbed, 0) and (Hmax, Vmax), and through (Hmin, Vdead) when Hmin is given. The table is at 0.5 m steps from Hbed to Hcrest with elevation, volume (hm³) and area (km²). Chart included. | U-M4-02, U-M4-03, P-M4-01 |
+| FR-M4-03 | Compute annual totals and sediment elevations (B3.4) | Total = TE x (suspended + bedload). Elevation is read from the curve; volumes above Vmax are clamped and warned. | U-M4-04, P-M4-02 |
+| FR-M4-04 | Accumulation to date (D12) | Sum of annual totals from the commissioning year up to (not including) the analysis year, using each record year's own total and the mean for years outside the record. Years in the record before commissioning are ignored. Requires a commissioning year. | U-M4-05 |
+| FR-M4-05 | Projection and lifespan (D20) | Cumulative volume to 100 years at the mean, min-year and max-year rates; lifespan = year the cumulative volume reaches Vdead. "Already exceeded in year X" when accumulation to date is above Vdead. | U-M4-06, U-M4-07, P-M4-03 |
+
+### M5: Final analysis and reporting
+
+| ID | Requirement | Acceptance criteria | Tests |
+|---|---|---|---|
+| FR-M5-01 | Isolate the minimum and maximum total-volume years | Year, total volume and elevation for each; ties resolve to the earliest year | U-M5-01 |
+| FR-M5-02 | Write the run folder `outputs/<dam-slug>_<YYYYMMDD_HHMM>/` | `results.xlsx` (sheets Inputs, Suspended, Bedload, Annual, Curve, Projection, Extremes, Warnings), PNG charts (bedload trend, annual volume, curve, projection with the Hmin line), one CSV per phase | P-M5-01, P-M5-02 |
+| FR-M5-03 | Write `run.json` | App version, timestamp, dam, every input with its SHA-256, all parameters, sigma and seed, flags, warnings | P-M5-03 |
+
+### Cross-cutting
+
+| ID | Requirement | Acceptance criteria | Tests |
+|---|---|---|---|
+| FR-X-01 | No input is loaded unless the user chose it, and there are no silent fallbacks | No bundled sample is read at startup or when an input is missing; a missing input is an error naming it | C-X-01, W-X-01 |
+| FR-X-02 | Turkish-first parsing: `read_table`, `turkish_lower`, `to_ascii_turkish`, decimal comma, several encodings | A UTF-8-BOM file, a CP1254 file and a semicolon-delimited decimal-comma file all load identically | C-X-02, C-X-03 |
+| FR-X-03 | Validation errors name the file, row or cell and the expected form | Error text contains the offending location | C-X-04 |
+| FR-X-04 | Editing a step invalidates later steps | Later steps become locked and their results are cleared | W-X-02 |
+| FR-X-05 | Long computations run off the Tk thread | The UI stays responsive; the result is delivered via `run_in_background` | W-X-03 |
+
+## A7. Data contracts
+
+All inputs are copied into the project (FR-M1-02). Aliases are matched with `normalize_header` or `find_basin_table_columns`; the first column name is canonical. The sample files in `inputs/` are the reference layouts.
+
+**Basin table** (sample: `inputs/master_yield.csv`)
+
+| Column (canonical) | Aliases | Unit | Rule |
+|---|---|---|---|
+| Dam Name | Dam, Baraj, Baraj Adı | | Required |
+| Basin Name | Basin, Havza, Havza Adı | | Required |
+| Sub-basin Name | Sub-basin, Alt Havza, Alt Havza Adı | | Required, unique within a dam |
+| Drainage Area (km2) | Area, Area_km2, Alan, Alan (km2) | km² | Required, > 0. **The alias `Drainage Area (km2)` is new (M1).** Downstream dams hold the *incremental* catchment (D21). |
+| Main Waterway Slope | Slope, Slope_m_per_m, Eğim | m/m | Required, numeric. Read as a decimal fraction (D23). |
+
+**Zonal means** (sample: `inputs/raw_zonal_means.csv`): a sub-basin name column (`Sub-basin`, `Alt Havza`, ...) and `MEAN` (t/ha/yr).
+
+**Dam sheet** (samples: `inputs/bathymetry/*_bathymetry.csv`; one row per dam)
+
+| Column | Symbol | Unit | Use |
+|---|---|---|---|
+| Dam Name | | | Match with the basin table |
+| Drainage Area (km2) | | km² | Cross-check only |
+| Longest River Length (km) | | km | Informational |
+| Top Elev of River, Bot Elev of River | | m | **Bot Elev of River = Hbed**, must be the bed at the dam axis (OI-01). Top is informational. |
+| Avg. Slope % | | m/m | Cross-check only. **The header says % but the values are decimal m/m (D23).** |
+| Cret Elev | Hcrest | m | Curve upper end |
+| Max Res. Elev | Hmax | m | Curve |
+| Active Vol. | Vactive | hm³ | Curve; Vdead = Vmax - Vactive |
+| Max Vol. | Vmax | hm³ | Curve |
+| Avg. Flow | | hm³/yr | Cross-check against the DSİ `ORT.` row when present |
+
+**Daily flow**: `Date` (dd/mm/yyyy; ISO also accepted) or `Tarih`; `Flow`, `Flow Q (m3/s)` or `Debi` (m³/s); optional `Water_Year`.
+
+**DSİ monthly flow** (samples: `inputs/dam_flow_data/*_flow.csv`): `Yıllar` and `Ekim` ... `Eylül` in hm³, plus the `TOP.` column and the `TOP.`/`ORT.` rows, which are ignored.
+
+**Fractions** (sample: `inputs/fractional_parameters.csv`)
+
+| Column | Unit | Rule |
+|---|---|---|
+| di | m | Required, > 0 |
+| Fi | | Required, sums to 1 within 0.02 |
+| tau_ri (Pa), bi | | Optional, cross-checked only (D36) |
+
+**`project.json`** (schema version 1; paths are relative to the project folder)
+
+```json
+{
+  "schema_version": 1,
+  "name": "Sakarya_Region",
+  "inputs": {
+    "basins": "inputs/basins.csv",
+    "zonal_means": "inputs/zonal_means.csv",
+    "fractions": "inputs/fractions.csv"
+  },
+  "dams": [
+    {
+      "name": "Çubuk 1",
+      "slug": "cubuk_1",
+      "sheet": "inputs/dams/cubuk_1.csv",
+      "flow": {"path": "inputs/flow/cubuk_1_flow.csv", "sigma": 0.6, "seed": 0},
+      "commissioning_year": null,
+      "analysis_year": null,
+      "h_min_m": null,
+      "shape_class": "hill",
+      "trap_efficiency_pct": 100
+    }
+  ]
+}
+```
+
+`null` means "not yet entered"; `analysis_year: null` means the current year. Output columns are named for their units (`Volume_m3`, `Volume_hm3`, `Elevation_m`, `Area_km2`).
+
+## A8. Non-functional requirements
+
+| ID | Requirement |
+|---|---|
+| NFR-01 | Runs on Windows 10 or 11, offline. Until packaging is revisited (D30) it runs from the project's Python 3.14 virtualenv. |
+| NFR-02 | A per-dam run over about 40 water years completes in 10 s or less, and the UI never blocks. |
+| NFR-03 | Results are deterministic for the same inputs, parameters and seed. |
+| NFR-04 | Every warning is shown to the user, written to `run.json` and written to the Warnings sheet. |
+| NFR-05 | Layering rules (B2) hold: `src/core` imports no Tk, matplotlib, file dialogs or file I/O. |
+| NFR-06 | Units appear on every field, column and chart axis. |
+| NFR-07 | Code stays PyInstaller-compatible: bundled files are found through `resource_path()`. |
+
+## A9. Assumptions, limitations and open issues
+
+**Accepted limitations** (decided; the report states them)
+
+| ID | Limitation | Decision |
+|---|---|---|
+| AL-01 | Suspended sediment uses a deposited bulk density of 1.3 t/m³ and bedload the solid density 2.65 t/m³, and the two volumes are added. Bedload's share of reservoir volume is therefore understated. | D8 |
+| AL-02 | Wilcock hydraulics use a fixed rectangular channel: depth 0.5 m, width 50 m, n 0.05, D50 0.02 m, Fs 0.10, for every dam and every flow. Channel slope is unused. | D9 |
+| AL-03 | Monthly DSİ flow is split into days at random (log-normal, sigma 0.6). Bedload depends strongly on sigma. | D10 |
+| AL-04 | The USDA-SCS SIO coefficient 0.51 is used with area in km². It is conventionally quoted for mi²; the km² equivalent is about 0.566, which would raise SIO by about 11% and suspended yield by about 4%. | D37 |
+| AL-05 | The ÇEM SIO changes by less than 0.1% across the sample slopes, so slope hardly affects it. The slope column is read as m/m. | D11, D23 |
+| AL-06 | Dams are independent. Sediment trapped by an upstream dam is not removed from a downstream dam. | D21 |
+| AL-07 | The elevation-volume curve is a one-parameter power law, not a survey, and sediment fills it as a level pool from the bed up. | D19, D20 |
+| AL-08 | Years outside the flow record use the record mean for accumulation. | D12 |
+| AL-09 | D50 stands in for the surface-mean grain size in the Wilcock reference stress. | D9 |
+| AL-10 | The record's last year may be partial; the annual volume is the mean daily rate times a full year. | |
+
+**Open issues** (need an owner before the milestone that depends on them)
+
+| ID | Issue | Needed by |
+|---|---|---|
+| OI-01 | Çubuk 2: Hmax - Hbed = 5.3 m for 22.4 hm³ implies a surface of about 8 to 17 km². Confirm that `Bot Elev of River` is the bed at the dam axis. | M4 |
+| OI-02 | Commissioning years and (optionally) Hmin for the three sample dams are missing. | M4 |
+| OI-03 | Convention check: "analysis year" is treated as the first year *not yet* accumulated (so the default, the current year, excludes the incomplete current year). | M4 |
+| OI-04 | Hydrologist review of the bedload before and after D35 and D36. | M3 |
+| OI-05 | Hydrologist confirmation of the shape classes (gorge 1.25, hill 2, foothill 3, lake 4) and of the plausibility thresholds in FR-M4-01. | M4 |
+| OI-06 | Independent hand calculations for `tests/verification/` (the spreadsheet is written by the developer, reviewed by the hydrologist). | M2 |
+
+---
+
+# Part B: Technical design (how to build it)
+
+## B1. Stack
+
+| Concern | Choice |
+|---|---|
+| Language | Python 3.14 |
+| UI | Tkinter / ttk (D13) |
+| Data | pandas, numpy |
+| Charts | matplotlib: `TkAgg` inside the UI, `Agg` for exported PNGs |
+| Excel | openpyxl |
+| Tests and lint | pytest; ruff (`check` and `format`). Added to `requirements.txt`. |
+| Dependencies | One `requirements.txt` with loose `>=` ranges (D31) |
+| Packaging | Deferred (D30); `resource_path()` keeps PyInstaller possible |
+
+## B2. Architecture
+
+Three layers; imports point downward only (D16).
+
+```
+        +---------------------------+
+        |  src/ui   (Tk wizard)     |  collect input, call services on a
+        +-------------+-------------+  background thread, render results
+                      |
+        +-------------v-------------+
+        |  src/services             |  per-dam pipeline M1..M5, project I/O,
+        +-------------+-------------+  run folder, xlsx / png / csv / run.json
+                      |
+        +-------------v-------------+
+        |  src/core   (pure math)   |  no Tk, no matplotlib, no file I/O
+        +---------------------------+
+        src/utils: paths.py (read_table, resource_path) used by services and ui
+```
+
+**Rules.** `core` imports only the standard library, numpy and pandas. `services` never imports `tkinter`. `ui` holds no calculation and no file parsing. Dialogs live in `ui/common.py` only.
+
+**Target module map**
+
+| Module | Status | Notes |
+|---|---|---|
+| `src/core/rusle.py` | kept | Formulas unchanged (D37). Dead helpers removed (`raster_mean_t_ha_yr`, `to_phase2_handoff`). Gains the `Drainage Area (km2)` alias. |
+| `src/core/wilcock.py` | kept, changed | D35 and D36 fixes. `BedloadVisualizer` and the matplotlib import move to `services/reporting.py`. |
+| `src/core/monthly_flow_preprocessor.py` | kept, trimmed | `load`, `export_csv` and `main` move to services. |
+| `src/core/reservoir.py` | new | Curve fit, table, inverse, area, plausibility checks |
+| `src/core/projection.py` | new | Accumulation, projection, lifespan |
+| `src/core/integration.py` | moved | From `src/data/reporter.py`, adapted to per-dam and TE |
+| `src/services/project.py` | new | Project model, `project.json`, import-copy |
+| `src/services/regional.py`, `suspended.py`, `bedload.py`, `integration.py` | new | One service per wizard computation |
+| `src/services/reporting.py` | new | xlsx, png, csv, `run.json` |
+| `src/ui/wizard.py`, `src/ui/steps/` | new | Controller and one view per step |
+| `src/ui/common.py`, `src/utils/paths.py` | kept | |
+| `src/data/`, `src/ui/{app,rusle_view,wilcock_view,integration_view}.py`, back-compat shims, `BasinDatabase`, `load_raster_matrix` | removed | |
+
+## B3. Calculation reference
+
+Symbols are as in A4. "(D35)" and "(D36)" mark the two changes from today's code; everything else matches `src/core` as of this spec.
+
+### B3.1 Suspended sediment (M2)
+
+For each sub-basin with zonal mean *E* (t/ha/yr), area *A* (km²) and slope *S* (m/m):
+
+- area in hectares: `A_ha = 100 A`
+- gross erosion: `G = E · A_ha` (t/yr)
+- USDA-SCS: `SIO_u = 0.51 · A^(-0.11)` (0 if A <= 0)
+- ÇEM: `SIO_c = 1 / (2.05823 + 0.02816 · S²)`
+- average: `SIO = (SIO_u + SIO_c) / 2`
+- yield mass: `Y = G · SIO` (t/yr)
+- volume: `V_s = Y / 1.3` (m³/yr, bulk density 1.3 t/m³)
+- specific yield: `V_s / A` (m³/yr/km²)
+
+The dam's suspended volume is `ΣV_s` over that dam's sub-basins.
+
+### B3.2 Bedload (M3)
+
+Constants: g = 9.81, ρw = 1000, ρs = 2650 kg/m³, s = ρs/ρw, h = 0.5 m, B = 50 m, n = 0.05, D50 = 0.02 m, Fs = 0.10.
+
+For each daily flow *Q* (m³/s), with *Q* = 0 giving zero transport:
+
+- `v = Q / (B · h)`
+- `τ = ρw · g · n² · v² / h^(1/3)` (Pa)
+- `u* = sqrt(τ / ρw)`
+
+Reference stress per fraction *di* (D36: always computed):
+
+- `τrm* = 0.021 + 0.015 · exp(-20 · Fs)`
+- `τrm = τrm* · (s - 1) · ρw · g · D50` (7.4555 Pa for the defaults)
+- `b_i = 0.67 / (1 + exp(1.5 - di / D50))`
+- `τri = τrm · (di / D50)^b_i`
+
+For the sample fractions (di = 4, 10, 20, 32, 50 mm) τri is 5.918, 6.580, 7.456, 8.796, 11.679 Pa. The sample file's `tau_ri` column (1.18, 3.29, 7.46, 14.07, 29.2) differs by exactly `di / D50`, so it triggers the warning for every fraction except 20 mm.
+
+Transport:
+
+- `φ_i = τ / τri`
+- `W*_i = 0.002 · φ^7.5` for `0 < φ < 1.35`
+- `W*_i = 14 · (1 - 0.894 / φ^0.5)^4.5` for `φ >= 1.35` **(D35; today's code omits the square root)**
+- `q_bi = W*_i · Fi · u*³ / ((s - 1) · g)` (m²/s)
+- `q_b = Σ q_bi`
+
+D35 is a transcription fix. With it, W* at φ = 1.35 is 0.0190 from both branches. Today's code gives 0.0190 below and 0.1059 above, and overstates W* by 6.3x, 4.6x and 2.9x at φ = 2, 4 and 10.
+
+Annual summary (group key `Water_Year` if present, else calendar year):
+
+- `Q_mean`, `q̄_b` = mean of the daily values in the group
+- `V_b = q̄_b · B · 31,557,600` (m³/yr; 365.25 days)
+- `M_b = V_b · 2.65` (t/yr)
+
+Monthly-to-daily (D10): for each month with volume *V* (hm³) and *d* days, draw weights `w_k ~ LogNormal(-σ²/2, σ)` (mean one) with a generator seeded by `(seed, year, month)`; the daily volume is `V · 10⁶ · w_k / Σw`, and `Q_k = daily_volume / 86,400`. Volume is conserved exactly. `σ = 0` gives an even split.
+
+### B3.3 Reservoir curve (M4a)
+
+Let `x = (H - Hbed) / (Hmax - Hbed)`.
+
+- volume: `V(H) = Vmax · x^m` (hm³), defined from Hbed up to Hcrest
+- surface area: `A(H) = dV/dH = m · V(H) / (H - Hbed)` (km², because hm³ per m = 10⁶ m²)
+- inverse: `H(V) = Hbed + (Hmax - Hbed) · (V / Vmax)^(1/m)`
+- dead volume: `Vdead = Vmax - Vactive`
+
+Choosing *m* (D19):
+
+- if Hmin is given: `m = ln(Vdead / Vmax) / ln((Hmin - Hbed) / (Hmax - Hbed))`, so the curve passes through (Hmin, Vdead)
+- otherwise *m* is the shape-class value (gorge 1.25, hill 2, foothill 3, lake 4) and `Hmin = H(Vdead)`
+
+Worked examples (shape class): Kavşakkaya, foothill: Hmin = 1088.86 m, A(Hmax) = 4.09 km². Çubuk 1, hill: Hmin = 892.69 m, A(Hmax) = 0.57 km². Çubuk 2, hill: A(Hmax) = 8.45 km² (OI-01).
+
+### B3.4 Integration, accumulation, lifespan (M4b)
+
+All volumes in hm³ from here (m³ / 10⁶).
+
+- annual total for record year *y*: `T(y) = TE · (V_s + V_b(y))`, with `TE` as a fraction
+- sediment elevation for a cumulative volume *S*: `H(S)`, clamped to Hcrest with a warning
+- rates: mean `T̄`, `T_min = min T(y)`, `T_max = max T(y)`
+- accumulation to date, with commissioning year *c* and analysis year *a*: `S0 = Σ T'(y)` for `c <= y < a`, where `T'(y) = T(y)` for years in the record and `T̄` otherwise
+- projection at rate *r*: `S(a + k) = S0 + k · r`, for k = 0 to 100
+- lifespan at rate *r*: `a + (Vdead - S0) / r`; if `S0 >= Vdead`, "already exceeded"; if `r = 0`, "not reached"
+
+In the DSİ case the record years are water-year labels, and they are used as-is.
+
+## B4. Persistence
+
+```
+<project>/
+  project.json
+  inputs/                     copies of every imported file
+  outputs/<dam-slug>_<YYYYMMDD_HHMM>/
+      results.xlsx, *.png, suspended.csv, bedload.csv, integration.csv, run.json
+```
+
+Run-folder slugs use `to_ascii_turkish`, lowercased, with spaces replaced by underscores. A run never overwrites another run. `project.json` is rewritten whenever the user changes a parameter or imports a file, and carries `schema_version` for future migration.
+
+## B5. Errors and warnings
+
+- A validation error stops the step and names the file, row or cell and the expected form (FR-X-03).
+- A warning does not stop the step. It appears in the UI, in `run.json` and in the Warnings sheet (NFR-04).
+- Services raise `ValueError` or `KeyError` with those messages. Only the UI turns them into dialogs.
+- Python `logging` records warnings to the console; there is no log file.
+
+## B6. Test strategy
+
+The current suite is not trusted (D24). It is rebuilt in four layers (D28), planned together with the requirements in A6.
+
+| Layer | ID prefix | Folder | Oracle |
+|---|---|---|---|
+| Unit: formula verification | `U` | `tests/unit/` | Independent hand calculations in a spreadsheet in `tests/verification/`, reviewed by the hydrologist. Never the code's own output. |
+| Input contract | `C` | `tests/contract/` | The data contracts in A7: aliases, encodings, decimal comma, mislabelled headers, malformed files |
+| Pipeline | `P` | `tests/pipeline/` | Reviewed golden outputs in `tests/benchmarks/`, one set per sample dam |
+| Wizard | `W` | `tests/ui/` | Behaviour: navigation, gating, invalidation. Dialogs patched. |
+
+**Conventions**
+
+- Test IDs follow `<layer>-<milestone>-<nn>` and appear in the test name, so `pytest -k M3` selects a milestone.
+- Wizard tests share the session-scoped `tk_root` fixture and build their UI in a `tk.Toplevel` (the current `tests/conftest.py` pattern). They need a display, which the Windows runner provides.
+- Golden files are regenerated only through a script that records the code version, and are committed only after hydrologist sign-off.
+- Old tests move to `tests/legacy/` (D29). `pytest.ini` gains `addopts = --ignore=tests/legacy`; run them locally with `pytest -o addopts="" tests/legacy`. A legacy test is ported only if it maps to a requirement and passes review. The folder is deleted at M5.
+- `.gitignore` ignores `*.csv` and `*.xlsx` outside `inputs/`; M0 adds exceptions for `tests/**` so benchmark files are tracked.
+
+The traceability matrix is the Tests column in A6.
+
+## B7. Infrastructure and development pipeline
+
+**Hosting.** Public GitHub repository `umairnaeem2703/sediment-analysis-app`. Actions are free for public repositories. Real sample data stays in `inputs/` (D22).
+
+**Branching and Definition of Done** (D26). Every task is a short-lived branch off `main`:
+
+1. Write failing tests that reference the requirement ID.
+2. Implement the smallest change that passes.
+3. `pytest` and `/validate-calc-engine` pass.
+4. `/code-review` has no open findings.
+5. Commit with `/commit-msg` (conventional format).
+6. Open a pull request; CI is green; squash-merge.
+7. A change to any calculated number also needs hydrologist sign-off and regenerated goldens.
+
+**CI** (`.github/workflows/ci.yml`, D25): on push and pull request, on `windows-latest`: checkout, `setup-python` 3.14, `pip install -r requirements.txt`, `ruff check .`, `ruff format --check .`, `pytest`. A failing run blocks the merge to `main` through branch protection. There is no mypy or coverage gate.
+
+**Local tooling.** `.claude/` and `.agents/` stay untracked (D27), so CI never depends on them. `/validate-calc-engine` and `.claude/agents/explore-agent.md` are updated locally in M0 (the agent still mentions CustomTkinter and PDF output).
+
+**Packaging and release** are out of scope (D30).
+
+## B8. Roadmap
+
+Each milestone is a vertical slice: services, wizard step, tests and sign-off. Exit criteria are listed; there are no dates.
+
+| Milestone | Tasks | Exit criteria |
+|---|---|---|
+| **M0 Pipeline setup** | Fast-forward local `main` to `origin/main` (it already contains `branch1`), then retire `branch1` and `branch2` (confirm before deleting remote branches). Add ruff and one formatting-only commit with no logic changes. Add the `.gitignore` exceptions. Add the CI workflow and branch protection. Move current tests to `tests/legacy/` and create the new layout with one import smoke test. Create `src/services/`. | CI is green on a pull request; `pytest` runs the new layout only |
+| **M1 Regional data** | Project model, `project.json`, import-copy. Basin and dam-sheet validators, including the `Drainage Area (km2)` alias and cross-checks. Wizard shell with steps 1 to 3. Remove the old tabs, back-compat shims, `src/data/database.py` and dead code. Update the architecture section of `CLAUDE.md`. | FR-M1-* tests pass; the three sample dams load; the app opens to the wizard |
+| **M2 Suspended** | Suspended service and step 4. Verification workbook for B3.1. Golden outputs for the three dams. | FR-M2-* tests pass; hydrologist signs off the goldens |
+| **M3 Bedload** | D35 and D36 fixes. Move plotting and file I/O out of core. Bedload service and step 5. Before and after table for the hydrologist. | FR-M3-* tests pass; OI-04 closed |
+| **M4 Reservoir and projection** | `reservoir.py`, `projection.py`, `integration.py`. Steps 6 and 7. Commissioning years and Hmin collected (OI-02). | FR-M4-* tests pass; OI-01, OI-03, OI-05 closed |
+| **M5 Reporting** | Reporting service and step 8. `run.json` with the app version. Delete `tests/legacy/`. | FR-M5-* tests pass; end-to-end sign-off for the three dams; version 1.0.0 (no build) |
+
+## B9. Gap analysis: current code vs target
+
+| Area | Current (evidence) | Target | Milestone |
+|---|---|---|---|
+| Dams mixed | The RUSLE tab sums every row, so three dams give 118,933 m³/yr (`src/ui/rusle_view.py:321`) | Per-dam total (FR-M2-03) | M2 |
+| Silent sample fallbacks | Integration loads bundled samples when nothing is chosen (`src/ui/integration_view.py:154-185`) | Error naming the missing input (FR-X-01) | M1 |
+| Logic in views | `_ensure_phase2_volume`, `_load_default_phase3`, report text (`integration_view.py:86-135, 225-251`) | Services (B2) | M1 to M4 |
+| Not a curve | `inputs/bathymetry.csv` had one row per dam; the user has since removed it. `prepare_bathymetry` treats rows as one curve. | Generated per-dam curve (FR-M4-02) | M4 |
+| No accumulation or lifespan | One year's volume is mapped to an elevation (`integration_view.py:194-205`) | FR-M4-03 to FR-M4-05 | M4 |
+| Duplicate elevation columns | `Interpolated_Elevation_m`, `Elevation_m`, `Elevation` (`integration_view.py:199-205`) | One `Elevation_m` | M4 |
+| W* high branch | Missing square root (`src/core/wilcock.py:63, 85`) | D35 | M3 |
+| tau_ri precedence | File column wins (`wilcock.py:106-115`) | D36 | M3 |
+| Plotting in core | matplotlib in `src/core/wilcock.py:5` and `BedloadVisualizer` | `services/reporting.py` | M3 |
+| File I/O in core | `MonthlyFlowPreprocessor.load/export_csv/main` | Services | M3 |
+| Area header | `find_basin_table_columns` does not match `Drainage Area (km2)`; 9 tests fail since the `inputs/` edits | Alias added (FR-M1-03) | M1 |
+| Dead code | `BasinDatabase` (`src/data/database.py`), `load_raster_matrix` (`src/utils/paths.py:67`), `raster_mean_t_ha_yr` and `to_phase2_handoff` (`rusle.py`), the "Antigravity" docstring (`src/__init__.py`) | Removed | M1 |
+| Back-compat shims | Aliases and properties on `SedimentApp` (`src/ui/app.py:58-178`) | Removed with the old UI | M1 |
+| Suspended averaging | `merge_sediment_data` averages across years before adding (`src/data/reporter.py:26-29`) | One static value per dam | M4 |
+| No CI or lint | No `.github/`, no ruff config, no README | D25 | M0 |
+| Tests | 150 tests written without a plan; 9 fail on the edited inputs | Rebuilt (D24, D28) | M0 to M5 |
+| `.gitignore` | `*.csv` and `*.xlsx` ignored outside `inputs/` | Exceptions for `tests/**` | M0 |
+| Branches | Local `main` is behind `origin/main`; `branch1` and `branch2` are stale | Single `main` flow | M0 |
+
+---
+
+# Appendix: Decision log
+
+| ID | Decision | Rationale |
+|---|---|---|
+| D1 | Single-user, offline Windows desktop app | The users are individual analysts; no server to run |
+| D2 | Keep `src/core` formulas, rebuild the UI and controller | The formulas hold the domain value; the UI shape was wrong |
+| D3 | Per-dam analysis inside a regional project; batch is later | Mixed dams gave a wrong total |
+| D4 | No database | Plain files suffice and are easy to audit |
+| D5 | Project folder with `project.json`, `inputs/` and `outputs/` | Remembers a session without a database |
+| D6 | Phase 4 and 5 give annual totals, min and max years, and a cumulative projection | The brief's goal is fill rate and lifespan |
+| D7 | Trap efficiency is a per-dam percentage, default 100 | Conservative and transparent |
+| D8 | Keep 1.3 and 2.65 t/m³ | Accepted assumption (AL-01) |
+| D9 | Keep the fixed Wilcock channel | Accepted limitation (AL-02) |
+| D10 | Accept daily and DSİ monthly flow; flag synthetic | Some dams only have monthly data |
+| D11 | ÇEM SIO as coded | Accepted (AL-05) |
+| D12 | Projection starts at the commissioning year | The brief asks for *existing* accumulation |
+| D13 | Tkinter / ttk | No new dependency |
+| D14 | Excel, PNG and CSV outputs; no PDF | Enough for the reviewers |
+| D15 | English UI, Turkish data | Existing behaviour; no translation catalogue |
+| D16 | Layers `ui -> services -> core` | Moves logic out of views; core is testable without a display |
+| D17 | Wizard UI | Guides the user through the phases in order |
+| D18 | Eight wizard steps with gating | See A5 |
+| D19 | Generated power-law curve, fitted through the dead-storage point when Hmin is known | No measured curve is available |
+| D20 | Lifespan inputs and level-pool fill | Needed to reach dead storage |
+| D21 | Dams independent; incremental catchment entered by the user | Cascade routing is out of scope |
+| D22 | Real samples stay in the public repo | Owner's choice |
+| D23 | Slope is decimal m/m; the `%` header is a mislabel | Owner's statement |
+| D24 | Rebuild the test suite | The current tests were not planned |
+| D25 | CI on `windows-latest` with ruff and pytest; blocking | Free for a public repo; Tk tests need Windows |
+| D26 | Branch, test-first, review, squash; hydrologist sign-off for numeric changes | Small reviewable steps |
+| D27 | `.claude/` and `.agents/` stay untracked | Personal tooling |
+| D28 | Four test layers with traceability | See B6 |
+| D29 | Old tests go to `tests/legacy/`, local only | Safety net without blocking merges |
+| D30 | Packaging and release out of scope | Deferred by the owner |
+| D31 | Loose `>=` dependency ranges; add ruff | Owner's choice |
+| D32 | Roadmap M0, then vertical slices M1 to M5; old UI removed in M1 | Avoids maintaining two UIs |
+| D33 | Imports are copied into the project; originals untouched | Portable, auditable project folder |
+| D34 | Spec at the repo root, pointer in `CLAUDE.md` | Found by future sessions |
+| D35 | Fix the missing square root in the W&C high-transport branch | Transcription error: discontinuity at phi = 1.35 and a 3x to 6x overstatement |
+| D36 | tau_ri is always computed; a supplied value is cross-checked | The sample column is off by di / D50 |
+| D37 | Keep `0.51 · A^(-0.11)` with area in km² | Accepted (AL-04) |
