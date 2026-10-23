@@ -34,7 +34,6 @@ exports/
 .vscode/
 .idea/
 
-# Agent tooling artifacts
-.agents/
-.claude/
+# Agent tooling artifacts (shared config under .claude/ and .agents/ is tracked)
+.claude/settings.local.json
 skills-lock.json
