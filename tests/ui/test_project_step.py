@@ -44,6 +44,7 @@ def test_w_m1_01_creating_a_project_writes_project_json_and_completes_the_step(m
     data = json.loads((tmp_path / "region" / "project.json").read_text(encoding="utf-8"))
     assert data["name"] == "Sakarya Region"
     assert "Sakarya Region" in step.summary_var.get()
+    assert step.name_var.get() == "" and step.folder_var.get() == ""  # the form is for the next new project
 
 
 def test_w_m1_01_a_saved_project_reopens_with_the_same_state(make_wizard, tmp_path, errors):
@@ -57,9 +58,8 @@ def test_w_m1_01_a_saved_project_reopens_with_the_same_state(make_wizard, tmp_pa
 
     assert errors == []
     assert second.project == first.project
-    assert second_step.name_var.get() == "Sakarya Region"
-    assert second_step.folder_var.get() == str(tmp_path / "region")
-    assert "1 dam(s)" in second_step.summary_var.get()
+    summary = second_step.summary_var.get()
+    assert "Sakarya Region" in summary and str(tmp_path / "region") in summary and "1 dam(s)" in summary
     assert second_step.is_complete()
 
 

@@ -18,17 +18,21 @@ class ProjectStep(Step):
         self.summary_var = tk.StringVar(value="No project is open.")
         frame.columnconfigure(1, weight=1)
 
-        ttk.Label(frame, text="Project name:").grid(row=0, column=0, sticky="w", padx=10, pady=8)
-        ttk.Entry(frame, textvariable=self.name_var).grid(row=0, column=1, columnspan=2, sticky="ew", padx=10)
-        ttk.Label(frame, text="Project folder:").grid(row=1, column=0, sticky="w", padx=10, pady=8)
-        ttk.Entry(frame, textvariable=self.folder_var, state="readonly").grid(row=1, column=1, sticky="ew", padx=10)
-        ttk.Button(frame, text="Browse...", command=self.browse).grid(row=1, column=2, padx=(0, 10))
+        new = ttk.LabelFrame(frame, text="New project")
+        new.grid(row=0, column=0, sticky="ew", padx=10, pady=(8, 4))
+        new.columnconfigure(1, weight=1)
+        ttk.Label(new, text="Project name:").grid(row=0, column=0, sticky="w", padx=8, pady=6)
+        ttk.Entry(new, textvariable=self.name_var).grid(row=0, column=1, columnspan=2, sticky="ew", padx=8)
+        ttk.Label(new, text="Project folder:").grid(row=1, column=0, sticky="w", padx=8, pady=6)
+        ttk.Entry(new, textvariable=self.folder_var, state="readonly").grid(row=1, column=1, sticky="ew", padx=8)
+        ttk.Button(new, text="Browse...", command=self.browse).grid(row=1, column=2, padx=(0, 8))
+        ttk.Button(new, text="Create project", command=self.on_create).grid(row=2, column=0, sticky="w", padx=8, pady=6)
 
-        buttons = ttk.Frame(frame)
-        buttons.grid(row=2, column=0, columnspan=3, sticky="w", padx=10, pady=8)
-        ttk.Button(buttons, text="Create project", command=self.on_create).pack(side=tk.LEFT, padx=(0, 8))
-        ttk.Button(buttons, text="Open project...", command=self.on_open).pack(side=tk.LEFT)
-        ttk.Label(frame, textvariable=self.summary_var).grid(row=3, column=0, columnspan=3, sticky="w", padx=10)
+        existing = ttk.LabelFrame(frame, text="Existing project")
+        existing.grid(row=1, column=0, sticky="ew", padx=10, pady=4)
+        ttk.Button(existing, text="Open project...", command=self.on_open).pack(side=tk.LEFT, padx=8, pady=6)
+
+        ttk.Label(frame, textvariable=self.summary_var).grid(row=2, column=0, sticky="w", padx=10, pady=8)
 
     def is_complete(self) -> bool:
         return self.wizard.project is not None
@@ -69,7 +73,7 @@ class ProjectStep(Step):
         self._opened(project)
 
     def _opened(self, project: Project) -> None:
-        self.name_var.set(project.name)
-        self.folder_var.set(str(project.folder))
-        self.summary_var.set(f"Project '{project.name}' is open: {len(project.dams)} dam(s).")
+        self.name_var.set("")  # the form above is for the next new project, not for the open one
+        self.folder_var.set("")
+        self.summary_var.set(f"Open project: '{project.name}' in {project.folder} ({len(project.dams)} dam(s)).")
         self.wizard.set_project(project)

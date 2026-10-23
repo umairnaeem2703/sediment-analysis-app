@@ -197,3 +197,45 @@ def test_w_x_02_syncing_the_list_selection_does_not_trigger_endless_refreshes(sh
         top.update()
 
     assert len(calls) == 1
+
+
+def test_w_x_02_reopening_an_identical_project_keeps_later_results(shell):
+    from pathlib import Path
+
+    from src.services.project import Project
+
+    wizard, steps, _ = shell
+    wizard.set_project(Project(Path("region"), "Sakarya"))
+    steps[0].done = steps[1].done = True
+
+    wizard.set_project(Project(Path("region"), "Sakarya"))
+    assert steps[1].done is True
+    assert wizard.notice_var.get() == ""
+
+    wizard.set_project(Project(Path("region"), "Renamed"))
+    assert steps[1].done is False
+    assert "The project changed." in wizard.notice_var.get()
+    assert "Two" in wizard.notice_var.get()
+
+
+def test_w_x_02_invalidation_moves_to_the_changed_step_even_while_busy(shell):
+    wizard, steps, _ = shell
+    steps[0].done = steps[1].done = True
+    wizard.refresh()
+    wizard.go_to(1)
+    wizard.busy = True
+
+    wizard.invalidate_after(0, "Changed.")
+
+    assert wizard.current == 0
+    assert steps[1].frame.winfo_manager() == ""
+
+
+def test_w_x_02_only_the_current_step_is_laid_out(shell):
+    wizard, steps, _ = shell
+    steps[0].done = True
+    wizard.refresh()
+
+    assert [s.frame.winfo_manager() for s in steps] == ["grid", "", ""]
+    wizard.next()
+    assert [s.frame.winfo_manager() for s in steps] == ["", "grid", ""]

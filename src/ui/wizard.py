@@ -44,7 +44,6 @@ class Wizard:
         content.rowconfigure(0, weight=1)
         for step in self.steps:
             step.attach(self, content)
-            step.frame.grid(row=0, column=0, sticky="nsew")
 
         bottom = ttk.Frame(self.frame)
         bottom.grid(row=1, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 10))
@@ -67,12 +66,20 @@ class Wizard:
     def go_to(self, index: int) -> bool:
         if self.busy or not self.can_enter(index):
             return False
+        self._show(index)
+        return True
+
+    def _show(self, index: int) -> None:
+        """Make `index` the visible step. Only its frame is laid out, so hidden steps take no keyboard focus."""
         self.current = index
         self.notice_var.set("")
-        self.steps[index].frame.tkraise()
+        for position, step in enumerate(self.steps):
+            if position == index:
+                step.frame.grid(row=0, column=0, sticky="nsew")
+            else:
+                step.frame.grid_remove()
         self.steps[index].on_show()
         self.refresh()
-        return True
 
     def next(self) -> None:
         if self.steps[self.current].is_complete():
@@ -94,8 +101,12 @@ class Wizard:
     # --- state --------------------------------------------------------------------------------
 
     def set_project(self, project: Project) -> None:
+        unchanged = self.project == project  # re-opening the same project must not discard later results
         self.project = project
-        self.invalidate_after(0, "The project changed.")
+        if unchanged:
+            self.refresh()
+        else:
+            self.invalidate_after(0, "The project changed.")
 
     def invalidate_after(self, index: int, reason: str) -> None:
         """An earlier step changed: clear every later step and say which results were lost (FR-X-04)."""
@@ -104,7 +115,7 @@ class Wizard:
         for step in later:
             step.reset()
         if self.current > index:
-            self.go_to(index)
+            self._show(index)  # not go_to: the user must leave a reset step even while a task is running
         self.notice_var.set(f"{reason} Reset: {', '.join(lost)}." if lost else "")
         self.refresh()
 
