@@ -1,0 +1,7 @@
+{
+  "code_version": "920ce6d-dirty",
+  "inputs": {
+    "master_yield.csv": "ae89dc2ef9fe2cc02ca7f75b4d82bd7a4242be44e134b6b6a4b503b686feb026",
+    "raw_zonal_means.csv": "9c659f486786eeb36d6401f3573c829f3e92ac0c64964e7c2c74a2f124e07c17"
+  }
+}
