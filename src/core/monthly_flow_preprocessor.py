@@ -8,16 +8,13 @@ conserved exactly) and returns daily discharge in the Date/Flow/Water_Year layou
 by TimeSeriesAggregator, which groups by Water_Year when that column is present.
 """
 
-import argparse
 import math
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from src.core.rusle import normalize_header
 from src.core.wilcock import WATER_YEAR_COLUMN
-from src.utils.paths import read_table
 
 HM3_TO_M3 = 1_000_000.0
 SECONDS_PER_DAY = 86_400.0
@@ -115,11 +112,6 @@ class MonthlyFlowPreprocessor:
         monthly = pd.DataFrame(records, columns=[WATER_YEAR_COLUMN, "Year", "Month", "Volume_hm3"])
         return monthly.sort_values(["Year", "Month"], ignore_index=True)
 
-    def load(self, file_path: str) -> pd.DataFrame:
-        if Path(file_path).suffix.lower() != ".csv":
-            raise ValueError(f"Monthly flow input must be a CSV file (got {Path(file_path).name}).")
-        return self.parse_table(read_table(file_path))
-
     def disaggregate(self, monthly: pd.DataFrame) -> pd.DataFrame:
         """Allocate each monthly volume over its days and convert to discharge (m³/s)."""
         if monthly is None or monthly.empty:
@@ -151,16 +143,6 @@ class MonthlyFlowPreprocessor:
             raise ValueError("Disaggregated series contains duplicate dates; check for overlapping water years.")
         return daily
 
-    def run(self, file_path: str) -> pd.DataFrame:
-        return self.disaggregate(self.load(file_path))
-
-    @staticmethod
-    def export_csv(daily: pd.DataFrame, save_path: str) -> pd.DataFrame:
-        out = daily[["Date", "Flow", WATER_YEAR_COLUMN]].copy()
-        out["Date"] = pd.to_datetime(out["Date"]).dt.strftime("%d/%m/%Y")
-        out.to_csv(save_path, index=False, encoding="utf-8-sig")
-        return out
-
 
 def is_monthly_flow_table(df: pd.DataFrame) -> bool:
     """True if the table looks like a DSI monthly table rather than a Date/Flow daily series.
@@ -188,26 +170,3 @@ def prepare_daily_flow(df: pd.DataFrame, sigma: float = DEFAULT_SIGMA, seed: int
         f"with a log-normal split (σ={sigma:g}, seed {seed}); results grouped by water year (Oct–Sep)."
     ]
     return daily, notes
-
-
-def main(argv=None):
-    parser = argparse.ArgumentParser(description="Convert a DSI monthly flow CSV (hm³) to synthetic daily flow (m³/s).")
-    parser.add_argument("input", help="Monthly flow CSV with Yıllar, Ekim..Eylül columns")
-    parser.add_argument("output", help="Destination CSV with Date, Flow, Water_Year columns")
-    parser.add_argument("--sigma", type=float, default=DEFAULT_SIGMA, help="Log-normal sigma (0 = uniform split)")
-    parser.add_argument("--seed", type=int, default=DEFAULT_SEED, help="Base random seed")
-    args = parser.parse_args(argv)
-
-    pre = MonthlyFlowPreprocessor(sigma=args.sigma, seed=args.seed)
-    monthly = pre.load(args.input)
-    daily = pre.disaggregate(monthly)
-    pre.export_csv(daily, args.output)
-
-    total_hm3 = (daily["Flow"] * SECONDS_PER_DAY).sum() / HM3_TO_M3
-    print(f"Wrote {len(daily)} days ({daily['Date'].min():%d/%m/%Y} - {daily['Date'].max():%d/%m/%Y}) to {args.output}")
-    print(f"Total volume: {total_hm3:.2f} hm³ (input {monthly['Volume_hm3'].sum():.2f} hm³)")
-    print("Note: the Water_Year column makes the Wilcock tab group results by water year (Oct–Sep).")
-
-
-if __name__ == "__main__":
-    main()

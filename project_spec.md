@@ -124,7 +124,7 @@ Test IDs follow `<layer>-<milestone>-<nn>`; the layers are `U` unit, `C` input c
 |---|---|---|---|
 | FR-M3-01 | Ingest flow as a daily series or as a DSİ monthly table (D10) | Daily: `Date` or `Tarih` and `Flow`, `Flow Q (m3/s)` or `Debi`. Monthly: detected automatically and converted by the log-normal split with sigma and seed from the wizard. Monthly volumes are conserved exactly, and the result is flagged synthetic. | U-M3-01, C-M3-01, C-M3-02 |
 | FR-M3-02 | Load grain fractions (D36) | `di` (m) and `Fi` required; `Fi` sums to 1 within 0.02. tau_ri is always computed from the formula. A supplied `tau_ri` or `bi` is cross-checked; a difference above 1% adds a warning. | U-M3-02, C-M3-03 |
-| FR-M3-03 | Compute daily transport with the published Wilcock & Crowe function (D35) | W* is continuous at phi = 1.35 (relative jump below 1e-6). Values match hand calculations at phi = 0.5, 1.0, 1.35, 2, 4 and 10. | U-M3-03, U-M3-04 |
+| FR-M3-03 | Compute daily transport with the published Wilcock & Crowe function (D35) | W* is continuous at phi = 1.35 (relative jump below 1e-3; the published coefficients are rounded, so the branches differ by 4.2e-4, D47). Values match hand calculations at phi = 0.5, 1.0, 1.35, 2, 4 and 10. | U-M3-03, U-M3-04 |
 | FR-M3-04 | Summarise by water year when the series carries `Water_Year`, otherwise by calendar year | Group keys, annual mean flow, mean transport, annual volume (m³/yr) and mass (t/yr). Rows with bad dates or flows are dropped with a count in the warnings. Negative flow is an error. | U-M3-05, C-M3-04 |
 | FR-M3-05 | Show and export the results | Table, trend chart (PNG), `bedload.csv` | W-M3-01, P-M3-01 |
 
@@ -312,8 +312,8 @@ Three layers; imports point downward only (D16).
 | Module | Status | Notes |
 |---|---|---|
 | `src/core/rusle.py` | kept | Formulas unchanged (D37). Dead helpers removed (`raster_mean_t_ha_yr`, `to_phase2_handoff`). Gains the `Drainage Area (km2)` alias. |
-| `src/core/wilcock.py` | kept, changed | D35 and D36 fixes. `BedloadVisualizer` and the matplotlib import move to `services/reporting.py`. |
-| `src/core/monthly_flow_preprocessor.py` | kept, trimmed | `load`, `export_csv` and `main` move to services. |
+| `src/core/wilcock.py` | kept, changed | D35 and D36 fixes. `BedloadVisualizer` and the matplotlib import move to `services/reporting.py` (done in M3.1). |
+| `src/core/monthly_flow_preprocessor.py` | kept, trimmed | `load`, `export_csv` and `main` moved to `services/flow_files.py` in M3.1 (`run`, which only called `load`, is gone). |
 | `src/core/reservoir.py` | new | Curve fit, table, inverse, area, plausibility checks |
 | `src/core/projection.py` | new | Accumulation, projection, lifespan |
 | `src/core/integration.py` | moved | From `src/data/reporter.py`, adapted to per-dam and TE |
@@ -479,7 +479,7 @@ Each milestone is a vertical slice: services, wizard step, tests and sign-off. E
 | **M0 Pipeline setup** | Fast-forward local `main` to `origin/main` (it already contains `branch1`), then retire `branch1` and `branch2` (confirm before deleting remote branches). Add ruff and one formatting-only commit with no logic changes. Add the `.gitignore` exceptions. Add the CI workflow and branch protection. Move current tests to `tests/legacy/` and create the new layout with one import smoke test. Create `src/services/`. | CI is green on a pull request; `pytest` runs the new layout only | Done |
 | **M1 Regional data** | Project model, `project.json`, import-copy. Basin and dam-sheet validators, including the `Drainage Area (km2)` alias and cross-checks. Wizard shell with steps 1 to 3. Remove the old tabs, back-compat shims, `src/data/database.py` and dead code. Update the architecture section of `CLAUDE.md`. | FR-M1-* tests pass; the three sample dams load; the app opens to the wizard | Done (steps 1 to 3 and the cut-over; the old UI is tagged `legacy-ui`) |
 | **M2 Suspended** | Suspended service and step 4. Verification workbook for B3.1. Golden outputs for the three dams. | FR-M2-* tests pass; hydrologist signs off the goldens | Done (the hydrologist signed off the workbook; the goldens in `tests/benchmarks/` equal its three sample cases) |
-| **M3 Bedload** | D35 and D36 fixes. Move plotting and file I/O out of core. Bedload service and step 5. Before and after table for the hydrologist. | FR-M3-* tests pass; OI-04 closed | Not started |
+| **M3 Bedload** | D35 and D36 fixes. Move plotting and file I/O out of core. Bedload service and step 5. Before and after table for the hydrologist. | FR-M3-* tests pass; OI-04 closed | In progress: M3.1 (formulas, oracle, core clean-up) is on a branch awaiting hydrologist sign-off; M3.2 (service, step 5, goldens, before and after table) is next |
 | **M4 Reservoir and projection** | `reservoir.py`, `projection.py`, `integration.py`. Steps 6 and 7. Commissioning years and Hmin collected (OI-02). | FR-M4-* tests pass; OI-01, OI-03, OI-05 closed | Not started |
 | **M5 Reporting** | Reporting service and step 8. `run.json` with the app version. Delete `tests/legacy/`. | FR-M5-* tests pass; end-to-end sign-off for the three dams; version 1.0.0 (no build) | Not started |
 
@@ -493,10 +493,10 @@ Each milestone is a vertical slice: services, wizard step, tests and sign-off. E
 | Not a curve | `inputs/bathymetry.csv` had one row per dam; the user has since removed it. `prepare_bathymetry` treats rows as one curve. | Generated per-dam curve (FR-M4-02) | M4 | Open |
 | No accumulation or lifespan | One year's volume is mapped to an elevation (`integration_view.py:194-205`) | FR-M4-03 to FR-M4-05 | M4 | Open |
 | Duplicate elevation columns | `Interpolated_Elevation_m`, `Elevation_m`, `Elevation` (`integration_view.py:199-205`) | One `Elevation_m` | M4 | Open |
-| W* high branch | Missing square root (`src/core/wilcock.py:63, 85`) | D35 | M3 | Open |
-| tau_ri precedence | File column wins (`wilcock.py:106-115`) | D36 | M3 | Open |
-| Plotting in core | matplotlib in `src/core/wilcock.py:5` and `BedloadVisualizer` | `services/reporting.py` | M3 | Open |
-| File I/O in core | `MonthlyFlowPreprocessor.load/export_csv/main` | Services | M3 | Open |
+| W* high branch | Missing square root (`src/core/wilcock.py:63, 85`) | D35 | M3 | Done (M3.1): both code paths, pinned by `tests/unit/test_wilcock_formulas.py` |
+| tau_ri precedence | File column wins (`wilcock.py:106-115`) | D36 | M3 | Done (M3.1): `bi` and `tau_ri` are computed; supplied columns are cross-checked into `FractionalModel.warnings` |
+| Plotting in core | matplotlib in `src/core/wilcock.py:5` and `BedloadVisualizer` | `services/reporting.py` | M3 | Done (M3.1); `tests/unit/test_layering.py` keeps it that way |
+| File I/O in core | `MonthlyFlowPreprocessor.load/export_csv/main` | Services | M3 | Done (M3.1): `services/flow_files.py` |
 | Area header | `find_basin_table_columns` does not match `Drainage Area (km2)`; 9 tests fail since the `inputs/` edits | Alias added (FR-M1-03) | M1 | Done (M1.1) |
 | Dead code | `BasinDatabase` (`src/data/database.py`), `load_raster_matrix` (`src/utils/paths.py:67`), `raster_mean_t_ha_yr` and `to_phase2_handoff` (`rusle.py`), the "Antigravity" docstring (`src/__init__.py`) | Removed | M1 | Done (M1.5) |
 | Back-compat shims | Aliases and properties on `SedimentApp` (`src/ui/app.py:58-178`) | Removed with the old UI | M1 | Done (M1.5) |
@@ -560,3 +560,4 @@ The evidence column describes the code before M1. Files removed in M1.5 can be r
 | D44 | Work-package pull requests are squash-merged once CI is green and every review finding is fixed or declined in the PR description | Branch protection already requires the PR and the `ci` check |
 | D45 | The suspended service writes `suspended.csv` into a folder it is given; step 4 creates no run folder. The file holds a row per sub-basin and a final `Total` row (area, gross mass, yield mass, volume) | The run folder and its naming belong to M5; the total is the number the reviewer reads |
 | D46 | The M2 oracle is a workbook of live formulas for review plus a CSV of the same cases worked out with `math` in `tests/verification/make_suspended_oracle.py`; the unit tests read the CSV. A pull request with new goldens is held until the hydrologist signs them off | No spreadsheet engine was available to store the workbook's results. Evaluating the workbook's formulas separately gave the CSV values exactly. B6 allows goldens only after sign-off |
+| D47 | W* continuity at phi = 1.35 is tested to a relative jump below 1e-3, not 1e-6 | The published Wilcock & Crowe coefficients are rounded: with D35 the branches give 0.018990 and 0.018998 (4.2e-4 apart). 1e-6 cannot be met without changing the published function |

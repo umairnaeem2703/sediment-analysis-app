@@ -11,10 +11,10 @@ Activate the virtualenv if it is not active (`.venv\Scripts\Activate.ps1`), then
 
 ```
 pytest tests/unit tests/contract tests/pipeline -v
-pytest -o addopts="" tests/legacy/test_wilcock.py tests/legacy/test_spatial.py tests/legacy/test_monthly_flow_preprocessor.py -v
+pytest -o addopts="" tests/legacy/test_wilcock.py tests/legacy/test_spatial.py -v
 ```
 
-The first command is the rebuilt suite (`project_spec.md` B6). The second runs the old core suites, which `pytest.ini` skips by default; they stay until their cases are ported (M5 deletes `tests/legacy/`). `tests/legacy/test_monthly_flow_preprocessor.py` is Tk-free and needs no display. It covers the DSI monthly CSV parser, the log-normal daily disaggregation (volume conservation, seeding, leap years), and the hand-off into `TimeSeriesAggregator`. Its `test_is_monthly_flow_table_rejects_daily_series` is known to fail because `inputs/daily_flow_data.csv` was removed; that is a missing fixture, not a numerical failure.
+The first command is the rebuilt suite (`project_spec.md` B6). The second runs the old core suites, which `pytest.ini` skips by default; they stay until their cases are ported (M5 deletes `tests/legacy/`). The monthly flow preprocessor tests moved out of `tests/legacy/` in M3.1: `tests/unit/test_monthly_flow.py` (U-M3-01: the DSI monthly parser, the log-normal daily disaggregation, volume conservation, seeding, leap years, the hand-off into `TimeSeriesAggregator`) and `tests/contract/test_flow_files.py` (C-M3-02: the files on disk and the three sample DSI tables). The Wilcock formulas are checked against `tests/verification/make_bedload_oracle.py` by `tests/unit/test_wilcock_formulas.py`. These are Tk-free and need no display.
 
 Tests under `tests/ui` need a display. If collection fails with an `ImportError`/`ModuleNotFoundError`, or Tk errors such as "Can't find a usable tk.tcl" or "no display", record it as a **missing dependency / environment problem**, name the module or error, and suggest `pip install -r requirements.txt`. Do not treat it as a numerical failure.
 

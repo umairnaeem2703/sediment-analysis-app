@@ -8,10 +8,10 @@ import pytest
 from src.core.wilcock import (
     SECONDS_PER_YEAR,
     WATER_YEAR_COLUMN,
-    BedloadVisualizer,
     FractionalModel,
     TimeSeriesAggregator,
 )
+from src.services.reporting import BedloadVisualizer
 from src.utils.paths import read_table, resource_path
 
 
