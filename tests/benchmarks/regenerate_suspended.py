@@ -23,7 +23,7 @@ def _git(*args: str) -> str:
     return subprocess.run(["git", *args], capture_output=True, text=True, check=True, cwd=ROOT).stdout.strip()
 
 
-def _fingerprint(path: Path) -> str:
+def fingerprint(path: Path) -> str:
     return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
 
 
@@ -40,7 +40,7 @@ def main() -> None:
             shutil.copyfile(written, HERE / f"suspended_{dam.slug}.csv")
     manifest = {
         "code_version": code_version(),
-        "inputs": {path.name: _fingerprint(path) for path in (SAMPLE_BASINS, SAMPLE_ZONAL)},
+        "inputs": {path.name: fingerprint(path) for path in (SAMPLE_BASINS, SAMPLE_ZONAL)},
     }
     (HERE / "suspended_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 

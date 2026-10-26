@@ -8,6 +8,7 @@ from src.services.project import Project
 from src.services.regional_data import RegionalData
 from src.ui.common import run_in_background
 from src.ui.steps.base import Step
+from src.ui.steps.bedload_step import BedloadStep
 from src.ui.steps.dam_step import DamStep
 from src.ui.steps.project_step import ProjectStep
 from src.ui.steps.regional_step import RegionalStep
@@ -162,7 +163,7 @@ class Wizard:
 
 def default_steps() -> List[Step]:
     dam_step = DamStep()
-    return [ProjectStep(), RegionalStep(), dam_step, SuspendedStep(dam_step)]
+    return [ProjectStep(), RegionalStep(), dam_step, SuspendedStep(dam_step), BedloadStep(dam_step)]
 
 
 def main() -> None:
