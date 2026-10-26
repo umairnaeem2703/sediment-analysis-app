@@ -5,7 +5,8 @@ uses the same synthetic daily flow (the DSİ monthly table split with the defaul
 fractions. The columns are the annual bedload in m³/yr by water year:
 
 - `Before`: the code before M3.1. W* has no square root (D35) and tau_ri is the sample file's column (D36).
-- `D36_only`: tau_ri computed from the grain size, W* as before.
+- `D36_only`: tau_ri computed from the grain size, W* as before. The computed values reproduce the file's column to its
+  rounding (D50), so this column differs from `Before` by under 0.01% in the mean (2.3% in the worst single year).
 - `D35_only`: W* with the square root, tau_ri from the file.
 - `After`: both fixes, as computed by `TimeSeriesAggregator` in `src`.
 

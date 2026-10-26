@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from src.core.wilcock import PHI_BREAK, WATER_YEAR_COLUMN, FractionalModel, TimeSeriesAggregator
+from src.utils.paths import read_table, resource_path
 from tests.oracle import bedload_annual, bedload_series, bedload_tau_ri, bedload_transport, bedload_wstar
 
 REL = 1e-9
@@ -12,6 +13,8 @@ SAMPLE = [row for row in bedload_tau_ri() if row["Fi"] != ""]  # the five sample
 COMPUTED_TAU_RI = [row["tau_ri_Pa"] for row in SAMPLE]
 COMPUTED_EXPONENT = [row["b_i"] for row in SAMPLE]
 TRANSPORT = bedload_transport()
+HYDROLOGIST_FILE = read_table(resource_path("inputs", "fractional_parameters.csv"))  # the hydrologist's tau_ri, in Pa
+OFF_COLUMN = [value * 1.5 for value in COMPUTED_TAU_RI]  # a column that disagrees with the formula everywhere
 
 
 def close(expected):
@@ -41,14 +44,31 @@ def test_u_m3_02_tau_ri_and_the_exponent_are_computed_from_the_formula():
     assert model.warnings == []
 
 
+def test_u_m3_02_tau_ri_reproduces_the_hydrologists_sample_file():
+    file_tau_ri = pd.to_numeric(HYDROLOGIST_FILE["tau_ri"]).to_numpy(dtype=float)
+    file_exponent = pd.to_numeric(HYDROLOGIST_FILE["bi"]).to_numpy(dtype=float)
+    model = _model()
+
+    # The file is rounded to 3 significant digits (1.18 for 1.1836), so the match is to its rounding, not to 1e-9.
+    assert [fraction["tau_ri"] for fraction in model.fractions] == pytest.approx(list(file_tau_ri), rel=5e-3)
+    assert [fraction["bi"] for fraction in model.fractions] == pytest.approx(list(file_exponent), abs=5e-4)
+    assert model.warnings == []
+
+
+def test_u_m3_02_the_sample_file_loaded_whole_gives_no_cross_check_warning():
+    model = FractionalModel()
+    model.load_fractional_parameters(HYDROLOGIST_FILE)
+
+    assert model.warnings == []
+    assert [fraction["tau_ri"] for fraction in model.fractions] == close(COMPUTED_TAU_RI)
+
+
 def test_u_m3_02_a_supplied_tau_ri_is_cross_checked_and_never_used():
-    sample_file_column = [1.18, 3.29, 7.46, 14.07, 29.2]  # inputs/fractional_parameters.csv: off by di / D50
-    model = _model(tau_ri=sample_file_column)
+    model = _model(tau_ri=OFF_COLUMN)
 
     assert [fraction["tau_ri"] for fraction in model.fractions] == close(COMPUTED_TAU_RI)
-    assert len(model.warnings) == 4
+    assert len(model.warnings) == len(SAMPLE)
     assert all("tau_ri" in warning for warning in model.warnings)
-    assert not any("20 mm" in warning for warning in model.warnings)  # 7.46 against 7.4555 Pa is within 1%
 
 
 def test_u_m3_02_supplied_values_within_one_percent_give_no_warning():
@@ -158,7 +178,7 @@ def test_u_m3_04_transport_series_matches_the_hand_calculation():
 def test_u_m3_04_a_supplied_tau_ri_does_not_change_the_transport():
     flows = [row["Flow_m3_s"] for row in TRANSPORT]
 
-    with_column = _model(tau_ri=[1.18, 3.29, 7.46, 14.07, 29.2]).compute_transport_series(flows)
+    with_column = _model(tau_ri=OFF_COLUMN).compute_transport_series(flows)
 
     assert list(with_column) == close([row["Qb_m2_s"] for row in TRANSPORT])
 

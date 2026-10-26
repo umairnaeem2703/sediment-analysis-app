@@ -46,7 +46,6 @@ SERIES = [  # (date, flow m3/s): two calendar years, three water years
 ]
 
 TAU_RM_STAR = 0.021 + 0.015 * math.exp(-20 * FS)
-TAU_RM = TAU_RM_STAR * (S - 1) * RHO_W * G * D50
 
 
 def wstar(phi):
@@ -62,7 +61,8 @@ def exponent(di):
 
 
 def tau_ri(di):
-    return TAU_RM * (di / D50) ** exponent(di)
+    """The hydrologist's form (D50): the hiding function scales the Shields number, converted to Pa with di."""
+    return TAU_RM_STAR * (di / D50) ** exponent(di) * (S - 1) * RHO_W * G * di
 
 
 def hydraulics(q):
@@ -153,11 +153,10 @@ def write_workbook():
         constants.append([label, value])
     constants.append(["s = rho_s / rho_w", "=B4/B3"])
     constants.append(["tau_rm* = 0.021 + 0.015 exp(-20 Fs)", "=0.021+0.015*EXP(-20*B9)"])
-    constants.append(["tau_rm = tau_rm* (s-1) rho_w g D50 (Pa)", "=B13*(B12-1)*B3*B2*B8"])
     constants.append(["Mass factor rho_s / 1000 (t/m3)", "=B4/1000"])
     constants.column_dimensions["A"].width = 42
-    g, rho_w, h, bed, n, d50, phi_break, per_year, s, tau_rm, mass = (
-        f"Constants!$B${row}" for row in (2, 3, 5, 6, 7, 8, 10, 11, 12, 14, 15)
+    g, rho_w, h, bed, n, d50, phi_break, per_year, s, tau_rm_star, mass = (
+        f"Constants!$B${row}" for row in (2, 3, 5, 6, 7, 8, 10, 11, 12, 13, 14)
     )
 
     wstar_sheet = book.create_sheet("W star")
@@ -179,12 +178,28 @@ def write_workbook():
     fractions = book.create_sheet("Fractions")
     _bold(
         fractions,
-        ["di (m)", "Fi", "di / D50", "b_i = 0.67 / (1 + exp(1.5 - di/D50))", "tau_ri = tau_rm (di/D50)^b_i (Pa)"],
+        [
+            "di (m)",
+            "Fi",
+            "di / D50",
+            "b_i = 0.67 / (1 + exp(1.5 - di/D50))",
+            "tau_ri* = tau_rm* (di/D50)^b_i",
+            "tau_ri = tau_ri* (s-1) rho_w g di (Pa)",
+        ],
     )
     for row, (di, fi) in enumerate(FRACTIONS + [(d, None) for d in EXTRA_DIAMETERS], start=2):
-        fractions.append([di, fi, f"=A{row}/{d50}", f"=0.67/(1+EXP(1.5-C{row}))", f"={tau_rm}*C{row}^D{row}"])
-    fractions["G1"] = "Rows without Fi only check tau_ri."
-    for column, width in zip("ABCDE", (8, 8, 10, 38, 34)):
+        fractions.append(
+            [
+                di,
+                fi,
+                f"=A{row}/{d50}",
+                f"=0.67/(1+EXP(1.5-C{row}))",
+                f"={tau_rm_star}*C{row}^D{row}",
+                f"=E{row}*({s}-1)*{rho_w}*{g}*A{row}",
+            ]
+        )
+    fractions["H1"] = "Rows without Fi only check tau_ri."
+    for column, width in zip("ABCDEF", (8, 8, 10, 38, 30, 38)):
         fractions.column_dimensions[column].width = width
     first = 2  # the sheet row of the first sample fraction
 
@@ -216,7 +231,7 @@ def write_workbook():
                     f"=A{row}/({bed}*{h})",
                     f"={rho_w}*{g}*{n}^2*D{row}^2/{h}^(1/3)",
                     f"=SQRT(E{row}/{rho_w})",
-                    f"=Fractions!$E${f}",
+                    f"=Fractions!$F${f}",
                     f"=E{row}/G{row}",
                     f"=IF(H{row}<=0,0,IF(H{row}<{phi_break},0.002*H{row}^7.5,14*(1-0.894/SQRT(H{row}))^4.5))",
                     f"=I{row}*C{row}*F{row}^3/(({s}-1)*{g})",
@@ -252,7 +267,7 @@ def write_workbook():
         per_fraction = []
         for k in range(len(FRACTIONS)):
             f = first + k
-            phi = f"E{row}/Fractions!$E${f}"
+            phi = f"E{row}/Fractions!$F${f}"
             per_fraction.append(
                 f"=IF(E{row}<=0,0,IF({phi}<{phi_break},0.002*({phi})^7.5,14*(1-0.894/SQRT({phi}))^4.5))"
                 f"*Fractions!$B${f}*F{row}^3/(({s}-1)*{g})"

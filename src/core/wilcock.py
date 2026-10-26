@@ -93,10 +93,11 @@ class FractionalModel:
         return 0.67 / (1 + math.exp(1.5 - (d_i / self.d50)))
 
     def _reference_stress_for_fraction(self, d_i: float) -> float:
-        """Wilcock & Crowe tau_ri from sand fraction, D50, and grain size d_i."""
+        """tau_ri (Pa) as the hydrologist computes it (D50): the hiding function scales the Shields number,
+        tau_ri* = tau_rm* (d_i / D50)^b_i, which is then converted to a stress with the fraction's own d_i."""
         tau_rm_star = 0.021 + 0.015 * math.exp(-20 * self.f_s)
-        tau_rm = tau_rm_star * (self.s - 1) * self.rho_w * self.g * self.d50
-        return tau_rm * math.pow((d_i / self.d50), self._exponent_for_fraction(d_i))
+        tau_ri_star = tau_rm_star * math.pow((d_i / self.d50), self._exponent_for_fraction(d_i))
+        return tau_ri_star * (self.s - 1) * self.rho_w * self.g * d_i
 
     def load_fractional_parameters(self, df: pd.DataFrame):
         """Load the grain fractions. di and Fi are required. tau_ri and bi are always computed (D36); a supplied
