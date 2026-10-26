@@ -23,7 +23,7 @@ Do this before any edit, as CLAUDE.md asks. If the spec is ambiguous or two appr
 
 ## 3. Get the go-ahead
 
-Stop and wait for the user to approve the plan. Do not start implementing in the same reply. The user may change model or effort first; the pause hook in `.claude/settings.json` also expects this.
+Stop and wait for the user to approve the plan. Do not start implementing in the same reply. The user may change model or effort first.
 
 ## 4. Cut the branch
 
