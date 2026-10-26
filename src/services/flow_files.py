@@ -10,6 +10,7 @@ from pathlib import Path
 import pandas as pd
 
 from src.core.monthly_flow_preprocessor import (
+    DEFAULT_PHI,
     DEFAULT_SEED,
     DEFAULT_SIGMA,
     HM3_TO_M3,
@@ -40,11 +41,12 @@ def main(argv=None):
     parser.add_argument("input", help="Monthly flow CSV with Yıllar, Ekim..Eylül columns")
     parser.add_argument("output", help="Destination CSV with Date, Flow, Water_Year columns")
     parser.add_argument("--sigma", type=float, default=DEFAULT_SIGMA, help="Log-normal sigma (0 = uniform split)")
+    parser.add_argument("--phi", type=float, default=DEFAULT_PHI, help="Lag-1 autocorrelation, 0 to under 1")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED, help="Base random seed")
     args = parser.parse_args(argv)
 
     monthly = load_monthly_flow(args.input)
-    daily = MonthlyFlowPreprocessor(sigma=args.sigma, seed=args.seed).disaggregate(monthly)
+    daily = MonthlyFlowPreprocessor(sigma=args.sigma, seed=args.seed, phi=args.phi).disaggregate(monthly)
     export_daily_csv(daily, args.output)
 
     total_hm3 = (daily["Flow"] * SECONDS_PER_DAY).sum() / HM3_TO_M3

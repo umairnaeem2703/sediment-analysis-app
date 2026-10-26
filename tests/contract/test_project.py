@@ -162,3 +162,18 @@ def test_dam_dataclass_defaults():
     dam = Dam(name="A", slug="a")
     assert dam.trap_efficiency_pct == 100.0
     assert dam.flow == Flow()
+
+
+def test_c_m1_01_phi_round_trips_and_a_project_saved_without_it_opens_with_zero(tmp_path):
+    project = Project.new(tmp_path / "p", "x")
+    dam = project.add_dam("A")
+    dam.flow = Flow(path="inputs/flow/a_flow.csv", sigma=0.4, seed=7, phi=0.7)
+    project.save()
+    assert Project.open(tmp_path / "p").dams[0].flow.phi == 0.7
+
+    file = tmp_path / "p" / "project.json"
+    data = json.loads(file.read_text(encoding="utf-8"))
+    del data["dams"][0]["flow"]["phi"]
+    file.write_text(json.dumps(data), encoding="utf-8")
+
+    assert Project.open(tmp_path / "p").dams[0].flow.phi == 0.0

@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Dict, List, Optional
 
-from src.core.monthly_flow_preprocessor import DEFAULT_SEED, DEFAULT_SIGMA
+from src.core.monthly_flow_preprocessor import DEFAULT_PHI, DEFAULT_SEED, DEFAULT_SIGMA
 from src.core.rusle import to_ascii_turkish
 
 SCHEMA_VERSION = 1
@@ -29,6 +29,7 @@ class Flow:
     path: Optional[str] = None
     sigma: float = DEFAULT_SIGMA
     seed: int = DEFAULT_SEED
+    phi: float = DEFAULT_PHI
 
 
 @dataclass

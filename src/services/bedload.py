@@ -12,7 +12,7 @@ from typing import List, NamedTuple, Tuple
 
 import pandas as pd
 
-from src.core.monthly_flow_preprocessor import is_monthly_flow_table, prepare_daily_flow
+from src.core.monthly_flow_preprocessor import DEFAULT_PHI, is_monthly_flow_table, prepare_daily_flow
 from src.core.rusle import normalize_header
 from src.core.wilcock import FractionalModel, TimeSeriesAggregator
 from src.services.project import Dam, Flow, Project
@@ -63,15 +63,15 @@ def _message(exc: Exception) -> str:
 # --- inputs -----------------------------------------------------------------------------------
 
 
-def load_flow(path, sigma: float, seed: int) -> FlowSeries:
-    """Read a flow file. A DSİ monthly table is split into a synthetic daily series with `sigma` and `seed` (D10); a daily
-    series is returned as read and checked when it is summarised."""
+def load_flow(path, sigma: float, seed: int, phi: float = DEFAULT_PHI) -> FlowSeries:
+    """Read a flow file. A DSİ monthly table is split into a synthetic daily series with `sigma`, `seed` and the lag-1
+    `phi` (D10, D62); a daily series is returned as read and checked when it is summarised."""
     source = Path(path).name
     table = read_input(path)
     if not is_monthly_flow_table(table):
         return FlowSeries(table, False, [])
     try:
-        daily, notes = prepare_daily_flow(table, sigma, seed)
+        daily, notes = prepare_daily_flow(table, sigma, seed, phi)
     except (KeyError, ValueError) as exc:
         raise ValueError(f"{source}: {_message(exc)}") from exc
     return FlowSeries(daily, True, notes)
@@ -119,8 +119,8 @@ def load_fractions(path) -> Loaded:
     return Loaded(frame, [f"{source}: {warning}" for warning in model.warnings])
 
 
-def validate_flow_settings(sigma, seed) -> Tuple[float, int]:
-    """Convert the entered sigma and seed of the monthly split. Raises ValueError listing every problem."""
+def validate_flow_settings(sigma, seed, phi="0") -> Tuple[float, int, float]:
+    """Convert the entered sigma, seed and lag-1 phi of the monthly split. Raises ValueError listing every problem."""
     problems = []
     sigma_value = parse_number(sigma)
     if sigma_value is None or sigma_value < 0:
@@ -128,34 +128,37 @@ def validate_flow_settings(sigma, seed) -> Tuple[float, int]:
     seed_text = cell_text(seed)
     if not re.fullmatch(r"[0-9]+", seed_text):  # ASCII digits only
         problems.append(f"Seed must be a whole number of at least 0, found {quote_cell(seed)}.")
+    phi_value = parse_number(phi)
+    if phi_value is None or not 0 <= phi_value < 1:
+        problems.append(f"Lag-1 phi must be a number from 0 up to, but not including, 1, found {quote_cell(phi)}.")
     if problems:
         raise ValueError("The flow settings are not valid:\n" + "\n".join(f"- {problem}" for problem in problems))
-    return sigma_value, int(seed_text)
+    return sigma_value, int(seed_text), phi_value
 
 
-def apply_flow_settings(project: Project, dam: Dam, sigma, seed) -> bool:
+def apply_flow_settings(project: Project, dam: Dam, sigma, seed, phi="0") -> bool:
     """Validate the entered texts and keep them on the dam if they are all valid and saved. True if they changed."""
-    values = validate_flow_settings(sigma, seed)
-    previous = (dam.flow.sigma, dam.flow.seed)
+    values = validate_flow_settings(sigma, seed, phi)
+    previous = (dam.flow.sigma, dam.flow.seed, dam.flow.phi)
     if values == previous:
         return False
-    dam.flow.sigma, dam.flow.seed = values
+    dam.flow.sigma, dam.flow.seed, dam.flow.phi = values
     try:
         project.save()
     except OSError:
-        dam.flow.sigma, dam.flow.seed = previous
+        dam.flow.sigma, dam.flow.seed, dam.flow.phi = previous
         raise
     return True
 
 
-def import_flow(project: Project, dam: Dam, path, sigma: float, seed: int) -> FlowSeries:
-    """Check a flow file and copy it into the project as the dam's flow, with the sigma and seed to split it with.
+def import_flow(project: Project, dam: Dam, path, sigma: float, seed: int, phi: float = DEFAULT_PHI) -> FlowSeries:
+    """Check a flow file and copy it into the project as the dam's flow, with the sigma, seed and phi to split it with.
     A file that cannot be read, converted or summarised raises and nothing is copied."""
-    series = load_flow(path, sigma, seed)
+    series = load_flow(path, sigma, seed, phi)
     compute_bedload(series, _CHECK_FRACTIONS, Path(path).name)
     relative = project.import_file(path, f"inputs/flow/{dam.slug}_flow{Path(path).suffix.lower()}")
     previous = dam.flow
-    dam.flow = Flow(relative, sigma, seed)
+    dam.flow = Flow(relative, sigma, seed, phi)
     try:
         project.save()
     except OSError:
@@ -217,7 +220,7 @@ def compute_dam_bedload(project: Project, dam: Dam) -> BedloadResult:
     if not fractions_path:
         raise ValueError("No grain fractions file has been chosen.")
     flow_file, fractions_file = project.folder / dam.flow.path, project.folder / fractions_path
-    flow = load_flow(flow_file, dam.flow.sigma, dam.flow.seed)
+    flow = load_flow(flow_file, dam.flow.sigma, dam.flow.seed, dam.flow.phi)
     fractions = load_fractions(fractions_file)
     return compute_bedload(flow, fractions.data, flow_file.name, fractions_file.name)
 

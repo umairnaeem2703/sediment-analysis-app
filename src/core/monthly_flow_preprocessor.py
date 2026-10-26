@@ -3,8 +3,8 @@
 DSI tables give natural inflow as monthly volumes (hm³) per water year. Spreading a
 month evenly over its days flattens flood peaks, and the steep Wilcock & Crowe
 threshold (tau > tau_ri) then yields little or no bedload. This module allocates each
-monthly volume across its days with a mean-one log-normal multiplier (volume is
-conserved exactly) and returns daily discharge in the Date/Flow/Water_Year layout read
+monthly volume across its days with a mean-one log-normal multiplier whose log follows
+an AR(1) chain, so a day depends partly on the day before (volume is conserved exactly) and returns daily discharge in the Date/Flow/Water_Year layout read
 by TimeSeriesAggregator, which groups by Water_Year when that column is present.
 """
 
@@ -20,6 +20,7 @@ HM3_TO_M3 = 1_000_000.0
 SECONDS_PER_DAY = 86_400.0
 DEFAULT_SIGMA = 0.6
 DEFAULT_SEED = 0
+DEFAULT_PHI = 0.0  # lag-1 autocorrelation of the daily log-flow; 0 gives independent days
 
 # Water-year order (Ekim -> Eylül) mapped to calendar month numbers.
 WATER_YEAR_MONTHS = (
@@ -41,13 +42,16 @@ SUMMARY_LABELS = {"top", "ort"}
 
 
 class MonthlyFlowPreprocessor:
-    def __init__(self, sigma: float = DEFAULT_SIGMA, seed: int = DEFAULT_SEED):
+    def __init__(self, sigma: float = DEFAULT_SIGMA, seed: int = DEFAULT_SEED, phi: float = DEFAULT_PHI):
         if not math.isfinite(sigma) or sigma < 0:
             raise ValueError(f"sigma must be a finite number >= 0 (got {sigma}).")
+        if not math.isfinite(phi) or not 0 <= phi < 1:
+            raise ValueError(f"phi must be a number from 0 up to, but not including, 1 (got {phi}).")
         if seed < 0:
             raise ValueError(f"seed must be >= 0 (got {seed}).")
         self.sigma = float(sigma)
         self.seed = int(seed)
+        self.phi = float(phi)
 
     @staticmethod
     def _calendar_year(label: int, month: int) -> int:
@@ -118,6 +122,8 @@ class MonthlyFlowPreprocessor:
             raise ValueError("Monthly volume table is empty.")
 
         mu = -0.5 * self.sigma**2  # gives the multiplier a mean of one
+        innovation = math.sqrt(1.0 - self.phi**2)  # keeps the variance of the standardised log-flow at one
+        previous = None  # (year, month, last z) of the month before, so the chain runs on across month boundaries
         frames = []
         columns = [WATER_YEAR_COLUMN, "Year", "Month", "Volume_hm3"]
         for water_year, year, month, volume_hm3 in monthly[columns].itertuples(index=False):
@@ -126,7 +132,14 @@ class MonthlyFlowPreprocessor:
             n_days = start.days_in_month
             # Seeded by (seed, year, month) so each month is reproducible on its own.
             rng = np.random.default_rng(np.random.SeedSequence([self.seed, year, month]))
-            weights = rng.lognormal(mean=mu, sigma=self.sigma, size=n_days)
+            eps = rng.standard_normal(n_days)
+            follows = previous is not None and previous[0] * 12 + previous[1] + 1 == year * 12 + month
+            z = np.empty(n_days)
+            z[0] = self.phi * previous[2] + innovation * eps[0] if follows else eps[0]
+            for day in range(1, n_days):
+                z[day] = self.phi * z[day - 1] + innovation * eps[day]
+            previous = (year, month, z[-1])
+            weights = np.exp(mu + self.sigma * z)
             daily_m3 = float(volume_hm3) * HM3_TO_M3 * weights / weights.sum()
             frames.append(
                 pd.DataFrame(
@@ -158,15 +171,21 @@ def is_monthly_flow_table(df: pd.DataFrame) -> bool:
     return YEAR_HEADER in names or any(month in names for month, _ in WATER_YEAR_MONTHS)
 
 
-def prepare_daily_flow(df: pd.DataFrame, sigma: float = DEFAULT_SIGMA, seed: int = DEFAULT_SEED):
+def prepare_daily_flow(
+    df: pd.DataFrame, sigma: float = DEFAULT_SIGMA, seed: int = DEFAULT_SEED, phi: float = DEFAULT_PHI
+):
     """Convert a DSI monthly table to daily flow. Returns (daily_df, notes)."""
-    pre = MonthlyFlowPreprocessor(sigma=sigma, seed=seed)
+    pre = MonthlyFlowPreprocessor(sigma=sigma, seed=seed, phi=phi)
     monthly = pre.parse_table(df)
     daily = pre.disaggregate(monthly)
     n_years = monthly[WATER_YEAR_COLUMN].nunique()
     total_hm3 = monthly["Volume_hm3"].sum()
+    if phi == 0:
+        split = f"a log-normal split (σ={sigma:g}, seed {seed})"
+    else:
+        split = f"a log-normal AR(1) split (σ={sigma:g}, φ={phi:g}, seed {seed})"
     notes = [
         f"Converted DSI monthly table ({n_years} water years, total {total_hm3:.2f} hm³) to daily flow "
-        f"with a log-normal split (σ={sigma:g}, seed {seed}); results grouped by water year (Oct–Sep)."
+        f"with {split}; results grouped by water year (Oct–Sep)."
     ]
     return daily, notes

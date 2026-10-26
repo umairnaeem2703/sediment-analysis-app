@@ -494,3 +494,48 @@ def test_c_m3_04_the_csv_holds_the_table_and_nothing_else(tmp_path):
     written = pd.read_csv(path, encoding="utf-8-sig")
     assert list(written.columns) == ["Year", *VALUE_COLUMNS]
     assert list(written["Year"]) == [2000, 2001]
+
+
+def test_c_m3_02_the_lag_1_phi_changes_the_series_keeps_the_volume_and_is_reported(tmp_path):
+    path = _monthly_file(tmp_path)
+
+    independent, persistent = load_flow(path, 0.6, 1), load_flow(path, 0.6, 1, 0.8)
+
+    assert not persistent.daily["Flow"].equals(independent.daily["Flow"])
+    assert persistent.daily["Flow"].sum() == pytest.approx(independent.daily["Flow"].sum(), rel=1e-12)
+    assert "AR(1)" in persistent.notes[0] and "φ=0.8" in persistent.notes[0]
+    assert "AR(1)" not in independent.notes[0]
+
+
+def test_c_m3_02_phi_is_validated_stored_and_reported_as_changed_or_not(project):
+    dam = project.dams[0]
+
+    assert apply_flow_settings(project, dam, "0.6", "0", "0,8") is True
+    assert dam.flow.phi == 0.8 and Project.open(project.folder).dams[0].flow.phi == 0.8
+    assert apply_flow_settings(project, dam, "0.6", "0", " 0.8 ") is False
+    assert validate_flow_settings("0.6", "0") == (0.6, 0, 0.0)
+
+
+@pytest.mark.parametrize("phi", ["-0.1", "1", "1.5", "x", ""])
+def test_c_m3_02_an_invalid_phi_is_refused_naming_the_field_and_changes_nothing(project, phi):
+    dam = project.dams[0]
+
+    with pytest.raises(ValueError, match="Lag-1 phi"):
+        apply_flow_settings(project, dam, "0.9", "5", phi)
+
+    assert (dam.flow.sigma, dam.flow.seed, dam.flow.phi) == (0.6, 0, 0.0)
+
+
+def test_c_m3_02_the_import_and_the_dams_computation_use_the_stored_phi(project, tmp_path):
+    dam = project.dams[0]
+    path = _monthly_file(tmp_path)
+    import_fractions(project, SAMPLE_FRACTIONS)
+    import_flow(project, dam, path, 0.6, 0, 0.0)
+    flat = compute_dam_bedload(project, dam)
+
+    import_flow(project, dam, path, 0.6, 0, 0.8)
+    persistent = compute_dam_bedload(project, dam)
+
+    assert dam.flow.phi == 0.8
+    assert list(persistent.table["Volume_m3_yr"]) != list(flat.table["Volume_m3_yr"])
+    assert "φ=0.8" in persistent.notes[0]
