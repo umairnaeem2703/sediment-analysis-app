@@ -22,12 +22,12 @@ ruff check . && ruff format --check .          # lint and format check
 pytest                                          # the new layout (tests/unit, contract, pipeline, ui); tests/legacy is skipped
 pytest tests/unit/test_smoke.py                 # one file
 pytest tests/unit/test_smoke.py::test_name      # one test
-pytest -o addopts="" tests/legacy               # old core tests, run locally only (4 known failures from removed fixtures)
+pytest -o addopts="" tests/legacy               # old core tests, run locally only (3 known failures from removed fixtures)
 pyinstaller ...                                 # packaging; no spec file is checked in
 python -m tests.benchmarks.regenerate_suspended # rewrite the suspended goldens; merge them only after hydrologist sign-off
 ```
 
-The oracle for the formulas is the hand calculation in `tests/verification/` (`make_suspended_oracle.py` writes the reviewable workbook and the CSV the unit tests read); `tests/benchmarks/` holds the reviewed golden outputs.
+The oracle for the formulas is the hand calculation in `tests/verification/` (`make_suspended_oracle.py` and `make_bedload_oracle.py` each write a reviewable workbook and the CSVs the unit tests read); `tests/benchmarks/` holds the reviewed golden outputs.
 
 Tests that build widgets use the session-scoped `tk_root` fixture in `tests/conftest.py`. Build UI inside a `tk.Toplevel(tk_root)` rather than calling `tk.Tk()` per test, which intermittently fails on Windows ("Can't find a usable tk.tcl"). The tests need a display. Tk delivers generated events only to mapped windows (call `update()` first), and a background thread may call into Tk only while the main thread is inside `mainloop()` (the `run_task` test runs one).
 
@@ -37,12 +37,12 @@ A Windows desktop app (Tkinter) that walks a hydrologist through estimating the 
 
 - **`src/ui`** collects input and shows results; it holds no calculation and no file parsing. `Wizard` owns navigation: a step opens only when every earlier step is complete, and `invalidate_after(index, reason)` resets the later steps and names the results that were lost. Each step is a `Step` subclass in `src/ui/steps/` (`build`, `on_show`, `is_complete`, `reset`). Built so far: 1 Project, 2 Regional data (an editable basin grid that flags invalid cells), 3 Select dam, 4 Suspended sediment (Compute shows a grid per sub-basin and the dam total). Long work goes through `Wizard.run_task`. Shared dialogs and helpers are in `src/ui/common.py`.
 - **`src/services`** is Tk-free. `project.py` is the project folder (`project.json`, and `import_file` which copies every input into `inputs/` and never touches the original). `regional.py` loads and validates the basin table, zonal means and dam sheets; `TableError` carries the cells to flag. `regional_data.py` (`RegionalData`) imports them, applies grid edits and keeps the project's dams in step with the table. `dam_settings.py` validates the step 3 fields. `suspended.py` computes one dam's suspended sediment from its own sub-basin rows and the zonal means (`compute_suspended`) and writes `suspended.csv` into a folder it is given (`write_suspended_csv`); the M5 reporting service will create the run folder.
-- **`src/core`** is pure maths and must stay free of Tkinter. The spec's target is also no matplotlib and no file I/O, which `wilcock.py` and `monthly_flow_preprocessor.py` still break until M3.
+- **`src/core`** is pure maths and must stay free of Tkinter, matplotlib and file I/O; `tests/unit/test_layering.py` checks it.
   - RUSLE (`rusle.py`): `YieldCalculator` and `ZonalMatcher` turn basin/sub-basin tables and zonal statistics into suspended-sediment yield.
-  - Wilcock & Crowe bedload (`wilcock.py`): `FractionalModel` computes shear stress from daily flow (Manning, rectangular channel) and transport per grain-size fraction, vectorised in `compute_transport_series`. `TimeSeriesAggregator` produces annual summaries and `BedloadVisualizer` the plots. `monthly_flow_preprocessor.py` turns DSİ monthly tables into daily flow. The spec moves the plotting and file I/O out of core in M3.
+  - Wilcock & Crowe bedload (`wilcock.py`): `FractionalModel` computes shear stress from daily flow (Manning, rectangular channel) and transport per grain-size fraction, vectorised in `compute_transport_series`. `tau_ri` and `bi` are always computed from the grain size; a supplied column is only cross-checked into `FractionalModel.warnings` (D36). `TimeSeriesAggregator` produces annual summaries. `monthly_flow_preprocessor.py` turns DSİ monthly tables into daily flow; reading and writing those files is `services/flow_files.py`, and `BedloadVisualizer` (the plots) is in `services/reporting.py`.
 - **`src/data/reporter.py`** `IntegrationModule` is the old integration code. Nothing in the wizard uses it; M4 replaces it with `src/core/integration.py`. Wilcock exports are in metric tons/yr and are converted to m³ with `SEDIMENT_DENSITY_KG_M3 = 2650`, which must stay in sync with `FractionalModel.rho_s`.
 
-The bedload, reservoir curve, integration and reporting steps are not built yet (milestones M3 to M5 in `project_spec.md`, which also lists the two planned formula fixes in `wilcock.py`).
+The bedload service and step, the reservoir curve, integration and reporting steps are not built yet (milestones M3 to M5 in `project_spec.md`). The Wilcock & Crowe formula fixes (D35, D36) are in.
 
 ## Things to know
 
