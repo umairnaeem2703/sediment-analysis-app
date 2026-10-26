@@ -49,7 +49,8 @@ def test_u_m3_02_tau_ri_reproduces_the_hydrologists_sample_file():
     file_exponent = pd.to_numeric(HYDROLOGIST_FILE["bi"]).to_numpy(dtype=float)
     model = _model()
 
-    # The file is rounded to 3 significant digits (1.18 for 1.1836), so the match is to its rounding, not to 1e-9.
+    # The file is rounded to 3 significant digits (1.18 for 1.1836; bi to 3 decimals, so 5e-4 is half its last digit),
+    # so the match is to its rounding, not to 1e-9.
     assert [fraction["tau_ri"] for fraction in model.fractions] == pytest.approx(list(file_tau_ri), rel=5e-3)
     assert [fraction["bi"] for fraction in model.fractions] == pytest.approx(list(file_exponent), abs=5e-4)
     assert model.warnings == []
