@@ -1,0 +1,13 @@
+{
+  "code_version": "5e4b9a8",
+  "flow_split": {
+    "sigma": 0.6,
+    "seed": 0
+  },
+  "inputs": {
+    "fractional_parameters.csv": "b4d858122e6a3828230f1d64e026ff57fccb4c9938b1bed4c557517e1b5946b0",
+    "kavsakkaya_flow.csv": "ec0e1f8862356cf29c0268901e6e2d60a4ce6decf8c342500b362abc2a8532a1",
+    "cubuk_1_flow.csv": "33b4add4c607675e476cab6640826d7d56f1366453d4486596e3977d2d2cf8f5",
+    "cubuk_2_flow.csv": "1482db2c55e962084699a2ed7b4d53be4f8060b5293eecfbd4626ab4c43989b0"
+  }
+}
