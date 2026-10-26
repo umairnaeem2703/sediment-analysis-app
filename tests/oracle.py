@@ -45,6 +45,17 @@ def bedload_annual() -> List[dict]:
     return _rows("bedload_annual.csv")
 
 
+def reservoir_cases() -> List[dict]:
+    """The B3.3 fits (Hbed_m, Hmin_given_m, Hmax_m, Hcrest_m, Vactive_hm3, Vmax_hm3, Shape_Class, then Vdead_hm3, m,
+    Hmin_m and Area_Hmax_km2). A blank Hmin_given_m or Shape_Class is the empty string."""
+    return _rows("reservoir_cases.csv")
+
+
+def reservoir_points() -> List[dict]:
+    """The curve of each reservoir case at its bed, Hmin, mid-level, Hmax and crest (Case, Point, H_m, V_hm3, A_km2)."""
+    return _rows("reservoir_points.csv")
+
+
 def suspended_cases() -> Dict[int, dict]:
     """The B3.1 cases by case number: inputs and hand-calculated results as floats, plus the description."""
     with open(VERIFICATION / "suspended_cases.csv", newline="", encoding="utf-8") as handle:

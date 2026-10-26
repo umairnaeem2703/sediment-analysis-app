@@ -5,13 +5,8 @@ from typing import Optional, Tuple
 from src.services.dam_settings import apply_dam_settings
 from src.services.project import Dam
 from src.services.regional import AREA, SLOPE, SUBBASIN
-from src.ui.common import show_error
+from src.ui.common import format_number, show_error
 from src.ui.steps.base import Step
-
-
-def _fmt(value: float) -> str:
-    """A stored number as text without losing digits (100.0 -> '100', 93.456789 -> '93.456789')."""
-    return f"{value:.12g}"
 
 
 class DamStep(Step):
@@ -128,6 +123,12 @@ class DamStep(Step):
         self._show_dam(reload_fields=different)  # choosing the same dam again keeps the typed text
         self.wizard.refresh()
 
+    def set_h_min(self, h_min: Optional[float]) -> None:
+        """Hmin was changed in step 6: show it here too, so this step does not undo it, and keep the dam confirmed."""
+        self.h_min_var.set("" if h_min is None else format_number(h_min))
+        self._confirmed_entries = self._entries()
+        self.wizard.refresh()
+
     def use_dam(self) -> None:
         dam = self.selected
         if dam is None:
@@ -199,8 +200,8 @@ class DamStep(Step):
             self._set_fields(
                 "" if dam.commissioning_year is None else str(dam.commissioning_year),
                 "" if dam.analysis_year is None else str(dam.analysis_year),
-                _fmt(dam.trap_efficiency_pct),
-                "" if dam.h_min_m is None else _fmt(dam.h_min_m),
+                format_number(dam.trap_efficiency_pct),
+                "" if dam.h_min_m is None else format_number(dam.h_min_m),
             )
 
     def _set_fields(self, commissioning: str, analysis: str, efficiency: str, h_min: str) -> None:
