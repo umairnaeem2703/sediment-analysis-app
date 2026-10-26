@@ -5,7 +5,7 @@ from typing import Optional
 
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-from src.core.projection import EXCEEDED, RATE_NAMES, YEAR, Lifespan
+from src.core.projection import EXCEEDED, HORIZON_YEARS, RATE_NAMES, YEAR, Lifespan
 from src.core.wilcock import WATER_YEAR_COLUMN
 from src.services.integration import (
     BEDLOAD_HM3,
@@ -14,6 +14,7 @@ from src.services.integration import (
     TOTAL_HM3,
     IntegrationResult,
     compute_dam_integration,
+    parse_horizon,
 )
 from src.services.reporting import projection_figure
 from src.ui.common import show_error
@@ -45,7 +46,8 @@ PROJECTION_COLUMNS = (
 
 class IntegrationStep(Step):
     """Step 7: the annual totals and elevations of the chosen dam, the sediment accumulated to date, and its projection
-    and lifespan (A5, B3.4). Everything comes from steps 3 to 6, so there is nothing to enter."""
+    and lifespan (A5, B3.4). Everything comes from steps 3 to 6 except the number of years to project (100 by default),
+    which is entered here."""
 
     title = "Integration and projection"
 
@@ -58,10 +60,13 @@ class IntegrationStep(Step):
         self.bedload_step = bedload_step
         self.reservoir_step = reservoir_step
         self.result: Optional[IntegrationResult] = None
+        self._result_years: Optional[str] = None  # the years text when the result was made
         self._canvas: Optional[FigureCanvasTkAgg] = None
 
     def build(self, frame):
         self.dam_var = tk.StringVar()
+        self.years_var = tk.StringVar(value=str(HORIZON_YEARS))
+        self.years_var.trace_add("write", lambda *_: self.wizard.refresh())  # editing it un-completes the step
         self.summary_var = tk.StringVar()
         self.lifespan_var = tk.StringVar()
         self.warning_var = tk.StringVar()
@@ -72,6 +77,8 @@ class IntegrationStep(Step):
         top.grid(row=0, column=0, sticky="ew", padx=10, pady=8)
         ttk.Label(top, textvariable=self.dam_var).pack(side=tk.LEFT)
         ttk.Button(top, text="Compute", command=self.compute).pack(side=tk.RIGHT)
+        ttk.Entry(top, textvariable=self.years_var, width=6).pack(side=tk.RIGHT, padx=(4, 12))
+        ttk.Label(top, text="Years to project:").pack(side=tk.RIGHT)
 
         info = ttk.Frame(frame)
         info.grid(row=1, column=0, sticky="ew", padx=10)
@@ -114,7 +121,8 @@ class IntegrationStep(Step):
     # --- Step contract ------------------------------------------------------------------------
 
     def is_complete(self) -> bool:
-        return self.result is not None
+        """True while a result exists and the years field still shows what it was made with."""
+        return self.result is not None and self.years_var.get().strip() == self._result_years
 
     def on_show(self):
         dam = self.dam_step.chosen
@@ -126,15 +134,20 @@ class IntegrationStep(Step):
     # --- actions ------------------------------------------------------------------------------
 
     def compute(self) -> None:
+        years_text = self.years_var.get().strip()
         try:
             result = compute_dam_integration(
-                self.suspended_step.result, self.bedload_step.result, self.reservoir_step.result, self.dam_step.chosen
+                self.suspended_step.result,
+                self.bedload_step.result,
+                self.reservoir_step.result,
+                self.dam_step.chosen,
+                horizon_years=parse_horizon(years_text),
             )
         except ValueError as exc:
             show_error("Integration and projection", str(exc))
             return
         self._clear_result()
-        self.result = result
+        self.result, self._result_years = result, years_text
         year_heading = "Water year" if result.year_column == WATER_YEAR_COLUMN else "Year"
         self.annual_tree.heading(YEAR_KEY, text=year_heading)
         self._fill(self.annual_tree, result.annual, ANNUAL_COLUMNS)
@@ -175,7 +188,7 @@ class IntegrationStep(Step):
             tree.insert("", "end", values=[format(value, spec) for value, (*_, spec) in zip(row, grid)])
 
     def _clear_result(self) -> None:
-        self.result = None
+        self.result = self._result_years = None
         self.annual_tree.delete(*self.annual_tree.get_children())
         self.projection_tree.delete(*self.projection_tree.get_children())
         for variable in (self.summary_var, self.lifespan_var, self.warning_var):

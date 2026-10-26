@@ -20,6 +20,7 @@ from src.core.projection import (
     Lifespan,
     accumulate,
     annual_rates,
+    check_horizon,
     exceeded_year,
     lifespan,
     project,
@@ -27,6 +28,7 @@ from src.core.projection import (
 from src.core.reservoir import ReservoirCurve
 from src.services.bedload import VOLUME_M3, BedloadResult
 from src.services.project import Dam
+from src.services.regional import parse_number, quote_cell
 from src.services.reservoir import CurveResult
 from src.services.suspended import SuspendedResult
 
@@ -50,7 +52,7 @@ class IntegrationResult(NamedTuple):
     accumulated_elevation_m: float
     exceeded_year: Optional[int]  # the year the cumulative volume reached the dead volume, if it already has
     lifespans: Dict[str, Lifespan]  # by rate
-    projection: pd.DataFrame  # PROJECTION_COLUMNS, from the analysis year to 100 years later
+    projection: pd.DataFrame  # PROJECTION_COLUMNS, from the analysis year to the horizon (100 years by default) later
     commissioning_year: int
     analysis_year: int
     trap_efficiency_pct: float
@@ -63,6 +65,17 @@ class IntegrationResult(NamedTuple):
         return self.annual.columns[0]
 
 
+def parse_horizon(text) -> int:
+    """The projection length in years, as entered in step 7: a whole number of at least 1. Raises ValueError."""
+    years = parse_number(text)
+    if years is None:
+        raise ValueError(f"The number of projection years must be a number, found {quote_cell(text)}.")
+    problems = check_horizon(years)
+    if problems:
+        raise ValueError("\n".join(problems))
+    return int(years)
+
+
 def compute_integration(
     suspended_m3_yr: float,
     bedload: BedloadResult,
@@ -71,9 +84,10 @@ def compute_integration(
     trap_efficiency_pct: float,
     commissioning_year: Optional[int],
     analysis_year: int,
+    horizon_years: int = HORIZON_YEARS,
 ) -> IntegrationResult:
-    """The annual totals and elevations of the record, the accumulation to date, and the projection and lifespan at the
-    mean, minimum and maximum rates (B3.4). A commissioning year is needed."""
+    """The annual totals and elevations of the record, the accumulation to date, and the projection over `horizon_years`
+    and the lifespan at the mean, minimum and maximum rates (B3.4). A commissioning year is needed."""
     if commissioning_year is None:
         raise ValueError(
             "The commissioning year is needed to accumulate the sediment to date: enter it in step 3 (Select dam)."
@@ -98,10 +112,10 @@ def compute_integration(
     rates = annual_rates(totals)
     accumulated_elevation, accumulated_over = sediment_elevations(curve, [accumulation.volume_hm3])
 
-    projection = pd.DataFrame({"Year": analysis_year + np.arange(HORIZON_YEARS + 1)})
+    projection = pd.DataFrame({"Year": analysis_year + np.arange(horizon_years + 1)})
     projected_over = 0
     for name in RATE_NAMES:
-        volumes = project(accumulation.volume_hm3, rates[name], analysis_year)["Cumulative_hm3"]
+        volumes = project(accumulation.volume_hm3, rates[name], analysis_year, horizon_years)["Cumulative_hm3"]
         projected_elevations, count = sediment_elevations(curve, volumes)
         projection[f"Cumulative_{name}_hm3"], projection[f"Elevation_{name}_m"] = volumes, projected_elevations
         projected_over += count
@@ -157,9 +171,10 @@ def compute_dam_integration(
     curve: CurveResult,
     dam: Dam,
     this_year: Optional[int] = None,
+    horizon_years: int = HORIZON_YEARS,
 ) -> IntegrationResult:
     """The dam's integration from its step 4 to 6 results and its step 3 settings. A blank analysis year is `this_year`
-    (the current year when that is not given)."""
+    (the current year when that is not given). The projection runs `horizon_years` past the analysis year."""
     analysis_year = dam.analysis_year or this_year or datetime.date.today().year
     return compute_integration(
         suspended.total_volume_m3,
@@ -168,6 +183,7 @@ def compute_dam_integration(
         trap_efficiency_pct=dam.trap_efficiency_pct,
         commissioning_year=dam.commissioning_year,
         analysis_year=analysis_year,
+        horizon_years=horizon_years,
     )
 
 

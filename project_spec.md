@@ -90,7 +90,7 @@ The main window is a wizard (D17, D18) with a step list on the left and Back/Nex
 | 4 | Suspended (M2) | Presses Compute | Per sub-basin SIO, mass, volume; the dam total |
 | 5 | Bedload (M3) | Picks the flow file (daily or DSİ monthly) and the fractions file | Annual flow and bedload table, trend chart, "synthetic daily flow" flag |
 | 6 | Reservoir curve (M4a) | Confirms or edits the prefilled curve inputs and sets the table's level interval (0.5 m by default) | Curve table and chart, plausibility warnings |
-| 7 | Integration & projection (M4b) | Presses Compute | Annual totals and elevations, accumulation to date, projection and lifespan chart |
+| 7 | Integration & projection (M4b) | Sets the years to project (100 by default) and presses Compute | Annual totals and elevations, accumulation to date, projection and lifespan chart |
 | 8 | Report (M5) | Presses Export | Min and max years; paths of the written files |
 
 ## A6. Functional requirements
@@ -136,7 +136,7 @@ Test IDs follow `<layer>-<milestone>-<nn>`; the layers are `U` unit, `C` input c
 | FR-M4-02 | Generate the curve (D19, B3.3) | The curve passes through (Hbed, 0) and (Hmax, Vmax), and through (Hmin, Vdead) when Hmin is given. The table steps by the level interval the user enters in step 6 (0.5 m by default, above 0) from Hbed to Hcrest, with elevation, volume (hm³) and area (km²). Chart included. | U-M4-02, U-M4-03, C-M4-01, P-M4-01, W-M4-01 |
 | FR-M4-03 | Compute annual totals and sediment elevations (B3.4) | Total = TE x (suspended + bedload). Elevation is read from the curve; volumes above the volume at the crest are limited to Hcrest and warned (D54). | U-M4-04, C-M4-02, P-M4-02, W-M4-02 |
 | FR-M4-04 | Accumulation to date (D12) | Sum of annual totals from the commissioning year up to (not including) the analysis year, using each record year's own total and the mean for years outside the record. Years in the record before commissioning are ignored. Requires a commissioning year. | U-M4-05, C-M4-02 |
-| FR-M4-05 | Projection and lifespan (D20) | Cumulative volume to 100 years at the mean, min-year and max-year rates; lifespan = year the cumulative volume reaches Vdead. "Already exceeded in year X" when accumulation to date is above Vdead. | U-M4-06, U-M4-07, C-M4-02, P-M4-03, W-M4-02 |
+| FR-M4-05 | Projection and lifespan (D20) | Cumulative volume to the number of years the user enters in step 7 (100 by default) at the mean, min-year and max-year rates; lifespan = year the cumulative volume reaches Vdead. "Already exceeded in year X" when accumulation to date is above Vdead. | U-M4-06, U-M4-07, C-M4-02, P-M4-03, W-M4-02 |
 
 ### M5: Final analysis and reporting
 
@@ -577,3 +577,4 @@ The evidence column describes the code before M1. Files removed in M1.5 can be r
 | D58 | `src/data/` and `tests/legacy/test_reporter.py` are removed | Nothing used them after M4.2 and the new modules replace them |
 | D59 | The M4.2 oracle is a workbook with one sheet of live formulas for each of seven cases, plus four CSVs worked out with `math` in `tests/verification/make_integration_oracle.py`. The goldens use placeholder commissioning and analysis years (1990 and 2020, OI-02) | Same method as D46. The real years of the three dams are not known |
 | D60 | The level interval of the table is an input of step 6: a number above 0 m, 0.5 m by default, read with a point or a comma. It sets only the table, its chart and its CSV, and it supersedes the 0.5 m step of D51 (the grid still starts at Hbed and a crest off it closes the table). It is not kept on the dam, and changing it un-completes step 6 without resetting later steps | The user asked to choose the interval. The curve, the integration and the projection do not depend on it, so it is not a model input and does not belong in `project.json` (D52). Step 7 reads the curve, not the table |
+| D61 | The length of the projection is an input of step 7: a whole number of years of at least 1, 100 by default, read with a point or a comma. It sets only the projection table and chart; the accumulation, rates and lifespans do not depend on it and the lifespan is not cut at it (D56). It is not kept on the dam, and changing it un-completes step 7 until Compute | The user asked to choose the horizon instead of the fixed 100 years. It changes no calculated number, so like D60 it is not a model input. There is no upper limit; a very long projection only makes the table longer |

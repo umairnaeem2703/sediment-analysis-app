@@ -4,13 +4,16 @@ Volumes are in hm³ and rates in hm³/yr. The years are the labels of the record
 keeps its label).
 """
 
-from typing import Dict, NamedTuple, Optional
+import math
+from typing import Dict, List, NamedTuple, Optional
 
 import numpy as np
 import pandas as pd
 
 RATE_NAMES = ("Mean", "Min", "Max")
-HORIZON_YEARS = 100  # the projection runs this many years past the analysis year
+HORIZON_YEARS = (
+    100  # the default length of the projection, in years past the analysis year (the user may enter another)
+)
 
 YEAR, EXCEEDED, NOT_REACHED = "year", "exceeded", "not reached"
 
@@ -61,11 +64,21 @@ def exceeded_year(table: pd.DataFrame, dead_vol_hm3: float) -> Optional[int]:
     return int(reached.iloc[0]) if len(reached) else None
 
 
+def check_horizon(years: float) -> List[str]:
+    """The projection length must be a whole number of years, at least 1."""
+    if math.isfinite(years) and years >= 1 and float(years).is_integer():
+        return []
+    return [f"The number of projection years ({years:g}) must be a whole number of at least 1."]
+
+
 def project(
     accumulated_hm3: float, rate_hm3_yr: float, analysis_year: int, horizon: int = HORIZON_YEARS
 ) -> pd.DataFrame:
-    """S(a + k) = S0 + k · r for k = 0 to `horizon`."""
-    k = np.arange(horizon + 1)
+    """S(a + k) = S0 + k · r for k = 0 to `horizon` years (100 by default). Raises ValueError for an invalid horizon."""
+    problems = check_horizon(horizon)
+    if problems:
+        raise ValueError("\n".join(problems))
+    k = np.arange(int(horizon) + 1)
     return pd.DataFrame({"Year": analysis_year + k, "Cumulative_hm3": accumulated_hm3 + k * rate_hm3_yr})
 
 

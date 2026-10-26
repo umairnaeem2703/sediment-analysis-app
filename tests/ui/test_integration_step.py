@@ -182,6 +182,50 @@ def test_w_m4_02_computing_again_replaces_the_tables(app):
     assert len(_rows(step.annual_tree)) == 39 and len(_rows(step.projection_tree)) == 101
 
 
+def test_w_m4_02_the_number_of_years_to_project_starts_at_100(app):
+    wizard, step, _, top = app
+    _reach_step(wizard, top)
+
+    assert step.years_var.get() == "100"
+
+
+def test_w_m4_02_compute_projects_the_entered_number_of_years(app):
+    wizard, step, _, top = app
+    _reach_step(wizard, top)
+    step.years_var.set("30")
+
+    step.compute()
+
+    projection = _rows(step.projection_tree)
+    assert step.is_complete() and len(projection) == 31 and projection[-1][0] == "2050"
+    assert len(_rows(step.annual_tree)) == 39  # the record does not depend on it
+
+
+def test_w_m4_02_an_invalid_number_of_years_is_refused_and_named(app, errors):
+    wizard, step, _, top = app
+    _reach_step(wizard, top)
+    step.years_var.set("0")
+
+    step.compute()
+
+    assert not step.is_complete() and not _rows(step.projection_tree)
+    assert len(errors) == 1 and "projection years" in errors[0][1]
+
+
+def test_w_x_02_editing_the_number_of_years_un_completes_the_step_until_it_is_computed_again(app):
+    wizard, step, _, top = app
+    _reach_step(wizard, top)
+    step.compute()
+
+    step.years_var.set("50")
+
+    assert not step.is_complete()
+    wizard.refresh()
+    assert wizard.next_button.instate(["disabled"])
+    step.compute()
+    assert step.is_complete() and len(_rows(step.projection_tree)) == 51
+
+
 def test_w_m4_02_the_grids_show_the_columns_the_service_returns():
     assert [key for key, *_ in integration_step.ANNUAL_COLUMNS[1:]] == [
         "Suspended_hm3",

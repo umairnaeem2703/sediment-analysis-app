@@ -13,6 +13,7 @@ from src.services.integration import (
     PROJECTION_CSV,
     compute_dam_integration,
     compute_integration,
+    parse_horizon,
     write_integration_csv,
     write_projection_csv,
 )
@@ -120,6 +121,31 @@ def test_c_m4_02_the_projection_matches_the_hand_calculation(number):
         at = result.projection.loc[result.projection["Year"] == int(row["Year"])].iloc[0]
         assert at[f"Cumulative_{row['Rate']}_hm3"] == pytest.approx(row["Cumulative_hm3"], rel=1e-12, abs=1e-15)
         assert at[f"Elevation_{row['Rate']}_m"] == pytest.approx(row["Elevation_m"], rel=1e-12)
+
+
+@pytest.mark.parametrize(("text", "years"), [("100", 100), (" 30 ", 30), ("30.0", 30), ("1", 1)])
+def test_c_m4_02_the_number_of_years_is_read_as_a_whole_number(text, years):
+    assert parse_horizon(text) == years and isinstance(parse_horizon(text), int)
+
+
+@pytest.mark.parametrize("text", ["", "x", "nan", "0", "-10", "2,5", "12.5"])
+def test_c_m4_02_a_number_of_years_that_is_blank_not_a_number_or_not_whole_is_refused(text):
+    with pytest.raises(ValueError, match="projection years"):
+        parse_horizon(text)
+
+
+def test_c_m4_02_the_projection_runs_the_entered_number_of_years_and_nothing_else_changes():
+    default, short = _run(1), _run(1, horizon_years=30)
+
+    assert len(short.projection) == 31 and short.projection["Year"].iloc[-1] == int(_case(1)["Analysis_year"]) + 30
+    pd.testing.assert_frame_equal(short.projection, default.projection.iloc[:31])
+    assert short.lifespans == default.lifespans and short.accumulated_hm3 == default.accumulated_hm3
+    assert len(_run(1, horizon_years=150).projection) == 151
+
+
+def test_c_m4_02_an_invalid_number_of_years_is_refused():
+    with pytest.raises(ValueError, match="projection years"):
+        _run(1, horizon_years=0)
 
 
 def test_c_m4_02_the_year_labels_are_used_as_they_are():

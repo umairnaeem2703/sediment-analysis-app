@@ -13,6 +13,7 @@ from src.core.projection import (
     YEAR,
     accumulate,
     annual_rates,
+    check_horizon,
     exceeded_year,
     lifespan,
     project,
@@ -220,6 +221,27 @@ def test_u_m4_06_the_projection_runs_100_years_from_the_analysis_year_in_a_strai
 
 def test_u_m4_06_no_sediment_gives_a_flat_projection():
     assert set(project(3.0, 0.0, 2020)["Cumulative_hm3"]) == {3.0}
+
+
+def test_u_m4_06_the_projection_runs_the_entered_number_of_years():
+    table = project(10.0, 2.5, 2020, 25)
+
+    assert len(table) == 26 and table["Year"].iloc[-1] == 2045 and table["Cumulative_hm3"].iloc[-1] == 72.5
+    assert list(project(10.0, 2.5, 2020, 1)["Year"]) == [2020, 2021]
+    assert len(project(10.0, 2.5, 2020, 250)) == 251
+    assert project(10.0, 2.5, 2020, 25).equals(project(10.0, 2.5, 2020, 100).iloc[:26])
+
+
+@pytest.mark.parametrize("years", [0, -5, 2.5, float("nan"), float("inf")])
+def test_u_m4_06_the_number_of_years_must_be_a_whole_number_of_at_least_one(years):
+    with pytest.raises(ValueError, match="projection years"):
+        project(10.0, 2.5, 2020, years)
+
+    assert len(check_horizon(years)) == 1
+
+
+def test_u_m4_06_a_whole_number_of_years_has_no_problems():
+    assert check_horizon(1) == [] and check_horizon(100) == [] and check_horizon(30.0) == []
 
 
 # --- U-M4-07: lifespan ------------------------------------------------------------------------
