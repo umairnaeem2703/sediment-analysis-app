@@ -340,3 +340,32 @@ def test_w_m3_01_each_dam_keeps_its_own_flow_file_and_settings(app):
 
 def test_w_m3_01_the_grid_shows_exactly_the_columns_the_service_returns():
     assert [key for key, *_ in bedload_step.GRID_COLUMNS[1:]] == VALUE_COLUMNS
+
+
+def test_w_m3_03_the_lag_1_phi_starts_at_zero_and_is_refused_when_invalid(app, errors):
+    wizard, step, _, top, _ = app
+    _reach_step(wizard, top)
+    _inputs(step)
+    assert step.phi_var.get() == "0"
+
+    step.phi_var.set("1")
+    _compute(wizard, step, top)
+
+    assert not step.is_complete() and errors and "Lag-1 phi" in errors[-1][1]
+
+
+def test_w_x_02_editing_phi_un_completes_the_step_and_computing_stores_it_and_changes_the_result(app):
+    wizard, step, later, top, _ = app
+    _reach_step(wizard, top)
+    _inputs(step)
+    _compute(wizard, step, top)
+    first = list(step.result.table["Volume_m3_yr"])
+    later.done = True
+
+    step.phi_var.set("0.8")
+
+    assert not step.is_complete()
+    _compute(wizard, step, top)
+    assert step.is_complete() and later.done is False
+    assert wizard.project.dams[1].flow.phi == 0.8 and "φ=0.8" in step.flag_var.get()
+    assert list(step.result.table["Volume_m3_yr"]) != first

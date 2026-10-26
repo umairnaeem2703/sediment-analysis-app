@@ -122,7 +122,7 @@ Test IDs follow `<layer>-<milestone>-<nn>`; the layers are `U` unit, `C` input c
 
 | ID | Requirement | Acceptance criteria | Tests |
 |---|---|---|---|
-| FR-M3-01 | Ingest flow as a daily series or as a DSİ monthly table (D10) | Daily: `Date` or `Tarih` and `Flow`, `Flow Q (m3/s)` or `Debi`. Monthly: detected automatically and converted by the log-normal split with sigma and seed from the wizard. Monthly volumes are conserved exactly, and the result is flagged synthetic. | U-M3-01, C-M3-01, C-M3-02 |
+| FR-M3-01 | Ingest flow as a daily series or as a DSİ monthly table (D10) | Daily: `Date` or `Tarih` and `Flow`, `Flow Q (m3/s)` or `Debi`. Monthly: detected automatically and converted by the log-normal split with sigma, lag-1 phi and seed from the wizard (D62). Monthly volumes are conserved exactly, and the result is flagged synthetic. | U-M3-01, C-M3-01, C-M3-02 |
 | FR-M3-02 | Load grain fractions (D36) | `di` (m) and `Fi` required; `Fi` sums to 1 within 0.02. tau_ri is always computed from the formula (D50). A supplied `tau_ri` or `bi` is cross-checked; a difference above 1% adds a warning. The sample file agrees with the formula, so it gives no warning. | U-M3-02, C-M3-03 |
 | FR-M3-03 | Compute daily transport with the published Wilcock & Crowe function (D35) | W* is continuous at phi = 1.35 (relative jump below 1e-3; the published coefficients are rounded, so the branches differ by 4.2e-4, D47). Values match hand calculations at phi = 0.5, 1.0, 1.35, 2, 4 and 10. | U-M3-03, U-M3-04 |
 | FR-M3-04 | Summarise by water year when the series carries `Water_Year`, otherwise by calendar year | Group keys, annual mean flow, mean transport, annual volume (m³/yr) and mass (t/yr). Rows with bad dates or flows are dropped with a count in the warnings. Negative flow is an error. | U-M3-05, C-M3-04 |
@@ -144,7 +144,7 @@ Test IDs follow `<layer>-<milestone>-<nn>`; the layers are `U` unit, `C` input c
 |---|---|---|---|
 | FR-M5-01 | Isolate the minimum and maximum total-volume years | Year, total volume and elevation for each; ties resolve to the earliest year | U-M5-01 |
 | FR-M5-02 | Write the run folder `outputs/<dam-slug>_<YYYYMMDD_HHMM>/` | `results.xlsx` (sheets Inputs, Suspended, Bedload, Annual, Curve, Projection, Extremes, Warnings), PNG charts (bedload trend, annual volume, curve, projection with the Hmin line), one CSV per phase | P-M5-01, P-M5-02 |
-| FR-M5-03 | Write `run.json` | App version, timestamp, dam, every input with its SHA-256, all parameters, sigma and seed, flags, warnings | P-M5-03 |
+| FR-M5-03 | Write `run.json` | App version, timestamp, dam, every input with its SHA-256, all parameters, sigma, phi and seed, flags, warnings | P-M5-03 |
 
 ### Cross-cutting
 
@@ -215,7 +215,7 @@ All inputs are copied into the project (FR-M1-02). Aliases are matched with `nor
       "name": "Çubuk 1",
       "slug": "cubuk_1",
       "sheet": "inputs/dams/cubuk_1.csv",
-      "flow": {"path": "inputs/flow/cubuk_1_flow.csv", "sigma": 0.6, "seed": 0},
+      "flow": {"path": "inputs/flow/cubuk_1_flow.csv", "sigma": 0.6, "seed": 0, "phi": 0},
       "curve": {"bed_elev_m": null, "crest_elev_m": null, "max_elev_m": null, "active_vol_hm3": null, "max_vol_hm3": null},
       "commissioning_year": null,
       "analysis_year": null,
@@ -249,7 +249,7 @@ All inputs are copied into the project (FR-M1-02). Aliases are matched with `nor
 |---|---|---|
 | AL-01 | Suspended sediment uses a deposited bulk density of 1.3 t/m³ and bedload the solid density 2.65 t/m³, and the two volumes are added. Bedload's share of reservoir volume is therefore understated. | D8 |
 | AL-02 | Wilcock hydraulics use a fixed rectangular channel: depth 0.5 m, width 50 m, n 0.05, D50 0.02 m, Fs 0.10, for every dam and every flow. Channel slope is unused. The consultant's constants (g 9.81, ρw 1000, ρs 2650, Fs 10%) are used as given; the d84 of 0.03 m in the same table is used by no formula. | D9 |
-| AL-03 | Monthly DSİ flow is split into days at random (log-normal, sigma 0.6). Bedload depends strongly on sigma. | D10 |
+| AL-03 | Monthly DSİ flow is split into days at random (log-normal, sigma 0.6; optionally with a lag-1 phi, default 0). Bedload depends strongly on sigma and on phi. | D10, D62 |
 | AL-04 | The USDA-SCS SIO coefficient 0.51 is used with area in km². It is conventionally quoted for mi²; the km² equivalent is about 0.566, which would raise SIO by about 11% and suspended yield by about 4%. | D37 |
 | AL-05 | The ÇEM SIO changes by less than 0.1% across the sample slopes, so slope hardly affects it. The slope column is read as m/m. | D11, D23 |
 | AL-06 | Dams are independent. Sediment trapped by an upstream dam is not removed from a downstream dam. | D21 |
@@ -383,6 +383,8 @@ Annual summary (group key `Water_Year` if present, else calendar year):
 - `M_b = V_b · 2.65` (t/yr)
 
 Monthly-to-daily (D10): for each month with volume *V* (hm³) and *d* days, draw weights `w_k ~ LogNormal(-σ²/2, σ)` (mean one) with a generator seeded by `(seed, year, month)`; the daily volume is `V · 10⁶ · w_k / Σw`, and `Q_k = daily_volume / 86,400`. Volume is conserved exactly. `σ = 0` gives an even split.
+
+Lag-1 form (D62): the log-flow follows an AR(1) chain, so a day depends partly on the day before. With `ε` standard normal draws from the same generator, `z_1 = ε_1` at the start of the record and `z_t = φ·z_{t-1} + √(1-φ²)·ε_t` after it, so `z` has variance one for any φ. The weights are `w_t = exp(σ·z_t - σ²/2)`, and the daily volume is `V · 10⁶ · w_t / Σw` as above, which corrects each month to its observed volume. The chain carries over from the last day of one month into the first of the next, and restarts when a month is missing from the table. `0 ≤ φ < 1`; `φ = 0` gives the independent split above.
 
 ### B3.3 Reservoir curve (M4a)
 
@@ -578,3 +580,4 @@ The evidence column describes the code before M1. Files removed in M1.5 can be r
 | D59 | The M4.2 oracle is a workbook with one sheet of live formulas for each of seven cases, plus four CSVs worked out with `math` in `tests/verification/make_integration_oracle.py`. The goldens use placeholder commissioning and analysis years (1990 and 2020, OI-02) | Same method as D46. The real years of the three dams are not known |
 | D60 | The level interval of the table is an input of step 6: a number above 0 m, 0.5 m by default, read with a point or a comma. It sets only the table, its chart and its CSV, and it supersedes the 0.5 m step of D51 (the grid still starts at Hbed and a crest off it closes the table). It is not kept on the dam, and changing it un-completes step 6 without resetting later steps | The user asked to choose the interval. The curve, the integration and the projection do not depend on it, so it is not a model input and does not belong in `project.json` (D52). Step 7 reads the curve, not the table |
 | D61 | The length of the projection is an input of step 7: a whole number of years of at least 1, 100 by default, read with a point or a comma. It sets only the projection table and chart; the accumulation, rates and lifespans do not depend on it and the lifespan is not cut at it (D56). It is not kept on the dam, and changing it un-completes step 7 until Compute | The user asked to choose the horizon instead of the fixed 100 years. It changes no calculated number, so like D60 it is not a model input. There is no upper limit; a very long projection only makes the table longer |
+| D62 | The monthly-to-daily split can carry a lag-1 autocorrelation φ in the log-flow (AR(1)): `0 ≤ φ < 1`, default 0, a setting of step 5 next to sigma and seed and kept on the dam (`flow.phi` in `project.json`; a project saved without it opens with 0). The chain runs on across month boundaries; each month's innovations still come from a generator seeded by `(seed, year, month)`, and every month is rescaled to its observed volume | The user asked for flood waves and dry-spell decay instead of independent daily noise. At φ = 0 the output is identical to the split of D10, so the bedload goldens are unchanged and need no new sign-off; a non-zero default would need them regenerated and signed off |

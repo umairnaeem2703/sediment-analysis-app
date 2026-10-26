@@ -79,3 +79,16 @@ def test_c_m3_02_parses_sample_dam_flow_files(name):
     annual = monthly.groupby(WATER_YEAR_COLUMN)["Volume_hm3"].sum()
     assert len(totals) == 39
     np.testing.assert_allclose(annual.loc[totals.index].to_numpy(), totals.to_numpy(), atol=0.05)
+
+
+def test_c_m3_02_cli_takes_the_lag_1_phi(tmp_path):
+    src = tmp_path / "monthly.csv"
+    dsi_table(sample_values()).to_csv(src, index=False, encoding="utf-8")
+    flat, persistent = tmp_path / "flat.csv", tmp_path / "persistent.csv"
+
+    main([str(src), str(flat), "--seed", "3"])
+    main([str(src), str(persistent), "--seed", "3", "--phi", "0.8"])
+
+    assert not np.allclose(read_table(str(flat))["Flow"], read_table(str(persistent))["Flow"])
+    with pytest.raises(ValueError, match="phi"):
+        main([str(src), str(tmp_path / "bad.csv"), "--phi", "1"])

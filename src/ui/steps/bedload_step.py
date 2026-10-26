@@ -38,7 +38,7 @@ class BedloadStep(Step):
     """Step 5: the bedload of the chosen dam from its flow file and the grain fractions (A5, B3.2).
 
     The flow is a daily series or a DSİ monthly table; a monthly table is split into synthetic daily flow with the
-    entered sigma and seed and the result is flagged. Compute runs off the Tk thread.
+    entered sigma, lag-1 phi and seed and the result is flagged. Compute runs off the Tk thread.
     """
 
     title = "Bedload"
@@ -47,8 +47,10 @@ class BedloadStep(Step):
         super().__init__()
         self.dam_step = dam_step
         self.result: Optional[BedloadResult] = None
-        self._result_entries: Optional[Tuple[str, str]] = None  # sigma and seed as entered when the result was made
-        self._fields_slug: Optional[str] = None  # the dam whose stored sigma and seed the fields were loaded from
+        self._result_entries: Optional[Tuple[str, str, str]] = (
+            None  # sigma, seed and phi as entered when the result was made
+        )
+        self._fields_slug: Optional[str] = None  # the dam whose stored sigma, seed and phi the fields were loaded from
         self._canvas: Optional[FigureCanvasTkAgg] = None
 
     def build(self, frame):
@@ -57,10 +59,11 @@ class BedloadStep(Step):
         self.fractions_var = tk.StringVar()
         self.sigma_var = tk.StringVar()
         self.seed_var = tk.StringVar()
+        self.phi_var = tk.StringVar()
         self.flag_var = tk.StringVar()
         self.summary_var = tk.StringVar()
         self.warning_var = tk.StringVar()
-        for variable in (self.sigma_var, self.seed_var):
+        for variable in (self.sigma_var, self.seed_var, self.phi_var):
             variable.trace_add("write", lambda *_: self.wizard.refresh())  # editing the fields un-completes the step
         frame.columnconfigure(0, weight=1)
         frame.rowconfigure(2, weight=1)
@@ -75,6 +78,8 @@ class BedloadStep(Step):
         split.grid(row=2, column=1, columnspan=2, sticky="w")
         ttk.Label(split, text="DSİ monthly table: split into days with sigma").pack(side=tk.LEFT)
         ttk.Entry(split, textvariable=self.sigma_var, width=6).pack(side=tk.LEFT, padx=4)
+        ttk.Label(split, text="lag-1 phi").pack(side=tk.LEFT)
+        ttk.Entry(split, textvariable=self.phi_var, width=6).pack(side=tk.LEFT, padx=4)
         ttk.Label(split, text="and seed").pack(side=tk.LEFT)
         ttk.Entry(split, textvariable=self.seed_var, width=8).pack(side=tk.LEFT, padx=4)
         ttk.Button(inputs, text="Grain fractions...", command=self.on_choose_fractions).grid(
@@ -117,11 +122,11 @@ class BedloadStep(Step):
 
     # --- Step contract ------------------------------------------------------------------------
 
-    def _entries(self) -> Tuple[str, str]:
-        return self.sigma_var.get().strip(), self.seed_var.get().strip()
+    def _entries(self) -> Tuple[str, str, str]:
+        return self.sigma_var.get().strip(), self.seed_var.get().strip(), self.phi_var.get().strip()
 
     def is_complete(self) -> bool:
-        """True while a result exists and the sigma and seed fields still show what it was made with."""
+        """True while a result exists and the sigma, seed and phi fields still show what it was made with."""
         return self.result is not None and self._entries() == self._result_entries
 
     def on_show(self):
@@ -148,8 +153,8 @@ class BedloadStep(Step):
 
     def use_flow_file(self, path: str) -> None:
         dam, project = self.dam_step.chosen, self.wizard.project
-        try:  # the typed sigma and seed are applied when computing; a daily series does not use them
-            import_flow(project, dam, path, dam.flow.sigma, dam.flow.seed)
+        try:  # the typed sigma, seed and phi are applied when computing; a daily series does not use them
+            import_flow(project, dam, path, dam.flow.sigma, dam.flow.seed, dam.flow.phi)
         except (ValueError, OSError) as exc:
             show_error("Flow file", str(exc))
             return
@@ -170,7 +175,7 @@ class BedloadStep(Step):
             return
         dam, project = self.dam_step.chosen, self.wizard.project
         try:
-            changed = apply_flow_settings(project, dam, self.sigma_var.get(), self.seed_var.get())
+            changed = apply_flow_settings(project, dam, self.sigma_var.get(), self.seed_var.get(), self.phi_var.get())
         except (ValueError, OSError) as exc:
             show_error("Flow settings", str(exc))
             return
@@ -183,7 +188,9 @@ class BedloadStep(Step):
             "Computing bedload...",
         )
 
-    def _computed(self, result: Optional[BedloadResult], error: Optional[Exception], entries: Tuple[str, str]) -> None:
+    def _computed(
+        self, result: Optional[BedloadResult], error: Optional[Exception], entries: Tuple[str, str, str]
+    ) -> None:
         if error is not None:
             show_error("Bedload", str(error))
             if self.result is not None:  # the inputs changed and the old result no longer matches them
@@ -240,4 +247,5 @@ class BedloadStep(Step):
         if dam is not None and reload_fields:
             self.sigma_var.set(f"{dam.flow.sigma:g}")
             self.seed_var.set(str(dam.flow.seed))
+            self.phi_var.set(f"{dam.flow.phi:g}")
             self._fields_slug = dam.slug
