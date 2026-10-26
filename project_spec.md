@@ -123,7 +123,7 @@ Test IDs follow `<layer>-<milestone>-<nn>`; the layers are `U` unit, `C` input c
 | ID | Requirement | Acceptance criteria | Tests |
 |---|---|---|---|
 | FR-M3-01 | Ingest flow as a daily series or as a DSİ monthly table (D10) | Daily: `Date` or `Tarih` and `Flow`, `Flow Q (m3/s)` or `Debi`. Monthly: detected automatically and converted by the log-normal split with sigma and seed from the wizard. Monthly volumes are conserved exactly, and the result is flagged synthetic. | U-M3-01, C-M3-01, C-M3-02 |
-| FR-M3-02 | Load grain fractions (D36) | `di` (m) and `Fi` required; `Fi` sums to 1 within 0.02. tau_ri is always computed from the formula. A supplied `tau_ri` or `bi` is cross-checked; a difference above 1% adds a warning. | U-M3-02, C-M3-03 |
+| FR-M3-02 | Load grain fractions (D36) | `di` (m) and `Fi` required; `Fi` sums to 1 within 0.02. tau_ri is always computed from the formula (D50). A supplied `tau_ri` or `bi` is cross-checked; a difference above 1% adds a warning. The sample file agrees with the formula, so it gives no warning. | U-M3-02, C-M3-03 |
 | FR-M3-03 | Compute daily transport with the published Wilcock & Crowe function (D35) | W* is continuous at phi = 1.35 (relative jump below 1e-3; the published coefficients are rounded, so the branches differ by 4.2e-4, D47). Values match hand calculations at phi = 0.5, 1.0, 1.35, 2, 4 and 10. | U-M3-03, U-M3-04 |
 | FR-M3-04 | Summarise by water year when the series carries `Water_Year`, otherwise by calendar year | Group keys, annual mean flow, mean transport, annual volume (m³/yr) and mass (t/yr). Rows with bad dates or flows are dropped with a count in the warnings. Negative flow is an error. | U-M3-05, C-M3-04 |
 | FR-M3-05 | Show and export the results | Table, trend chart (PNG), `bedload.csv` | W-M3-01, P-M3-01 |
@@ -247,7 +247,7 @@ All inputs are copied into the project (FR-M1-02). Aliases are matched with `nor
 | ID | Limitation | Decision |
 |---|---|---|
 | AL-01 | Suspended sediment uses a deposited bulk density of 1.3 t/m³ and bedload the solid density 2.65 t/m³, and the two volumes are added. Bedload's share of reservoir volume is therefore understated. | D8 |
-| AL-02 | Wilcock hydraulics use a fixed rectangular channel: depth 0.5 m, width 50 m, n 0.05, D50 0.02 m, Fs 0.10, for every dam and every flow. Channel slope is unused. | D9 |
+| AL-02 | Wilcock hydraulics use a fixed rectangular channel: depth 0.5 m, width 50 m, n 0.05, D50 0.02 m, Fs 0.10, for every dam and every flow. Channel slope is unused. The consultant's constants (g 9.81, ρw 1000, ρs 2650, Fs 10%) are used as given; the d84 of 0.03 m in the same table is used by no formula. | D9 |
 | AL-03 | Monthly DSİ flow is split into days at random (log-normal, sigma 0.6). Bedload depends strongly on sigma. | D10 |
 | AL-04 | The USDA-SCS SIO coefficient 0.51 is used with area in km². It is conventionally quoted for mi²; the km² equivalent is about 0.566, which would raise SIO by about 11% and suspended yield by about 4%. | D37 |
 | AL-05 | The ÇEM SIO changes by less than 0.1% across the sample slopes, so slope hardly affects it. The slope column is read as m/m. | D11, D23 |
@@ -264,7 +264,7 @@ All inputs are copied into the project (FR-M1-02). Aliases are matched with `nor
 | OI-01 | Çubuk 2: Hmax - Hbed = 5.3 m for 22.4 hm³ implies a surface of about 8 to 17 km². Confirm that `Bot Elev of River` is the bed at the dam axis. | M4 |
 | OI-02 | Commissioning years and (optionally) Hmin for the three sample dams are missing. | M4 |
 | OI-03 | Convention check: "analysis year" is treated as the first year *not yet* accumulated (so the default, the current year, excludes the incomplete current year). | M4 |
-| OI-04 | Hydrologist review of the bedload before and after D35 and D36. | M3 |
+| OI-04 | Hydrologist review of the bedload before and after D35 and D36, and confirmation of the tau_ri form (D50). | M3 |
 | OI-05 | Hydrologist confirmation of the shape classes (gorge 1.25, hill 2, foothill 3, lake 4) and of the plausibility thresholds in FR-M4-01. | M4 |
 | OI-06 | Independent hand calculations for `tests/verification/` (the spreadsheet is written by the developer, reviewed by the hydrologist). Closed for M2: the hydrologist signed off `suspended_verification.xlsx`. | M2 |
 | OI-07 | The dam sheet is cross-checked against the sum of the dam's sub-basin areas and their area-weighted mean slope (D43). A downstream dam holds the *incremental* catchment in the table (D21) but the total drainage area in its sheet, so its area check will warn. Decide whether to compare against the cumulative upstream area. | M4 |
@@ -354,14 +354,16 @@ For each daily flow *Q* (m³/s), with *Q* = 0 giving zero transport:
 - `τ = ρw · g · n² · v² / h^(1/3)` (Pa)
 - `u* = sqrt(τ / ρw)`
 
-Reference stress per fraction *di* (D36: always computed):
+Reference stress per fraction *di* (D36: always computed; D50: the hydrologist's form):
 
-- `τrm* = 0.021 + 0.015 · exp(-20 · Fs)`
-- `τrm = τrm* · (s - 1) · ρw · g · D50` (7.4555 Pa for the defaults)
+- `τrm* = 0.021 + 0.015 · exp(-20 · Fs)` (0.02303 for Fs = 0.10)
 - `b_i = 0.67 / (1 + exp(1.5 - di / D50))`
-- `τri = τrm · (di / D50)^b_i`
+- `τri* = τrm* · (di / D50)^b_i`
+- `τri = τri* · (s - 1) · ρw · g · di` (Pa)
 
-For the sample fractions (di = 4, 10, 20, 32, 50 mm) τri is 5.918, 6.580, 7.456, 8.796, 11.679 Pa. The sample file's `tau_ri` column (1.18, 3.29, 7.46, 14.07, 29.2) differs by exactly `di / D50`, so it triggers the warning for every fraction except 20 mm.
+For the sample fractions (di = 4, 10, 20, 32, 50 mm) τri* is 0.01828, 0.02033, 0.02303, 0.02717, 0.03608 and τri is 1.184, 3.290, 7.456, 14.073, 29.197 Pa. The sample file's `tau_ri_star` and `tau_ri` columns (1.18, 3.29, 7.46, 14.07, 29.2 Pa) are the same to the file's rounding (at most 0.31%), so it gives no warning.
+
+D50 departs from the printed Wilcock & Crowe (2003) Eqs. 3 and 5. The paper applies the hiding function to the stress in Pa, `τri = τrm · (di / Dsm)^b` with `τrm = τrm* · (s - 1) · ρw · g · Dsm`, which gives 5.918, 6.580, 7.456, 8.796 and 11.679 Pa for the sample. The hydrologist's values are the reference, so the program reproduces them. The hydrologist is asked to confirm the form under OI-04.
 
 Transport:
 
@@ -494,7 +496,7 @@ Each milestone is a vertical slice: services, wizard step, tests and sign-off. E
 | No accumulation or lifespan | One year's volume is mapped to an elevation (`integration_view.py:194-205`) | FR-M4-03 to FR-M4-05 | M4 | Open |
 | Duplicate elevation columns | `Interpolated_Elevation_m`, `Elevation_m`, `Elevation` (`integration_view.py:199-205`) | One `Elevation_m` | M4 | Open |
 | W* high branch | Missing square root (`src/core/wilcock.py:63, 85`) | D35 | M3 | Done (M3.1): both code paths, pinned by `tests/unit/test_wilcock_formulas.py` |
-| tau_ri precedence | File column wins (`wilcock.py:106-115`) | D36 | M3 | Done (M3.1): `bi` and `tau_ri` are computed; supplied columns are cross-checked into `FractionalModel.warnings` |
+| tau_ri precedence | File column wins (`wilcock.py:106-115`) | D36 | M3 | Done (M3.1): `bi` and `tau_ri` are computed, in the hydrologist's form (D50); supplied columns are cross-checked into `FractionalModel.warnings` |
 | Plotting in core | matplotlib in `src/core/wilcock.py:5` and `BedloadVisualizer` | `services/reporting.py` | M3 | Done (M3.1); `tests/unit/test_layering.py` keeps it that way |
 | File I/O in core | `MonthlyFlowPreprocessor.load/export_csv/main` | Services | M3 | Done (M3.1): `services/flow_files.py` |
 | Area header | `find_basin_table_columns` does not match `Drainage Area (km2)`; 9 tests fail since the `inputs/` edits | Alias added (FR-M1-03) | M1 | Done (M1.1) |
@@ -549,7 +551,7 @@ The evidence column describes the code before M1. Files removed in M1.5 can be r
 | D33 | Imports are copied into the project; originals untouched | Portable, auditable project folder |
 | D34 | Spec at the repo root, pointer in `CLAUDE.md` | Found by future sessions |
 | D35 | Fix the missing square root in the W&C high-transport branch | Transcription error: discontinuity at phi = 1.35 and a 3x to 6x overstatement |
-| D36 | tau_ri is always computed; a supplied value is cross-checked | The sample column is off by di / D50 |
+| D36 | tau_ri is always computed; a supplied value is cross-checked | A computed value does not depend on a rounded or hand-edited column, which stays as a check. (Recorded when the sample column looked off by di / D50; D50 shows that was the formula, and the column now agrees) |
 | D37 | Keep `0.51 · A^(-0.11)` with area in km² | Accepted (AL-04) |
 | D38 | A basin table with invalid cells is still imported and shown in the grid with the cells flagged. An unreadable file, missing columns or no data rows is refused and nothing is copied | The grid is where the data is fixed (FR-M1-04); a structural problem cannot be fixed there |
 | D39 | The project's dams follow the basin table: one per dam name, matched by identifier (slug). Settings of dams that stay are kept; dams that leave the table are dropped and named in a notice | One source of truth for which dams exist |
@@ -561,3 +563,4 @@ The evidence column describes the code before M1. Files removed in M1.5 can be r
 | D45 | The suspended service writes `suspended.csv` into a folder it is given; step 4 creates no run folder. The file holds a row per sub-basin and a final `Total` row (area, gross mass, yield mass, volume) | The run folder and its naming belong to M5; the total is the number the reviewer reads |
 | D46 | The M2 oracle is a workbook of live formulas for review plus a CSV of the same cases worked out with `math` in `tests/verification/make_suspended_oracle.py`; the unit tests read the CSV. A pull request with new goldens is held until the hydrologist signs them off | No spreadsheet engine was available to store the workbook's results. Evaluating the workbook's formulas separately gave the CSV values exactly. B6 allows goldens only after sign-off |
 | D47 | W* continuity at phi = 1.35 is tested to a relative jump below 1e-3, not 1e-6 | The published Wilcock & Crowe coefficients are rounded: with D35 the branches give 0.018990 and 0.018998 (4.2e-4 apart). 1e-6 cannot be met without changing the published function |
+| D50 | tau_ri is `τrm* · (di / D50)^b_i · (s - 1) · ρw · g · di`: the hiding function scales the Shields number and each fraction is converted to a stress with its own di. This departs from the printed Wilcock & Crowe Eqs. 3 and 5 | The user decided on 2026-10-26 that the program reproduces the hydrologist's sample `tau_ri`, and this form matches it to the file's rounding (at most 0.31%). The printed form gives 5.9 to 11.7 Pa against the file's 1.18 to 29.2 Pa. With it D36 changes the bedload by under 0.01% and D35 explains the whole drop (B9). Awaiting the hydrologist's confirmation (OI-04) |

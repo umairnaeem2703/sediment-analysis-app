@@ -29,11 +29,11 @@ def test_tau_ri_fallback_uses_wilcock_crowe():
     model.load_fractional_parameters(df_no_tau)
 
     tau_rm_star = 0.021 + 0.015 * math.exp(-20 * model.f_s)
-    tau_rm = tau_rm_star * (model.s - 1) * model.rho_w * model.g * model.d50
     expected = []
     for d_i in df_no_tau["di"]:
         b = 0.67 / (1 + math.exp(1.5 - (d_i / model.d50)))
-        expected.append(tau_rm * math.pow((d_i / model.d50), b))
+        tau_ri_star = tau_rm_star * math.pow((d_i / model.d50), b)
+        expected.append(tau_ri_star * (model.s - 1) * model.rho_w * model.g * d_i)
     np.testing.assert_allclose(model._tau_ri, expected, rtol=1e-12, atol=1e-12)
 
 
