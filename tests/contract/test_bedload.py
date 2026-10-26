@@ -22,9 +22,9 @@ from src.services.bedload import (
 )
 from src.services.project import Project
 from tests.flows import dsi_table, sample_values
-from tests.samples import SAMPLE_FRACTIONS
+from tests.samples import SAMPLE_FRACTIONS, write_fractions_with_wrong_tau_ri
 
-FRACTIONS = load_fractions(SAMPLE_FRACTIONS).data[["di", "Fi"]]  # no supplied tau_ri, so nothing to warn about
+FRACTIONS = load_fractions(SAMPLE_FRACTIONS).data[["di", "Fi"]]  # no tau_ri or bi column, so nothing to cross-check
 GOOD_FRACTIONS = "di,Fi\n0.004,0.1\n0.01,0.2\n0.02,0.35\n0.032,0.25\n0.05,0.1\n"
 
 
@@ -142,12 +142,18 @@ def test_c_m3_02_a_malformed_monthly_table_is_an_error_naming_the_file_and_the_m
 # --- C-M3-03: the grain fractions -------------------------------------------------------------
 
 
-def test_c_m3_03_the_sample_file_loads_and_its_tau_ri_column_is_cross_checked():
+def test_c_m3_03_the_sample_file_loads_and_its_tau_ri_column_agrees_with_the_formula():
     loaded = load_fractions(SAMPLE_FRACTIONS)
 
     assert list(loaded.data["di"]) == [0.004, 0.01, 0.02, 0.032, 0.05]
     assert list(loaded.data.columns) == ["di", "Fi", "bi", "tau_ri"]
-    assert len(loaded.warnings) == 4  # only the 20 mm value agrees with the formula
+    assert loaded.warnings == []  # the hydrologist's tau_ri is the formula's, to the file's rounding (D50)
+
+
+def test_c_m3_03_a_tau_ri_column_that_disagrees_with_the_formula_is_warned_with_the_file(tmp_path):
+    loaded = load_fractions(write_fractions_with_wrong_tau_ri(tmp_path))
+
+    assert len(loaded.warnings) == 5
     assert all(warning.startswith("fractional_parameters.csv: ") and "tau_ri" in warning for warning in loaded.warnings)
 
 
@@ -269,15 +275,15 @@ def test_c_m3_04_summarising_leaves_the_input_table_unchanged():
     pd.testing.assert_frame_equal(frame, before)
 
 
-def test_c_m3_04_the_fractions_warnings_come_with_the_result_and_name_their_file():
+def test_c_m3_04_the_fractions_warnings_come_with_the_result_and_name_their_file(tmp_path):
     result = compute_bedload(
         FlowSeries(_daily(5.0), False, []),
-        load_fractions(SAMPLE_FRACTIONS).data,
+        load_fractions(write_fractions_with_wrong_tau_ri(tmp_path)).data,
         "flow.csv",
         "fractional_parameters.csv",
     )
 
-    assert len(result.warnings) == 4 and all(w.startswith("fractional_parameters.csv: ") for w in result.warnings)
+    assert len(result.warnings) == 5 and all(w.startswith("fractional_parameters.csv: ") for w in result.warnings)
 
 
 # --- the project's copies, settings and the output file ----------------------------------------
@@ -381,12 +387,14 @@ def test_c_m3_02_a_flow_file_that_cannot_be_used_is_refused_and_nothing_is_copie
     assert project.dams[0].flow.path is None and not (project.folder / "inputs" / "flow").exists()
 
 
-def test_c_m3_03_importing_fractions_copies_them_and_returns_the_cross_check(project):
-    loaded = import_fractions(project, SAMPLE_FRACTIONS)
+def test_c_m3_03_importing_fractions_copies_them_and_returns_the_cross_check(project, tmp_path):
+    source = write_fractions_with_wrong_tau_ri(tmp_path)
+
+    loaded = import_fractions(project, source)
 
     assert project.inputs["fractions"] == "inputs/fractions.csv"
-    assert (project.folder / "inputs" / "fractions.csv").read_bytes() == SAMPLE_FRACTIONS.read_bytes()
-    assert len(loaded.warnings) == 4
+    assert (project.folder / "inputs" / "fractions.csv").read_bytes() == source.read_bytes()
+    assert len(loaded.warnings) == 5
     assert Project.open(project.folder).inputs["fractions"] == "inputs/fractions.csv"
 
 
@@ -456,14 +464,14 @@ def test_x_01_missing_fractions_are_an_error_naming_them(project, tmp_path):
 def test_c_m3_04_the_project_copies_are_what_is_computed(project, tmp_path):
     source = _write(tmp_path, "mine.csv", "Date,Flow\n01/01/2000,10\n02/01/2000,20\n")
     import_flow(project, project.dams[0], source, 0.6, 0)
-    import_fractions(project, SAMPLE_FRACTIONS)
+    import_fractions(project, write_fractions_with_wrong_tau_ri(tmp_path))
     source.unlink()  # the project must not depend on the original
 
     result = compute_dam_bedload(project, project.dams[0])
 
     assert result.table[VALUE_COLUMNS[0]].iloc[0] == 15.0
     assert not result.synthetic
-    assert all(
+    assert result.warnings and all(
         warning.startswith("fractions.csv: ") for warning in result.warnings
     )  # the copy's name, not the original's
 

@@ -12,7 +12,7 @@ from src.ui.steps.regional_step import RegionalStep
 from src.ui.steps.suspended_step import SuspendedStep
 from src.ui.wizard import Wizard
 from src.utils.paths import resource_path
-from tests.samples import SAMPLE_BASINS, SAMPLE_FRACTIONS, SAMPLE_ZONAL, sample_flow
+from tests.samples import SAMPLE_BASINS, SAMPLE_FRACTIONS, SAMPLE_ZONAL, sample_flow, write_fractions_with_wrong_tau_ri
 from tests.ui.fakes import FakeStep
 from tests.ui.helpers import wait_until
 
@@ -115,15 +115,26 @@ def test_w_m3_01_compute_fills_the_table_the_chart_and_the_synthetic_flag(app):
     assert not wizard.next_button.instate(["disabled"])
 
 
-def test_w_m3_01_the_fractions_cross_check_is_shown_when_they_are_chosen_and_with_the_result(app, warnings_shown):
+def test_w_m3_01_the_sample_fractions_show_no_warning(app, warnings_shown):
     wizard, step, _, top, _ = app
     _reach_step(wizard, top)
-
     _inputs(step)
+
+    _compute(wizard, step, top)
+
+    assert warnings_shown == [] and step.warning_var.get() == ""
+
+
+def test_w_m3_01_the_fractions_cross_check_is_shown_when_they_are_chosen_and_with_the_result(app, warnings_shown):
+    wizard, step, _, top, tmp_path = app
+    _reach_step(wizard, top)
+    step.use_flow_file(str(sample_flow("cubuk_1")))
+
+    step.use_fractions_file(str(write_fractions_with_wrong_tau_ri(tmp_path)))
 
     assert len(warnings_shown) == 1 and "fractional_parameters.csv" in warnings_shown[0][1]
     _compute(wizard, step, top)
-    assert step.warning_var.get().count("tau_ri") == 4
+    assert step.warning_var.get().count("tau_ri") == 5
 
 
 def test_w_m3_01_the_calculation_runs_off_the_tk_thread(app, monkeypatch):

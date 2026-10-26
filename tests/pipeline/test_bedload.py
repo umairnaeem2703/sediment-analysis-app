@@ -6,8 +6,8 @@ import pandas as pd
 import pytest
 
 from src.core.wilcock import WATER_YEAR_COLUMN
-from src.services.bedload import VALUE_COLUMNS, compute_dam_bedload, write_bedload_csv
-from tests.samples import sample_bedload_inputs
+from src.services.bedload import VALUE_COLUMNS, compute_dam_bedload, import_fractions, write_bedload_csv
+from tests.samples import sample_bedload_inputs, write_fractions_with_wrong_tau_ri
 
 BENCHMARKS = Path(__file__).parents[1] / "benchmarks"
 SAMPLE_DAMS = ["kavsakkaya", "cubuk_1", "cubuk_2"]
@@ -45,9 +45,13 @@ def test_p_m3_01_the_mass_is_the_volume_times_the_density_of_the_sediment(tmp_pa
 
 
 def test_p_m3_01_the_fractions_cross_check_reaches_the_result(tmp_path):
-    result = _result(sample_bedload_inputs(tmp_path / "project"), "cubuk_2")
+    data = sample_bedload_inputs(tmp_path / "project")
+    assert _result(data, "cubuk_2").warnings == []  # the sample agrees with the formula (D50)
 
-    assert len(result.warnings) == 4 and all("fractions.csv" in warning for warning in result.warnings)
+    import_fractions(data.project, write_fractions_with_wrong_tau_ri(tmp_path))
+
+    warnings = _result(data, "cubuk_2").warnings
+    assert len(warnings) == 5 and all("fractions.csv" in warning for warning in warnings)
 
 
 @pytest.mark.parametrize("slug", SAMPLE_DAMS)
