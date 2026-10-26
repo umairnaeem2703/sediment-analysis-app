@@ -10,6 +10,7 @@ from src.ui.common import run_in_background
 from src.ui.steps.base import Step
 from src.ui.steps.bedload_step import BedloadStep
 from src.ui.steps.dam_step import DamStep
+from src.ui.steps.integration_step import IntegrationStep
 from src.ui.steps.project_step import ProjectStep
 from src.ui.steps.regional_step import RegionalStep
 from src.ui.steps.reservoir_step import ReservoirStep
@@ -164,13 +165,15 @@ class Wizard:
 
 def default_steps() -> List[Step]:
     dam_step = DamStep()
+    suspended, bedload, reservoir = SuspendedStep(dam_step), BedloadStep(dam_step), ReservoirStep(dam_step)
     return [
         ProjectStep(),
         RegionalStep(),
         dam_step,
-        SuspendedStep(dam_step),
-        BedloadStep(dam_step),
-        ReservoirStep(dam_step),
+        suspended,
+        bedload,
+        reservoir,
+        IntegrationStep(dam_step, suspended, bedload, reservoir),
     ]
 
 

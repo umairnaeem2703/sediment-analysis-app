@@ -1,0 +1,27 @@
+{
+  "code_version": "3cbc7d3",
+  "placeholder_years": {
+    "commissioning_year": 1990,
+    "analysis_year": 2020
+  },
+  "flow_split": {
+    "sigma": 0.6,
+    "seed": 0
+  },
+  "shape_classes": {
+    "kavsakkaya": "foothill",
+    "cubuk_1": "hill",
+    "cubuk_2": "hill"
+  },
+  "inputs": {
+    "master_yield.csv": "7b8599a2896eaf5dd88f9f2edd725e90531e24245e7eeadf5cfe0cb1da434a0f",
+    "raw_zonal_means.csv": "c9fa8154e53c2b3d3f44d3e84040c485307c115c8f75371513ac3446e80e06f5",
+    "fractional_parameters.csv": "b4d858122e6a3828230f1d64e026ff57fccb4c9938b1bed4c557517e1b5946b0",
+    "kavsakkaya_flow.csv": "ec0e1f8862356cf29c0268901e6e2d60a4ce6decf8c342500b362abc2a8532a1",
+    "kavsakkaya_bathymetry.csv": "5d4ccfbed3648371d159a65f7b7a80b97c8f85974d83852085d6a940437c6483",
+    "cubuk_1_flow.csv": "33b4add4c607675e476cab6640826d7d56f1366453d4486596e3977d2d2cf8f5",
+    "cubuk_1_bathymetry.csv": "c53318ef3d1edc62027a0e844f4e36d5f126cefebf4eb11105b2c3b1f21febd8",
+    "cubuk_2_flow.csv": "1482db2c55e962084699a2ed7b4d53be4f8060b5293eecfbd4626ab4c43989b0",
+    "cubuk_2_bathymetry.csv": "e81e4f86d02d20f94e24be19c3af77fe008ec4acc07ef0105d3a49a4a29b3394"
+  }
+}

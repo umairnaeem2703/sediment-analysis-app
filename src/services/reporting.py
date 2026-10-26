@@ -9,9 +9,11 @@ from pathlib import Path
 import pandas as pd
 from matplotlib.figure import Figure
 
+from src.core.projection import RATE_NAMES, YEAR
 from src.core.reservoir import AREA_KM2, ELEVATION_M, VOLUME_HM3
 from src.core.wilcock import WATER_YEAR_COLUMN
 from src.services.bedload import FLOW_M3_S, MASS_T
+from src.services.integration import IntegrationResult
 from src.services.reservoir import CurveResult
 
 TREND_PNG = "bedload_trend.png"
@@ -71,6 +73,37 @@ def reservoir_curve_figure(result: CurveResult) -> Figure:
     lines = [volume_line, area_line, h_min_line, h_max_line]
     volume_axis.legend(lines, [line.get_label() for line in lines], loc="upper left")
     volume_axis.set_title("Reservoir Elevation-Volume Curve", fontweight="bold", pad=15)
+    return figure
+
+
+def projection_figure(result: IntegrationResult) -> Figure:
+    """The cumulative sediment volume against the year at the three rates, with the dead volume (Hmin) marked."""
+    figure = Figure(figsize=(10, 6), layout="tight")
+    axis = figure.subplots()
+    history = result.accumulation
+    if not history.empty:  # the volume at the end of each year, which is the volume at the start of the next
+        years = [result.commissioning_year, *(history["Year"] + 1)]
+        axis.plot(years, [0.0, *history["Cumulative_hm3"]], color="gray", label="Accumulated to date")
+    colors = {"Mean": "blue", "Min": "green", "Max": "red"}
+    for name in RATE_NAMES:
+        label = f"{name} rate ({result.rates[name]:,.2f} hm³/yr)"
+        axis.plot(
+            result.projection["Year"], result.projection[f"Cumulative_{name}_hm3"], color=colors[name], label=label
+        )
+        reached = result.lifespans[name]
+        if reached.status == YEAR and reached.year <= result.projection["Year"].iloc[-1]:
+            axis.plot(reached.year, result.dead_vol_hm3, color=colors[name], marker="o")
+    axis.axhline(
+        result.dead_vol_hm3,
+        color="black",
+        linestyle="--",
+        label=f"Dead volume ({result.dead_vol_hm3:,.2f} hm³, Hmin {result.h_min_m:.2f} m)",
+    )
+    axis.set_xlabel("Year", fontweight="bold")
+    axis.set_ylabel("Cumulative sediment (hm³)", fontweight="bold")
+    axis.grid(True, linestyle="--", alpha=0.6)
+    axis.legend(loc="upper left")
+    axis.set_title("Sediment Accumulation and Lifespan", fontweight="bold", pad=15)
     return figure
 
 

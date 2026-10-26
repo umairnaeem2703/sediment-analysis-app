@@ -15,6 +15,9 @@ SAMPLE_BASINS = resource_path("inputs", "master_yield.csv")
 SAMPLE_ZONAL = resource_path("inputs", "raw_zonal_means.csv")
 SAMPLE_FRACTIONS = resource_path("inputs", "fractional_parameters.csv")
 SAMPLE_SHAPE_CLASSES = {"kavsakkaya": "foothill", "cubuk_1": "hill", "cubuk_2": "hill"}
+# Placeholders, not the dams' real years (OI-02): the integration goldens depend on them and are regenerated with the
+# real years before they are signed off. The analysis year is fixed so that the goldens do not move with the date.
+SAMPLE_COMMISSIONING_YEAR, SAMPLE_ANALYSIS_YEAR = 1990, 2020
 
 
 def sample_regional(folder) -> RegionalData:
@@ -52,14 +55,18 @@ def sample_sheet(slug: str):
     return resource_path("inputs", "bathymetry", f"{slug}_bathymetry.csv")
 
 
-def sample_curve_inputs(folder) -> RegionalData:
-    """`sample_regional` plus each dam's sheet and the shape class of its worked example in B3.3 (no Hmin)."""
-    data = sample_regional(folder)
+def _add_curves(data: RegionalData) -> RegionalData:
+    """Each dam's sheet and the shape class of its worked example in B3.3 (no Hmin)."""
     data.import_dam_sheets([str(sample_sheet(dam.slug)) for dam in data.project.dams])
     for dam in data.project.dams:
         dam.shape_class = SAMPLE_SHAPE_CLASSES[dam.slug]
     data.project.save()
     return data
+
+
+def sample_curve_inputs(folder) -> RegionalData:
+    """`sample_regional` plus each dam's sheet and shape class."""
+    return _add_curves(sample_regional(folder))
 
 
 def sample_bedload_inputs(folder) -> RegionalData:
@@ -68,4 +75,13 @@ def sample_bedload_inputs(folder) -> RegionalData:
     import_fractions(data.project, SAMPLE_FRACTIONS)
     for dam in data.project.dams:
         import_flow(data.project, dam, sample_flow(dam.slug), DEFAULT_SIGMA, DEFAULT_SEED)
+    return data
+
+
+def sample_integration_inputs(folder) -> RegionalData:
+    """`sample_bedload_inputs` plus each dam's sheet and shape class, and the placeholder years of the three dams."""
+    data = _add_curves(sample_bedload_inputs(folder))
+    for dam in data.project.dams:
+        dam.commissioning_year, dam.analysis_year = SAMPLE_COMMISSIONING_YEAR, SAMPLE_ANALYSIS_YEAR
+    data.project.save()
     return data

@@ -56,6 +56,28 @@ def reservoir_points() -> List[dict]:
     return _rows("reservoir_points.csv")
 
 
+def integration_cases() -> List[dict]:
+    """The B3.4 cases: the reservoir (Hbed_m ... Vmax_hm3, m, Vdead_hm3, Vcrest_hm3, Hmin_m), the inputs (Suspended_m3_yr,
+    TE_pct, Commissioning_year, Analysis_year) and the results (the three rates, S0_hm3, S0_Elevation_m, Exceeded_Year,
+    and Lifespan_Mean, Lifespan_Min and Lifespan_Max, which are a year, 'exceeded' or 'not reached')."""
+    return _rows("integration_cases.csv")
+
+
+def integration_record() -> List[dict]:
+    """The record years of each integration case (Case, Year, Bedload_m3_yr, Total_hm3, Elevation_m)."""
+    return _rows("integration_record.csv")
+
+
+def integration_accumulation() -> List[dict]:
+    """The accumulation to date year by year (Case, Year, In_Record, Total_Used_hm3, Cumulative_hm3)."""
+    return _rows("integration_accumulation.csv")
+
+
+def integration_projection() -> List[dict]:
+    """The projection at 0, 1, 10, 50 and 100 years (Case, Rate, K, Year, Cumulative_hm3, Elevation_m)."""
+    return _rows("integration_projection.csv")
+
+
 def suspended_cases() -> Dict[int, dict]:
     """The B3.1 cases by case number: inputs and hand-calculated results as floats, plus the description."""
     with open(VERIFICATION / "suspended_cases.csv", newline="", encoding="utf-8") as handle:
