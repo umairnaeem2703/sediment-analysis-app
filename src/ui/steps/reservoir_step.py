@@ -5,7 +5,7 @@ from typing import Optional, Tuple
 
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-from src.core.reservoir import AREA_KM2, ELEVATION_M, SHAPE_CLASSES, VOLUME_HM3
+from src.core.reservoir import AREA_KM2, ELEVATION_M, SHAPE_CLASSES, STEP_M, VOLUME_HM3
 from src.services.reporting import reservoir_curve_figure
 from src.services.reservoir import (
     FIELDS,
@@ -13,6 +13,7 @@ from src.services.reservoir import (
     apply_curve_settings,
     compute_curve,
     curve_inputs,
+    parse_table_step,
     sheet_differences,
 )
 from src.ui.common import format_number, show_error
@@ -31,7 +32,8 @@ class ReservoirStep(Step):
     """Step 6: confirm or edit the inputs of the chosen dam's reservoir curve and generate it (A5, B3.3).
 
     The inputs are prefilled from the dam sheet. Hmin is the dam's own setting from step 3, and the shape class fixes
-    the curve when Hmin is blank. An input that differs from the sheet is kept on the dam and listed.
+    the curve when Hmin is blank. An input that differs from the sheet is kept on the dam and listed. The level interval
+    of the table (0.5 m by default) only sets the table and its chart; it is not kept on the dam.
     """
 
     title = "Reservoir curve"
@@ -53,6 +55,7 @@ class ReservoirStep(Step):
         self.active_var = tk.StringVar()
         self.max_vol_var = tk.StringVar()
         self.shape_var = tk.StringVar()
+        self.step_var = tk.StringVar(value=format_number(STEP_M))
         self.edits_var = tk.StringVar()
         self.summary_var = tk.StringVar()
         self.warning_var = tk.StringVar()
@@ -62,7 +65,7 @@ class ReservoirStep(Step):
                 (self.bed_var, self.h_min_var, self.max_elev_var, self.crest_var, self.active_var, self.max_vol_var),
             )
         )
-        for variable in (*self._input_vars.values(), self.shape_var):
+        for variable in (*self._input_vars.values(), self.shape_var, self.step_var):
             variable.trace_add("write", lambda *_: self.wizard.refresh())  # editing the fields un-completes the step
         frame.columnconfigure(0, weight=1)
         frame.rowconfigure(2, weight=1)
@@ -86,8 +89,10 @@ class ReservoirStep(Step):
             inputs, textvariable=self.shape_var, values=list(SHAPE_CLASSES), state="readonly", width=10
         )
         self.shape_box.grid(row=4, column=1, sticky="w", pady=2)
+        ttk.Label(inputs, text="Level interval of the table (m):").grid(row=4, column=2, sticky="w", padx=6)
+        ttk.Entry(inputs, textvariable=self.step_var, width=12).grid(row=4, column=3, sticky="w", pady=2)
         ttk.Button(inputs, text="Generate curve", command=self.generate).grid(
-            row=4, column=2, columnspan=2, sticky="w", padx=6, pady=6
+            row=5, column=0, columnspan=2, sticky="w", padx=6, pady=6
         )
 
         info = ttk.Frame(frame)
@@ -125,7 +130,8 @@ class ReservoirStep(Step):
     # --- Step contract ------------------------------------------------------------------------
 
     def _entries(self) -> Tuple[str, ...]:
-        return tuple(variable.get().strip() for variable in (*self._input_vars.values(), self.shape_var))
+        """The texts of the curve inputs, the shape class and the level interval, in that order."""
+        return tuple(variable.get().strip() for variable in (*self._input_vars.values(), self.shape_var, self.step_var))
 
     def is_complete(self) -> bool:
         """True while a curve exists and the fields still show what it was made with."""
@@ -145,10 +151,12 @@ class ReservoirStep(Step):
 
     def generate(self) -> None:
         dam, project = self.dam_step.chosen, self.wizard.project
+        *curve_texts, step_text = self._entries()
         try:
             sheet = self.wizard.regional.dam_sheet(dam).data
-            changed = apply_curve_settings(project, dam, sheet, **dict(zip((*FIELDS, "shape_class"), self._entries())))
-            result = compute_curve(curve_inputs(sheet, dam), sheet.drainage_area_km2)
+            step_m = parse_table_step(step_text)  # refused before anything is kept on the dam
+            changed = apply_curve_settings(project, dam, sheet, **dict(zip((*FIELDS, "shape_class"), curve_texts)))
+            result = compute_curve(curve_inputs(sheet, dam), sheet.drainage_area_km2, step_m)
         except (ValueError, OSError) as exc:
             show_error("Reservoir curve", str(exc))
             return

@@ -5,7 +5,7 @@ import math
 import numpy as np
 import pytest
 
-from src.core.reservoir import SHAPE_CLASSES, check_inputs, curve_table, curve_warnings, fit_curve
+from src.core.reservoir import SHAPE_CLASSES, check_inputs, check_step, curve_table, curve_warnings, fit_curve
 from tests.oracle import reservoir_cases, reservoir_points
 
 CASES = reservoir_cases()
@@ -283,3 +283,40 @@ def test_u_m4_03_the_table_rises_to_the_crest():
 
     assert table["Volume_hm3"].is_monotonic_increasing and table["Area_km2"].is_monotonic_increasing
     assert table["Volume_hm3"].iloc[-1] > 22.4  # the curve goes on above Hmax up to the crest
+
+
+def test_u_m4_03_the_table_steps_by_the_entered_interval():
+    curve = _fit(1)  # 1063 m to 1124 m: 244 steps of 0.25 m
+
+    table = curve_table(curve, 0.25)
+
+    assert len(table) == 245
+    assert table["Elevation_m"].iloc[0] == 1063.0 and table["Elevation_m"].iloc[-1] == 1124.0
+    assert np.allclose(np.diff(table["Elevation_m"]), 0.25)
+    assert table["Volume_hm3"].iloc[100] == pytest.approx(curve.volume(1063.0 + 100 * 0.25), rel=1e-12)
+
+
+def test_u_m4_03_an_interval_off_the_crest_closes_the_table_at_the_crest():
+    table = curve_table(_fit(2), 0.3)  # 888 m to 908.6 m: the last step is 908.4 m, then the crest
+
+    elevations = table["Elevation_m"]
+    assert len(table) == 70
+    assert elevations.iloc[-2] == pytest.approx(908.4) and elevations.iloc[-1] == 908.6
+
+
+def test_u_m4_03_an_interval_longer_than_the_depth_gives_the_bed_and_the_crest_only():
+    table = curve_table(_fit(1), 100.0)
+
+    assert list(table["Elevation_m"]) == [1063.0, 1124.0]
+
+
+@pytest.mark.parametrize("step", [0.0, -0.5, float("nan"), float("inf")])
+def test_u_m4_03_an_interval_must_be_a_finite_number_above_zero(step):
+    with pytest.raises(ValueError, match="level interval"):
+        curve_table(_fit(1), step)
+
+    assert len(check_step(step)) == 1
+
+
+def test_u_m4_03_a_positive_finite_interval_has_no_problems():
+    assert check_step(0.25) == [] and check_step(0.5) == []

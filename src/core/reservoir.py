@@ -15,7 +15,7 @@ import pandas as pd
 SHAPE_CLASSES = {"gorge": 1.25, "hill": 2.0, "foothill": 3.0, "lake": 4.0}
 EXPONENT_RANGE = (1.0, 4.5)  # a fitted m outside this is implausible (FR-M4-01)
 MIN_DEPTH_M = 10.0  # Hmax - Hbed below this leaves the curve poorly constrained
-STEP_M = 0.5  # the table's level step
+STEP_M = 0.5  # the table's default level step (the user may enter another, FR-M4-02)
 
 ELEVATION_M, VOLUME_HM3, AREA_KM2 = "Elevation_m", "Volume_hm3", "Area_km2"
 
@@ -109,6 +109,13 @@ def check_shape(h_min_m: Optional[float], shape_class: Optional[str]) -> List[st
     return []
 
 
+def check_step(step_m: float) -> List[str]:
+    """The level interval of the table must be a finite number above 0."""
+    if math.isfinite(step_m) and step_m > 0:
+        return []
+    return [f"The level interval ({step_m:g} m) must be a number above 0."]
+
+
 def fit_curve(
     *,
     bed_elev_m: float,
@@ -159,10 +166,14 @@ def curve_warnings(curve: ReservoirCurve, drainage_area_km2: Optional[float] = N
     return warnings
 
 
-def curve_table(curve: ReservoirCurve) -> pd.DataFrame:
-    """Level, volume and surface area every 0.5 m from the bed to the crest; a crest off that grid closes the table."""
-    steps = int((curve.crest_elev_m - curve.bed_elev_m) / STEP_M + 1e-9)
-    levels = curve.bed_elev_m + STEP_M * np.arange(steps + 1)
+def curve_table(curve: ReservoirCurve, step_m: float = STEP_M) -> pd.DataFrame:
+    """Level, volume and surface area every `step_m` (0.5 m by default) from the bed to the crest; a crest off that grid
+    closes the table."""
+    problems = check_step(step_m)
+    if problems:
+        raise ValueError("\n".join(problems))
+    steps = int((curve.crest_elev_m - curve.bed_elev_m) / step_m + 1e-9)
+    levels = curve.bed_elev_m + step_m * np.arange(steps + 1)
     if curve.crest_elev_m - levels[-1] > 1e-9:
         levels = np.append(levels, curve.crest_elev_m)
     return pd.DataFrame({ELEVATION_M: levels, VOLUME_HM3: curve.volume(levels), AREA_KM2: curve.area(levels)})

@@ -283,3 +283,52 @@ def test_w_m4_01_going_back_and_forth_keeps_what_was_typed(app):
 
 def test_w_m4_01_the_grid_shows_the_columns_of_the_curve_table():
     assert [key for key, *_ in reservoir_step.GRID_COLUMNS] == ["Elevation_m", "Volume_hm3", "Area_km2"]
+
+
+def test_w_m4_01_the_level_interval_is_offered_and_starts_at_half_a_metre(app):
+    wizard, step, _, _ = app
+    _reach_step(wizard)
+
+    assert step.step_var.get() == "0.5"
+
+
+def test_w_m4_01_generate_makes_the_table_at_the_entered_level_interval(app):
+    wizard, step, _, _ = app
+    _reach_step(wizard)
+    step.shape_var.set("foothill")
+    step.step_var.set("0.25")
+
+    step.generate()
+
+    assert step.is_complete() and len(step.result.table) == 245
+    rows = _rows(step)
+    assert len(rows) == 245 and rows[0][0] == "1063.0" and rows[-1][0] == "1124.0"
+
+
+def test_w_m4_01_an_invalid_level_interval_is_refused_before_anything_is_kept_on_the_dam(app, errors):
+    wizard, step, _, _ = app
+    _reach_step(wizard)
+    step.shape_var.set("foothill")
+    step.step_var.set("0")
+
+    step.generate()
+
+    assert len(errors) == 1 and "level interval" in errors[0][1]
+    assert wizard.project.dams[0].shape_class is None and not _rows(step) and not step.is_complete()
+
+
+def test_w_x_02_changing_the_level_interval_un_completes_the_step_and_keeps_the_later_steps(app):
+    wizard, step, later, _ = app
+    _reach_step(wizard)
+    step.shape_var.set("foothill")
+    step.generate()
+    later.done = True
+    step.step_var.set("0.25")
+
+    assert not step.is_complete()
+    wizard.refresh()
+    assert wizard.next_button.instate(["disabled"])
+
+    step.generate()
+
+    assert step.is_complete() and later.done is True and len(_rows(step)) == 245
