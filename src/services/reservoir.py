@@ -2,8 +2,9 @@
 
 `curve_inputs` gives the inputs of step 6: the dam sheet's values, with the edits the user kept on the dam, Hmin and the
 shape class. `validate_curve_entries` and `apply_curve_settings` turn the entered texts into numbers and keep them on
-the dam; `compute_curve` and `compute_dam_curve` fit the curve and make its table and warnings. `write_reservoir_csv`
-writes `reservoir_curve.csv` into a folder it is given; the run folder itself belongs to the reporting service (M5).
+the dam; `parse_table_step` reads the level interval of the table. `compute_curve` and `compute_dam_curve` fit the curve
+and make its table and warnings. `write_reservoir_csv` writes `reservoir_curve.csv` into a folder it is given; the run
+folder itself belongs to the reporting service (M5).
 """
 
 import math
@@ -12,7 +13,16 @@ from typing import List, NamedTuple, Optional
 
 import pandas as pd
 
-from src.core.reservoir import ReservoirCurve, check_inputs, check_shape, curve_table, curve_warnings, fit_curve
+from src.core.reservoir import (
+    STEP_M,
+    ReservoirCurve,
+    check_inputs,
+    check_shape,
+    check_step,
+    curve_table,
+    curve_warnings,
+    fit_curve,
+)
 from src.services.project import CurveOverrides, Dam, Project
 from src.services.regional import DamSheet, cell_text, parse_number, quote_cell
 
@@ -104,6 +114,18 @@ def validate_curve_entries(
     return CurveInputs(shape_class=shape, **numbers)
 
 
+def parse_table_step(text) -> float:
+    """The level interval of the table, in m, as entered in step 6 (a decimal comma is read as a point). Raises
+    ValueError when it is blank, not a number, or not above 0."""
+    step = parse_number(text)
+    if step is None:
+        raise ValueError(f"The level interval of the table (m) must be a number, found {quote_cell(text)}.")
+    problems = check_step(step)
+    if problems:
+        raise ValueError("\n".join(problems))
+    return step
+
+
 def apply_curve_settings(project: Project, dam: Dam, sheet: DamSheet, **entered) -> bool:
     """Validate the entered texts and, only if they are all valid and saved, keep them on the dam: Hmin and the shape
     class as they are, and each sheet input only when it differs from the sheet. True if the curve changed (a new shape
@@ -133,8 +155,11 @@ def _fixing(curve: CurveOverrides, h_min_m: Optional[float], shape_class: Option
     return curve, h_min_m, shape_class if h_min_m is None else None
 
 
-def compute_curve(inputs: CurveInputs, drainage_area_km2: Optional[float] = None) -> CurveResult:
-    """Fit the curve (B3.3) and make its table and warnings. The drainage area is the dam sheet's."""
+def compute_curve(
+    inputs: CurveInputs, drainage_area_km2: Optional[float] = None, step_m: float = STEP_M
+) -> CurveResult:
+    """Fit the curve (B3.3) and make its table, at the level interval `step_m`, and warnings. The drainage area is the dam
+    sheet's."""
     curve = fit_curve(
         bed_elev_m=inputs.bed_elev_m,
         max_elev_m=inputs.max_elev_m,
@@ -146,7 +171,7 @@ def compute_curve(inputs: CurveInputs, drainage_area_km2: Optional[float] = None
     )
     given = inputs.h_min_m is not None
     shape = None if given else inputs.shape_class
-    return CurveResult(curve, curve_table(curve), given, shape, curve_warnings(curve, drainage_area_km2))
+    return CurveResult(curve, curve_table(curve, step_m), given, shape, curve_warnings(curve, drainage_area_km2))
 
 
 def compute_dam_curve(sheet: DamSheet, dam: Dam) -> CurveResult:

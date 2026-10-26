@@ -15,6 +15,7 @@ from src.services.reservoir import (
     compute_curve,
     compute_dam_curve,
     curve_inputs,
+    parse_table_step,
     sheet_differences,
     validate_curve_entries,
     write_reservoir_csv,
@@ -279,6 +280,25 @@ def test_c_m4_01_a_curve_through_a_given_hmin_ignores_the_shape_class():
 
     assert result.h_min_given and result.shape_class is None
     assert result.curve.exponent == pytest.approx(3.1647, abs=1e-4) and result.curve.h_min_m == pytest.approx(1090.0)
+
+
+@pytest.mark.parametrize(("text", "step"), [("0.25", 0.25), ("0,25", 0.25), (" 1 ", 1.0)])
+def test_c_m4_01_the_level_interval_is_read_with_a_point_or_a_comma(text, step):
+    assert parse_table_step(text) == step
+
+
+@pytest.mark.parametrize("text", ["", "x", "nan", "0", "-0.5"])
+def test_c_m4_01_a_level_interval_that_is_blank_not_a_number_or_not_above_zero_is_refused(text):
+    with pytest.raises(ValueError, match="level interval"):
+        parse_table_step(text)
+
+
+def test_c_m4_01_the_table_is_made_at_the_entered_interval_and_the_curve_does_not_change():
+    result = compute_curve(validate_curve_entries(**_entered()), 309.2, 0.25)
+
+    assert len(result.table) == 245
+    assert set(result.table["Elevation_m"].diff().dropna()) == {0.25}
+    assert result.curve == compute_curve(validate_curve_entries(**_entered()), 309.2).curve
 
 
 def test_c_m4_01_the_warnings_reach_the_result():
