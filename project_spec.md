@@ -95,7 +95,7 @@ The main window is a wizard (D17, D18) with a step list on the left and Back/Nex
 
 ## A6. Functional requirements
 
-Test IDs follow `<layer>-<milestone>-<nn>`; the layers are `U` unit, `C` input contract, `P` per-dam pipeline, `W` wizard (B6). Tests for the M1 to M4 requirements and the cross-cutting ones exist; those for M5 are still planned.
+Test IDs follow `<layer>-<milestone>-<nn>`; the layers are `U` unit, `C` input contract, `P` per-dam pipeline, `W` wizard (B6). Tests for every requirement exist.
 
 ### M1: Regional data ingestion
 
@@ -143,7 +143,7 @@ Test IDs follow `<layer>-<milestone>-<nn>`; the layers are `U` unit, `C` input c
 | ID | Requirement | Acceptance criteria | Tests |
 |---|---|---|---|
 | FR-M5-01 | Isolate the minimum and maximum total-volume years | Year, total volume and elevation for each; ties resolve to the earliest year | U-M5-01 |
-| FR-M5-02 | Write the run folder `outputs/<dam-slug>_<YYYYMMDD_HHMM>/` | `results.xlsx` (sheets Inputs, Suspended, Bedload, Annual, Curve, Projection, Extremes, Warnings), PNG charts (bedload trend, annual volume, curve, projection with the Hmin line), one CSV per phase | P-M5-01, P-M5-02 |
+| FR-M5-02 | Write the run folder `outputs/<dam-slug>_<YYYYMMDD_HHMM>/` | `results.xlsx` (sheets Inputs, Suspended, Bedload, Annual, Curve, Projection, Extremes, Warnings), PNG charts (bedload trend, annual volume, curve, projection with the Hmin line), one CSV per phase | P-M5-01, P-M5-02, W-M5-01 |
 | FR-M5-03 | Write `run.json` | App version, timestamp, dam, every input with its SHA-256, all parameters, sigma, phi and seed, flags, warnings | P-M5-03 |
 
 ### Cross-cutting
@@ -320,7 +320,7 @@ Three layers; imports point downward only (D16).
 | `src/core/integration.py` | new | Annual totals with TE and the elevations they reach, limited to the crest. Replaces `src/data/reporter.py` |
 | `src/services/project.py` | new | Project model, `project.json`, import-copy |
 | `src/services/regional.py`, `suspended.py`, `bedload.py`, `reservoir.py`, `integration.py` | new | One service per wizard computation |
-| `src/services/reporting.py` | new | xlsx, png, csv, `run.json` |
+| `src/services/reporting.py`, `run_export.py` | new | `reporting.py` draws the charts (png); `run_export.py` writes the run folder: xlsx, csv, `run.json` (D63) |
 | `src/ui/wizard.py`, `src/ui/steps/` | new | Controller and one view per step |
 | `src/ui/common.py`, `src/utils/paths.py` | kept | |
 | `src/data/database.py` (`BasinDatabase`), `src/ui/{app,rusle_view,wilcock_view,integration_view}.py`, back-compat shims, `load_raster_matrix` | removed in M1 | |
@@ -422,7 +422,7 @@ In the DSİ case the record years are water-year labels, and they are used as-is
   project.json
   inputs/                     copies of every imported file
   outputs/<dam-slug>_<YYYYMMDD_HHMM>/
-      results.xlsx, *.png, suspended.csv, bedload.csv, integration.csv, run.json
+      results.xlsx, *.png, suspended.csv, bedload.csv, reservoir_curve.csv, integration.csv, projection.csv, run.json
 ```
 
 Run-folder slugs use `to_ascii_turkish`, lowercased, with spaces replaced by underscores. A run never overwrites another run. `project.json` is rewritten whenever the user changes a parameter or imports a file, and carries `schema_version` for future migration.
@@ -450,7 +450,7 @@ The current suite is not trusted (D24). It is rebuilt in four layers (D28), plan
 - Test IDs follow `<layer>-<milestone>-<nn>` and appear in the test name, so `pytest -k M3` selects a milestone.
 - Wizard tests share the session-scoped `tk_root` fixture and build their UI in a `tk.Toplevel` (the current `tests/conftest.py` pattern). They need a display, which the Windows runner provides.
 - Golden files are regenerated only through a script that records the code version, and are committed only after hydrologist sign-off.
-- Old tests move to `tests/legacy/` (D29). `pytest.ini` gains `addopts = --ignore=tests/legacy`; run them locally with `pytest -o addopts="" tests/legacy`. A legacy test is ported only if it maps to a requirement and passes review. The folder is deleted at M5.
+- Old tests move to `tests/legacy/` (D29). `pytest.ini` gains `addopts = --ignore=tests/legacy`; run them locally with `pytest -o addopts="" tests/legacy`. A legacy test is ported only if it maps to a requirement and passes review. The folder was deleted at M5 and `addopts` removed (D65).
 - `.gitignore` ignores `*.csv` and `*.xlsx` outside `inputs/`; M0 adds exceptions for `tests/**` so benchmark files are tracked.
 
 The traceability matrix is the Tests column in A6.
@@ -486,7 +486,7 @@ Each milestone is a vertical slice: services, wizard step, tests and sign-off. E
 | **M2 Suspended** | Suspended service and step 4. Verification workbook for B3.1. Golden outputs for the three dams. | FR-M2-* tests pass; hydrologist signs off the goldens | Done (the hydrologist signed off the workbook; the goldens in `tests/benchmarks/` equal its three sample cases) |
 | **M3 Bedload** | D35 and D36 fixes. Move plotting and file I/O out of core. Bedload service and step 5. Before and after table for the hydrologist. | FR-M3-* tests pass; OI-04 closed | Built and signed off by the hydrologist (OI-04, 2026-10-26): M3.1 (formulas, oracle, core clean-up, before and after table) and M3.2 (bedload service, step 5, goldens) |
 | **M4 Reservoir and projection** | `reservoir.py`, `projection.py`, `integration.py`. Steps 6 and 7. Commissioning years and Hmin collected (OI-02). | FR-M4-* tests pass; OI-01, OI-03, OI-05 closed | Done: M4.1 (curve, service and step 6) and M4.2 (integration, projection, step 7, `src/data/` removed); OI-01, OI-02, OI-03 and OI-05 closed 2026-10-26; goldens signed off by the hydrologist 2026-10-26 (the integration and projection goldens use placeholder years, so their dam values are provisional until the real years are entered) |
-| **M5 Reporting** | Reporting service and step 8. `run.json` with the app version. Delete `tests/legacy/`. | FR-M5-* tests pass; end-to-end sign-off for the three dams; version 1.0.0 (no build) | Not started |
+| **M5 Reporting** | Reporting service and step 8. `run.json` with the app version. Delete `tests/legacy/`. | FR-M5-* tests pass; end-to-end sign-off for the three dams; version 1.0.0 (no build) | Done (sign-off pending): the end-to-end sign-off of the three dams is the hydrologist's |
 
 ## B9. Gap analysis: current code vs target
 
@@ -507,7 +507,7 @@ Each milestone is a vertical slice: services, wizard step, tests and sign-off. E
 | Back-compat shims | Aliases and properties on `SedimentApp` (`src/ui/app.py:58-178`) | Removed with the old UI | M1 | Done (M1.5) |
 | Suspended averaging | `merge_sediment_data` averages across years before adding (`src/data/reporter.py:26-29`) | One static value per dam | M4 | Done (M4.2): `compute_integration` takes the dam's one suspended total; `reporter.py` is removed |
 | No CI or lint | No `.github/`, no ruff config, no README | D25 | M0 | Done (M0) |
-| Tests | 150 tests written without a plan; 9 fail on the edited inputs | Rebuilt (D24, D28) | M0 to M5 | In progress: the new layout is in use; `tests/legacy` has 4 failures from removed fixtures |
+| Tests | 150 tests written without a plan; 9 fail on the edited inputs | Rebuilt (D24, D28) | M0 to M5 | Done (M5): the new layout holds every test; `tests/legacy/` is deleted (D65) |
 | `.gitignore` | `*.csv` and `*.xlsx` ignored outside `inputs/` | Exceptions for `tests/**` | M0 | Done (M0) |
 | Branches | Local `main` is behind `origin/main`; `branch1` and `branch2` are stale | Single `main` flow | M0 | Done (M0) |
 
@@ -581,3 +581,6 @@ The evidence column describes the code before M1. Files removed in M1.5 can be r
 | D60 | The level interval of the table is an input of step 6: a number above 0 m, 0.5 m by default, read with a point or a comma. It sets only the table, its chart and its CSV, and it supersedes the 0.5 m step of D51 (the grid still starts at Hbed and a crest off it closes the table). It is not kept on the dam, and changing it un-completes step 6 without resetting later steps | The user asked to choose the interval. The curve, the integration and the projection do not depend on it, so it is not a model input and does not belong in `project.json` (D52). Step 7 reads the curve, not the table |
 | D61 | The length of the projection is an input of step 7: a whole number of years of at least 1, 100 by default, read with a point or a comma. It sets only the projection table and chart; the accumulation, rates and lifespans do not depend on it and the lifespan is not cut at it (D56). It is not kept on the dam, and changing it un-completes step 7 until Compute | The user asked to choose the horizon instead of the fixed 100 years. It changes no calculated number, so like D60 it is not a model input. There is no upper limit; a very long projection only makes the table longer |
 | D62 | The monthly-to-daily split can carry a lag-1 autocorrelation φ in the log-flow (AR(1)): `0 ≤ φ < 1`, default 0, a setting of step 5 next to sigma and seed and kept on the dam (`flow.phi` in `project.json`; a project saved without it opens with 0). The chain runs on across month boundaries; each month's innovations still come from a generator seeded by `(seed, year, month)`, and every month is rescaled to its observed volume | The user asked for flood waves and dry-spell decay instead of independent daily noise. At φ = 0 the output is identical to the split of D10, so the bedload goldens are unchanged and need no new sign-off; a non-zero default would need them regenerated and signed off |
+| D63 | The run folder is written by `src/services/run_export.py` (`export_run`), not by `reporting.py`, which keeps the charts (and gains `annual_volume.png` and `projection.png`). The folder is `outputs/<dam-slug>_<YYYYMMDD_HHMM>/`, and a run that finds it taken gets `_2`, `_3`, ... so none is overwritten. Every input is hashed before the folder is created, so a missing input is an error naming it and leaves no folder; `run.json` is written last, and a folder whose writing fails is removed. `run.json` also holds the project name and the parameters as name, value and unit; the level interval is the one entered in step 6 (`CurveResult.step_m`), `Hmin` is the one entered (blank when a shape class fixed the curve) and `Hmin of the curve` the level the curve gives | B2 listed workbook, charts, CSV and `run.json` in one file, which already held the charts and would have mixed drawing with file layout. Minute-resolution names can collide when a run is exported twice, and B4 says a run never overwrites another. Nothing here changes a calculated number |
+| D64 | `results.xlsx` has the eight sheets of FR-M5-02. Suspended, Bedload, Annual, Curve and Projection are the tables of the CSV goldens (Suspended with its `Total` row). Inputs has the columns Group, Item, Value, Unit and SHA-256 (groups Run, Parameter and File). Extremes holds the Minimum and Maximum rows (Year, Total_hm3, Elevation_m), then a blank row and a table of the accumulation to date, the dead volume, the annual rates and the lifespan at each rate (a year, or the text "Already exceeded in X" or "Not reached"). Warnings has Phase and Warning, one row for each warning of the zonal means and dam sheet (Inputs), suspended, bedload, curve and integration, headed even when empty (NFR-04). The CSVs are the five of the phases; the extremes are in the workbook only | FR-M5-02 names the sheets but not their columns. The accumulation and lifespans appear in no other sheet, and Extremes is where the reader looks for the years that bound the record. `tests/pipeline/test_run_export.py` compares the tables with the existing goldens, so no new golden or sign-off is needed |
+| D65 | `src.__version__ = "1.0.0"` is the app version that `run.json` and the Inputs sheet record. `tests/legacy/` is deleted, `addopts` is removed from `pytest.ini` and the validate-calc-engine skill no longer runs it; every legacy case was already in the new layout except the Turkish helper tests, which are ported to `tests/contract/test_turkish_helpers.py` (C-X-02). Computing step 7 again resets step 8 when its annual or projection table changed, and keeps it when they did not (FR-X-04). `to_phase3_handoff`, `compute_daily_fractional_transport` and `year_column` in `core/wilcock.py` are removed: nothing called them and the deleted legacy tests were the only ones that did; no calculated number changes | The roadmap fixes version 1.0.0 and the deletion for M5. A report written from a superseded integration must not stay marked as complete |

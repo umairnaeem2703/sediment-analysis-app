@@ -6,9 +6,12 @@ import pandas as pd
 
 from src.core.monthly_flow_preprocessor import DEFAULT_SEED, DEFAULT_SIGMA
 from src.core.wilcock import FractionalModel
-from src.services.bedload import import_flow, import_fractions
+from src.services.bedload import compute_dam_bedload, import_flow, import_fractions
+from src.services.integration import compute_dam_integration
 from src.services.project import Project
 from src.services.regional_data import RegionalData
+from src.services.reservoir import compute_dam_curve
+from src.services.suspended import compute_suspended
 from src.utils.paths import read_table, resource_path
 
 SAMPLE_BASINS = resource_path("inputs", "master_yield.csv")
@@ -76,6 +79,15 @@ def sample_bedload_inputs(folder) -> RegionalData:
     for dam in data.project.dams:
         import_flow(data.project, dam, sample_flow(dam.slug), DEFAULT_SIGMA, DEFAULT_SEED)
     return data
+
+
+def sample_dam_results(data: RegionalData, slug: str):
+    """The dam, then its suspended, bedload, curve and integration results, as steps 4 to 7 hold them."""
+    dam = next(dam for dam in data.project.dams if dam.slug == slug)
+    suspended = compute_suspended(data.sub_basins(dam), data.zonal)
+    bedload = compute_dam_bedload(data.project, dam)
+    curve = compute_dam_curve(data.dam_sheet(dam).data, dam)
+    return dam, suspended, bedload, curve, compute_dam_integration(suspended, bedload, curve, dam)
 
 
 def sample_integration_inputs(folder) -> RegionalData:

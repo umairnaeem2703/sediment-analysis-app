@@ -61,10 +61,6 @@ class FractionalModel:
             return 0.002 * math.pow(phi, 7.5)
         return 14.0 * math.pow((1.0 - (0.894 / math.sqrt(phi))), 4.5)
 
-    def compute_daily_fractional_transport(self, q_flow: float):
-        series = self.compute_transport_series(np.array([q_flow], dtype=float))
-        return float(series[0])
-
     def compute_transport_series(self, q_flow) -> np.ndarray:
         if self._fi.size == 0:
             raise ValueError("Fractional parameters have not been loaded.")
@@ -135,11 +131,6 @@ class FractionalModel:
         self.fractions = work.to_dict(orient="records")
         self._fi = work["Fi"].to_numpy(dtype=float)
         self._tau_ri = work["tau_ri"].to_numpy(dtype=float)
-
-
-def year_column(columns) -> str:
-    """Year key of a Wilcock table: Water_Year (DSI-derived, Oct-Sep) if present, else Year."""
-    return WATER_YEAR_COLUMN if WATER_YEAR_COLUMN in columns else YEAR_COLUMN
 
 
 class TimeSeriesAggregator:
@@ -237,7 +228,7 @@ class TimeSeriesAggregator:
 
         annual_summary["Annual_Average_Bedload"] = annual_summary["Average_Rate_m2_s"]
 
-        # Maintain the original volume-based result for compatibility with handoff/legacy reporting.
+        # The annual volume in m3 (mean rate times the channel width times the seconds in a year).
         annual_summary["Annual_Total_Bedload_m3_yr"] = (
             annual_summary["Average_Rate_m2_s"] * self.model.bed_width * SECONDS_PER_YEAR
         )
@@ -248,11 +239,3 @@ class TimeSeriesAggregator:
         )
 
         return annual_summary
-
-    def to_phase3_handoff(self, annual_summary: pd.DataFrame) -> pd.DataFrame:
-        """Hand off the pre-calculated total annual volume."""
-        if annual_summary.empty:
-            raise ValueError("Annual summary is empty.")
-        handoff = annual_summary.reset_index()
-        handoff["Bedload_Volume_m3"] = handoff["Annual_Total_Bedload_m3_yr"]
-        return handoff[[year_column(handoff.columns), "Bedload_Volume_m3"]]

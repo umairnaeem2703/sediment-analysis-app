@@ -1,4 +1,4 @@
-"""Charts of the reports (FR-M3-05); the M5 reporting service adds the workbook and `run.json`.
+"""Charts of the reports (FR-M3-05, FR-M5-02); the workbook and `run.json` are written by `run_export.py`.
 
 matplotlib lives here and never in `src/core` (B2). Figures are built with `Figure` rather than pyplot, so they hold no
 global state, can be made off the Tk thread and can be embedded in the wizard.
@@ -13,11 +13,13 @@ from src.core.projection import RATE_NAMES, YEAR
 from src.core.reservoir import AREA_KM2, ELEVATION_M, VOLUME_HM3
 from src.core.wilcock import WATER_YEAR_COLUMN
 from src.services.bedload import FLOW_M3_S, MASS_T
-from src.services.integration import IntegrationResult
+from src.services.integration import TOTAL_HM3, IntegrationResult
 from src.services.reservoir import CurveResult
 
 TREND_PNG = "bedload_trend.png"
 CURVE_PNG = "reservoir_curve.png"
+ANNUAL_PNG = "annual_volume.png"
+PROJECTION_PNG = "projection.png"
 
 
 def bedload_trend_figure(table: pd.DataFrame) -> Figure:
@@ -105,6 +107,42 @@ def projection_figure(result: IntegrationResult) -> Figure:
     axis.legend(loc="upper left")
     axis.set_title("Sediment Accumulation and Lifespan", fontweight="bold", pad=15)
     return figure
+
+
+def annual_volume_figure(result: IntegrationResult) -> Figure:
+    """The sediment that stays in the reservoir each year of the record, with the mean, minimum and maximum marked."""
+    annual = result.annual
+    figure = Figure(figsize=(10, 6), layout="tight")
+    axis = figure.subplots()
+    axis.bar(annual[result.year_column], annual[TOTAL_HM3], color="steelblue", label="Annual total")
+    colors = {"Mean": "blue", "Min": "green", "Max": "red"}
+    for name in RATE_NAMES:
+        axis.axhline(
+            result.rates[name],
+            color=colors[name],
+            linestyle="--",
+            label=f"{name} ({result.rates[name]:,.4f} hm³/yr)",
+        )
+    axis.set_xlabel("Water Year (Oct–Sep)" if result.year_column == WATER_YEAR_COLUMN else "Year", fontweight="bold")
+    axis.set_ylabel("Sediment volume (hm³/yr)", fontweight="bold")
+    axis.grid(True, axis="y", linestyle="--", alpha=0.6)
+    axis.legend(loc="upper right")
+    axis.set_title("Annual Sediment Volume in the Reservoir", fontweight="bold", pad=15)
+    return figure
+
+
+def write_annual_volume(result: IntegrationResult, folder) -> Path:
+    """Write the annual volume chart to `folder/annual_volume.png`."""
+    path = Path(folder) / ANNUAL_PNG
+    annual_volume_figure(result).savefig(path, dpi=150)
+    return path
+
+
+def write_projection(result: IntegrationResult, folder) -> Path:
+    """Write the projection chart to `folder/projection.png`."""
+    path = Path(folder) / PROJECTION_PNG
+    projection_figure(result).savefig(path, dpi=150)
+    return path
 
 
 def write_reservoir_curve(result: CurveResult, folder) -> Path:
