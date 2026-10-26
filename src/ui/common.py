@@ -47,6 +47,11 @@ def browse_directory(title: str = "Select Folder") -> Optional[str]:
     return path if path else None
 
 
+def format_number(value: float) -> str:
+    """A stored number as text without losing digits (100.0 -> '100', 93.456789 -> '93.456789')."""
+    return f"{value:.12g}"
+
+
 def show_error(title: str, message: str) -> None:
     """Display an error messagebox."""
     messagebox.showerror(title, message)

@@ -14,6 +14,7 @@ from src.utils.paths import read_table, resource_path
 SAMPLE_BASINS = resource_path("inputs", "master_yield.csv")
 SAMPLE_ZONAL = resource_path("inputs", "raw_zonal_means.csv")
 SAMPLE_FRACTIONS = resource_path("inputs", "fractional_parameters.csv")
+SAMPLE_SHAPE_CLASSES = {"kavsakkaya": "foothill", "cubuk_1": "hill", "cubuk_2": "hill"}
 
 
 def sample_regional(folder) -> RegionalData:
@@ -44,6 +45,21 @@ def write_fractions_with_wrong_tau_ri(folder) -> Path:
 def sample_flow(slug: str):
     """The DSİ monthly flow table of one of the three sample dams."""
     return resource_path("inputs", "dam_flow_data", f"{slug}_flow.csv")
+
+
+def sample_sheet(slug: str):
+    """The dam sheet of one of the three sample dams."""
+    return resource_path("inputs", "bathymetry", f"{slug}_bathymetry.csv")
+
+
+def sample_curve_inputs(folder) -> RegionalData:
+    """`sample_regional` plus each dam's sheet and the shape class of its worked example in B3.3 (no Hmin)."""
+    data = sample_regional(folder)
+    data.import_dam_sheets([str(sample_sheet(dam.slug)) for dam in data.project.dams])
+    for dam in data.project.dams:
+        dam.shape_class = SAMPLE_SHAPE_CLASSES[dam.slug]
+    data.project.save()
+    return data
 
 
 def sample_bedload_inputs(folder) -> RegionalData:

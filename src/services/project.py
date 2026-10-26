@@ -32,11 +32,23 @@ class Flow:
 
 
 @dataclass
+class CurveOverrides:
+    """The curve inputs the user changed from the dam sheet in step 6; None keeps the sheet's value."""
+
+    bed_elev_m: Optional[float] = None
+    crest_elev_m: Optional[float] = None
+    max_elev_m: Optional[float] = None
+    active_vol_hm3: Optional[float] = None
+    max_vol_hm3: Optional[float] = None
+
+
+@dataclass
 class Dam:
     name: str
     slug: str
     sheet: Optional[str] = None
     flow: Flow = field(default_factory=Flow)
+    curve: CurveOverrides = field(default_factory=CurveOverrides)
     commissioning_year: Optional[int] = None
     analysis_year: Optional[int] = None
     h_min_m: Optional[float] = None
@@ -82,7 +94,10 @@ class Project:
                 f"(schema_version {version}; this app supports {SCHEMA_VERSION})."
             )
         try:
-            dams = [Dam(**{**d, "flow": Flow(**d.get("flow", {}))}) for d in data.get("dams", [])]
+            dams = [
+                Dam(**{**d, "flow": Flow(**d.get("flow", {})), "curve": CurveOverrides(**d.get("curve", {}))})
+                for d in data.get("dams", [])
+            ]
             inputs = {**dict.fromkeys(INPUT_KEYS), **data.get("inputs", {})}
         except TypeError as exc:
             raise ValueError(f"{path} is malformed ({exc}).") from exc
