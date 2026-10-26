@@ -11,6 +11,7 @@ from src.ui.steps.base import Step
 from src.ui.steps.dam_step import DamStep
 from src.ui.steps.project_step import ProjectStep
 from src.ui.steps.regional_step import RegionalStep
+from src.ui.steps.suspended_step import SuspendedStep
 
 
 class Wizard:
@@ -160,7 +161,8 @@ class Wizard:
 
 
 def default_steps() -> List[Step]:
-    return [ProjectStep(), RegionalStep(), DamStep()]
+    dam_step = DamStep()
+    return [ProjectStep(), RegionalStep(), dam_step, SuspendedStep(dam_step)]
 
 
 def main() -> None:

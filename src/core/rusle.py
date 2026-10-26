@@ -293,6 +293,7 @@ class ZonalMatcher:
                 raise ValueError("Zonal statistics file must include a sub-basin name column.")
 
         lookup: Dict[str, float] = {}
+        conflicting: Set[str] = set()
         for _, row in zonal_df.iterrows():
             name = row.get(name_col)
             if pd.isna(name) or str(name).strip() == "":
@@ -302,15 +303,15 @@ class ZonalMatcher:
                 continue
 
             float_mean = float(mean_value)
-            normalized_name = cls.normalize_subbasin_name(name)
-            if normalized_name:
-                lookup[normalized_name] = float_mean
-            for alias in cls.get_subbasin_aliases(name):
-                if alias:
-                    lookup[alias] = float_mean
+            for key in {cls.normalize_subbasin_name(name), *cls.get_subbasin_aliases(name)}:
+                if key and lookup.setdefault(key, float_mean) != float_mean:
+                    conflicting.add(key)
 
         if not lookup:
             raise ValueError("No valid sub-basin MEAN values were found in the zonal statistics file.")
+        # A key that two entries claim with different values can not name either of them.
+        for key in conflicting:
+            del lookup[key]
         return lookup
 
     @classmethod

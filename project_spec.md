@@ -95,7 +95,7 @@ The main window is a wizard (D17, D18) with a step list on the left and Back/Nex
 
 ## A6. Functional requirements
 
-Test IDs follow `<layer>-<milestone>-<nn>`; the layers are `U` unit, `C` input contract, `P` per-dam pipeline, `W` wizard (B6). Tests for the M1 requirements and the cross-cutting ones exist; those for M2 to M5 are still planned.
+Test IDs follow `<layer>-<milestone>-<nn>`; the layers are `U` unit, `C` input contract, `P` per-dam pipeline, `W` wizard (B6). Tests for the M1 and M2 requirements and the cross-cutting ones exist; those for M3 to M5 are still planned.
 
 ### M1: Regional data ingestion
 
@@ -266,7 +266,7 @@ All inputs are copied into the project (FR-M1-02). Aliases are matched with `nor
 | OI-03 | Convention check: "analysis year" is treated as the first year *not yet* accumulated (so the default, the current year, excludes the incomplete current year). | M4 |
 | OI-04 | Hydrologist review of the bedload before and after D35 and D36. | M3 |
 | OI-05 | Hydrologist confirmation of the shape classes (gorge 1.25, hill 2, foothill 3, lake 4) and of the plausibility thresholds in FR-M4-01. | M4 |
-| OI-06 | Independent hand calculations for `tests/verification/` (the spreadsheet is written by the developer, reviewed by the hydrologist). | M2 |
+| OI-06 | Independent hand calculations for `tests/verification/` (the spreadsheet is written by the developer, reviewed by the hydrologist). Closed for M2: the hydrologist signed off `suspended_verification.xlsx`. | M2 |
 | OI-07 | The dam sheet is cross-checked against the sum of the dam's sub-basin areas and their area-weighted mean slope (D43). A downstream dam holds the *incremental* catchment in the table (D21) but the total drainage area in its sheet, so its area check will warn. Decide whether to compare against the cumulative upstream area. | M4 |
 
 ---
@@ -478,7 +478,7 @@ Each milestone is a vertical slice: services, wizard step, tests and sign-off. E
 |---|---|---|---|
 | **M0 Pipeline setup** | Fast-forward local `main` to `origin/main` (it already contains `branch1`), then retire `branch1` and `branch2` (confirm before deleting remote branches). Add ruff and one formatting-only commit with no logic changes. Add the `.gitignore` exceptions. Add the CI workflow and branch protection. Move current tests to `tests/legacy/` and create the new layout with one import smoke test. Create `src/services/`. | CI is green on a pull request; `pytest` runs the new layout only | Done |
 | **M1 Regional data** | Project model, `project.json`, import-copy. Basin and dam-sheet validators, including the `Drainage Area (km2)` alias and cross-checks. Wizard shell with steps 1 to 3. Remove the old tabs, back-compat shims, `src/data/database.py` and dead code. Update the architecture section of `CLAUDE.md`. | FR-M1-* tests pass; the three sample dams load; the app opens to the wizard | Done (steps 1 to 3 and the cut-over; the old UI is tagged `legacy-ui`) |
-| **M2 Suspended** | Suspended service and step 4. Verification workbook for B3.1. Golden outputs for the three dams. | FR-M2-* tests pass; hydrologist signs off the goldens | Not started |
+| **M2 Suspended** | Suspended service and step 4. Verification workbook for B3.1. Golden outputs for the three dams. | FR-M2-* tests pass; hydrologist signs off the goldens | Done (the hydrologist signed off the workbook; the goldens in `tests/benchmarks/` equal its three sample cases) |
 | **M3 Bedload** | D35 and D36 fixes. Move plotting and file I/O out of core. Bedload service and step 5. Before and after table for the hydrologist. | FR-M3-* tests pass; OI-04 closed | Not started |
 | **M4 Reservoir and projection** | `reservoir.py`, `projection.py`, `integration.py`. Steps 6 and 7. Commissioning years and Hmin collected (OI-02). | FR-M4-* tests pass; OI-01, OI-03, OI-05 closed | Not started |
 | **M5 Reporting** | Reporting service and step 8. `run.json` with the app version. Delete `tests/legacy/`. | FR-M5-* tests pass; end-to-end sign-off for the three dams; version 1.0.0 (no build) | Not started |
@@ -487,7 +487,7 @@ Each milestone is a vertical slice: services, wizard step, tests and sign-off. E
 
 | Area | Current (evidence) | Target | Milestone | Status |
 |---|---|---|---|---|
-| Dams mixed | The RUSLE tab sums every row, so three dams give 118,933 m³/yr (`src/ui/rusle_view.py:321`) | Per-dam total (FR-M2-03) | M2 | Open |
+| Dams mixed | The RUSLE tab sums every row, so three dams give 118,933 m³/yr (`src/ui/rusle_view.py:321`) | Per-dam total (FR-M2-03) | M2 | Done (M2): `compute_suspended` takes one dam's rows |
 | Silent sample fallbacks | Integration loads bundled samples when nothing is chosen (`src/ui/integration_view.py:154-185`) | Error naming the missing input (FR-X-01) | M1 | Done (M1): the wizard loads only files the user chose |
 | Logic in views | `_ensure_phase2_volume`, `_load_default_phase3`, report text (`integration_view.py:86-135, 225-251`) | Services (B2) | M1 to M4 | Partly: the old views are gone; M2 to M4 add the services |
 | Not a curve | `inputs/bathymetry.csv` had one row per dam; the user has since removed it. `prepare_bathymetry` treats rows as one curve. | Generated per-dam curve (FR-M4-02) | M4 | Open |
@@ -558,3 +558,5 @@ The evidence column describes the code before M1. Files removed in M1.5 can be r
 | D42 | Step 3: commissioning year optional; analysis year blank means the current year and is not before the commissioning year; trap efficiency above 0 and at most 100, default 100; Hmin optional | Missing commissioning years (OI-02) must not block steps 4 to 6 |
 | D43 | A dam sheet is cross-checked against the sum of the dam's sub-basin areas and their area-weighted mean slope; more than 1% apart gives a warning | The spec was silent for dams with several sub-basins (OI-07) |
 | D44 | Work-package pull requests are squash-merged once CI is green and every review finding is fixed or declined in the PR description | Branch protection already requires the PR and the `ci` check |
+| D45 | The suspended service writes `suspended.csv` into a folder it is given; step 4 creates no run folder. The file holds a row per sub-basin and a final `Total` row (area, gross mass, yield mass, volume) | The run folder and its naming belong to M5; the total is the number the reviewer reads |
+| D46 | The M2 oracle is a workbook of live formulas for review plus a CSV of the same cases worked out with `math` in `tests/verification/make_suspended_oracle.py`; the unit tests read the CSV. A pull request with new goldens is held until the hydrologist signs them off | No spreadsheet engine was available to store the workbook's results. Evaluating the workbook's formulas separately gave the CSV values exactly. B6 allows goldens only after sign-off |

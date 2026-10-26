@@ -1,11 +1,11 @@
 import threading
-import time
 import tkinter as tk
 
 import pytest
 
 from src.ui.wizard import Wizard
 from tests.ui.fakes import FakeStep
+from tests.ui.helpers import wait_until
 
 
 @pytest.fixture()
@@ -21,21 +21,6 @@ def shell(tk_root):
 
 def _enabled(button):
     return not button.instate(["disabled"])
-
-
-def _wait_until(top, condition, timeout=5.0):
-    # Worker threads may only call into Tk while the main thread is inside mainloop(), as in the app.
-    deadline = time.monotonic() + timeout
-
-    def poll():
-        if condition() or time.monotonic() > deadline:
-            top.quit()
-        else:
-            top.after(10, poll)
-
-    top.after(10, poll)
-    top.mainloop()
-    assert condition(), "timed out waiting for the background task"
 
 
 def test_w_x_02_next_needs_a_complete_step_and_later_steps_stay_locked(shell):
@@ -134,7 +119,7 @@ def test_w_x_03_tasks_run_off_the_tk_thread_and_navigation_is_disabled_meanwhile
     assert wizard.go_to(1) is False
 
     release.set()
-    _wait_until(top, lambda: "result" in seen)
+    wait_until(top, lambda: "result" in seen)
 
     assert seen["task_thread"] != main_thread
     assert seen["done_thread"] == main_thread
@@ -151,7 +136,7 @@ def test_w_x_03_a_failing_task_reports_its_error_and_unlocks_navigation(shell):
         raise ValueError("bad input")
 
     wizard.run_task(task, lambda result, error: seen.update(result=result, error=error))
-    _wait_until(top, lambda: "error" in seen)
+    wait_until(top, lambda: "error" in seen)
 
     assert seen["result"] is None
     assert str(seen["error"]) == "bad input"

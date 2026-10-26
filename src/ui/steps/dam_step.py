@@ -82,6 +82,11 @@ class DamStep(Step):
         """The dam shown, looked up by slug so it stays current when the dams are re-synced."""
         return self._dam(self._selected_slug)
 
+    @property
+    def chosen(self) -> Optional[Dam]:
+        """The dam confirmed with "Use this dam"; the later steps analyse this one."""
+        return self._dam(self.confirmed)
+
     def _dam(self, slug: Optional[str]) -> Optional[Dam]:
         return next((dam for dam in self.wizard.project.dams if dam.slug == slug), None) if slug else None
 
