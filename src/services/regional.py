@@ -86,7 +86,7 @@ def name_key(text) -> str:
     return " ".join(to_ascii_turkish(turkish_lower(text)).split())
 
 
-def _read(path, dtype=None) -> pd.DataFrame:
+def read_input(path, dtype=None) -> pd.DataFrame:
     path = Path(path)
     if not path.is_file():
         raise FileNotFoundError(f"Input file not found: {path}")
@@ -145,7 +145,7 @@ def basin_grid(df: pd.DataFrame, source: str) -> pd.DataFrame:
 
 def read_basin_grid(path) -> pd.DataFrame:
     """Read a basin table for editing. Cell problems are allowed here; unreadable files and missing columns are not."""
-    return basin_grid(_read(path, dtype=str), Path(path).name)
+    return basin_grid(read_input(path, dtype=str), Path(path).name)
 
 
 def validate_basin_table(df: pd.DataFrame, source: str) -> Loaded:
@@ -187,7 +187,7 @@ def validate_basin_table(df: pd.DataFrame, source: str) -> Loaded:
 
 
 def load_basin_table(path) -> Loaded:
-    return validate_basin_table(_read(path), Path(path).name)
+    return validate_basin_table(read_input(path), Path(path).name)
 
 
 # --- zonal means ------------------------------------------------------------------------------
@@ -226,7 +226,7 @@ def validate_zonal_means(df: pd.DataFrame, source: str) -> Loaded:
 
 
 def load_zonal_means(path) -> Loaded:
-    return validate_zonal_means(_read(path), Path(path).name)
+    return validate_zonal_means(read_input(path), Path(path).name)
 
 
 # --- dam sheet --------------------------------------------------------------------------------
@@ -297,4 +297,4 @@ def validate_dam_sheet(df: pd.DataFrame, source: str, basin_table: pd.DataFrame)
 
 
 def load_dam_sheet(path, basin_table: pd.DataFrame) -> Loaded:
-    return validate_dam_sheet(_read(path), Path(path).name, basin_table)
+    return validate_dam_sheet(read_input(path), Path(path).name, basin_table)

@@ -1,86 +1,47 @@
-"""Bedload tables and charts (FR-M3-05). Moved out of `src/core`, which must hold no plotting (B2)."""
+"""Charts of the reports (FR-M3-05); the M5 reporting service adds the workbook and `run.json`.
 
-import matplotlib.pyplot as plt
+matplotlib lives here and never in `src/core` (B2). Figures are built with `Figure` rather than pyplot, so they hold no
+global state, can be made off the Tk thread and can be embedded in the wizard.
+"""
+
+from pathlib import Path
+
 import pandas as pd
+from matplotlib.figure import Figure
 
-from src.core.wilcock import WATER_YEAR_COLUMN, YEAR_COLUMN, year_column
+from src.core.wilcock import WATER_YEAR_COLUMN
+from src.services.bedload import FLOW_M3_S, MASS_T
 
-FLOW_COLUMN_LABEL = "Annual Average Flow (m3/s)"
-BEDLOAD_COLUMN_LABEL = "Annual Average Bed Load (metric tons/year)"
+TREND_PNG = "bedload_trend.png"
 
 
-class BedloadVisualizer:
-    @staticmethod
-    def prepare_summary_table(df_summary: pd.DataFrame) -> pd.DataFrame:
-        if df_summary is None or df_summary.empty:
-            raise ValueError("Dataframe is empty. Cannot generate summary table.")
+def bedload_trend_figure(table: pd.DataFrame) -> Figure:
+    """Annual mean flow and annual bedload mass against the year, from a `BedloadResult.table`."""
+    if table is None or table.empty:
+        raise ValueError("The bedload table is empty. Cannot generate the chart.")
+    key = table.columns[0]
+    years = table[key]
 
-        display = df_summary.reset_index().copy()
-        year_key = year_column(display.columns)
-        if year_key not in display.columns:
-            display = display.rename(columns={display.columns[0]: YEAR_COLUMN})
+    figure = Figure(figsize=(10, 6), layout="tight")
+    flow_axis = figure.subplots()
+    flow_line = flow_axis.plot(years, table[FLOW_M3_S], color="blue", marker="o", label="Mean Flow")[0]
+    flow_axis.set_xlabel("Water Year (Oct–Sep)" if key == WATER_YEAR_COLUMN else "Year", fontweight="bold")
+    flow_axis.set_ylabel("Annual Mean Flow (m³/s)", color="blue", fontweight="bold")
+    flow_axis.tick_params(axis="y", labelcolor="blue")
+    flow_axis.grid(True, linestyle="--", alpha=0.6)
 
-        mass_col = "Annual_Average_Bed_Load_metric_tons_yr"
-        if mass_col not in display.columns:
-            if "Annual_Total_Bedload" in display.columns:
-                display[mass_col] = display["Annual_Total_Bedload"] * 2.65
-            elif "Annual_Total_Bedload_m3_yr" in display.columns:
-                display[mass_col] = display["Annual_Total_Bedload_m3_yr"] * 2.65
-            else:
-                raise KeyError("Annual summary is missing bedload mass column.")
+    mass_axis = flow_axis.twinx()
+    mass_line = mass_axis.plot(years, table[MASS_T], color="red", marker="s", label="Bed Load")[0]
+    mass_axis.set_ylabel("Annual Bed Load (t/yr)", color="red", fontweight="bold")
+    mass_axis.tick_params(axis="y", labelcolor="red")
 
-        required = [year_key, "Annual_Average_Flow", mass_col]
-        missing = [col for col in required if col not in display.columns]
-        if missing:
-            raise KeyError(f"Annual summary is missing required columns: {missing}")
+    flow_axis.legend([flow_line, mass_line], [flow_line.get_label(), mass_line.get_label()], loc="upper right")
+    flow_axis.set_title("Annual Flow vs. Bed Load Trends", fontweight="bold", pad=15)
+    return figure
 
-        table = display[required].copy()
-        table = table.rename(
-            columns={
-                "Annual_Average_Flow": FLOW_COLUMN_LABEL,
-                mass_col: BEDLOAD_COLUMN_LABEL,
-            }
-        )
-        return table
 
-    @staticmethod
-    def export_summary_csv(df_summary: pd.DataFrame, save_path: str):
-        table = BedloadVisualizer.prepare_summary_table(df_summary)
-        table.to_csv(save_path, index=False, encoding="utf-8-sig")
-        return table
-
-    def generate_trend_graph(self, df_summary: pd.DataFrame):
-        if df_summary.empty:
-            raise ValueError("Dataframe is empty. Cannot generate plot.")
-
-        fig, ax1 = plt.subplots(figsize=(10, 6))
-        years = df_summary.index
-
-        line1 = ax1.plot(years, df_summary["Annual_Average_Flow"], color="blue", marker="o", label="Average Flow")[0]
-        year_label = "Water Year (Oct–Sep)" if df_summary.index.name == WATER_YEAR_COLUMN else "Year"
-        ax1.set_xlabel(year_label, fontweight="bold")
-        ax1.set_ylabel("Annual Average Flow (m³/s)", color="blue", fontweight="bold")
-        ax1.tick_params(axis="y", labelcolor="blue")
-        ax1.grid(True, linestyle="--", alpha=0.6)
-
-        mass_col = "Annual_Average_Bed_Load_metric_tons_yr"
-        if mass_col not in df_summary.columns:
-            if "Annual_Total_Bedload" in df_summary.columns:
-                bedload_series = df_summary["Annual_Total_Bedload"] * 2.65
-            elif "Annual_Total_Bedload_m3_yr" in df_summary.columns:
-                bedload_series = df_summary["Annual_Total_Bedload_m3_yr"] * 2.65
-            else:
-                raise KeyError("Annual summary is missing the bedload mass series for plotting.")
-        else:
-            bedload_series = df_summary[mass_col]
-
-        ax2 = ax1.twinx()
-        line2 = ax2.plot(years, bedload_series, color="red", marker="s", label="Bed Load")[0]
-        ax2.set_ylabel("Annual Average Bed Load (metric tons/year)", color="red", fontweight="bold")
-        ax2.tick_params(axis="y", labelcolor="red")
-
-        ax1.legend([line1, line2], [line1.get_label(), line2.get_label()], loc="upper left")
-        ax1.set_title("Annual Flow vs. Bed Load Trends", fontweight="bold", pad=15)
-        fig.tight_layout()
-
-        return fig
+def write_bedload_trend(table: pd.DataFrame, folder) -> Path:
+    """Write the trend chart to `folder/bedload_trend.png`."""
+    path = Path(folder) / TREND_PNG
+    bedload_trend_figure(table).savefig(path, dpi=150)
+    return path

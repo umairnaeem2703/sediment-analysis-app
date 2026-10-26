@@ -169,9 +169,8 @@ class TimeSeriesAggregator:
 
         if date_col is None or flow_col is None:
             raise KeyError(
-                "Flow table must contain the columns: Date (or Tarih) and Flow Q (m3/s) "
-                "(or the legacy Flow / Debi column). DSI monthly tables (Yıllar, Ekim...Eylül) must first be "
-                "converted with prepare_daily_flow; the Wilcock tab does this automatically."
+                "Flow table must contain the columns: Date (or Tarih) and Flow (or Flow Q (m3/s), Debi), "
+                "or be a DSI monthly table with the columns Yıllar and Ekim...Eylül."
             )
 
         renames = {date_col: "Date", flow_col: "Flow Q (m3/s)"}

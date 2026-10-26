@@ -1,48 +1,48 @@
-"""P-M3-01: the bedload summary table and trend chart, now in the reporting service (FR-M3-05)."""
+"""P-M3-01: the bedload trend chart (FR-M3-05)."""
 
-import matplotlib.pyplot as plt
 import pandas as pd
 import pytest
+from matplotlib.figure import Figure
 
-from src.core.wilcock import WATER_YEAR_COLUMN, TimeSeriesAggregator
-from src.services.reporting import BedloadVisualizer
+from src.services.bedload import FlowSeries, compute_bedload
+from src.services.reporting import TREND_PNG, bedload_trend_figure, write_bedload_trend
 from tests.samples import sample_fraction_model
 
 
-def _water_year_flow() -> pd.DataFrame:
-    return pd.DataFrame({"Date": ["30/09/2010", "01/10/2010"], "Flow": [10.0, 80.0], WATER_YEAR_COLUMN: [2010, 2011]})
+def _table(water_year: bool) -> pd.DataFrame:
+    flow = pd.DataFrame({"Date": ["30/09/2010", "01/10/2010"], "Flow": [10.0, 80.0]})
+    if water_year:
+        flow["Water_Year"] = [2010, 2011]
+    fractions = pd.DataFrame(sample_fraction_model().fractions)[["di", "Fi"]]
+    return compute_bedload(FlowSeries(flow, False, []), fractions).table
 
 
-@pytest.fixture()
-def agg_backend():
-    # Draw without a GUI. A TkAgg figure created before the session's Tk root exists
-    # breaks later Tk-based tests on Windows, so restore the previous backend afterwards.
-    previous = plt.get_backend()
-    plt.switch_backend("Agg")
-    yield
-    plt.switch_backend(previous)
+def test_p_m3_01_the_chart_labels_water_years_and_calendar_years_by_the_key_column():
+    water, calendar = bedload_trend_figure(_table(True)), bedload_trend_figure(_table(False))
+
+    assert water.axes[0].get_xlabel() == "Water Year (Oct–Sep)"
+    assert calendar.axes[0].get_xlabel() == "Year"
 
 
-def test_p_m3_01_the_summary_table_keeps_the_water_year_key():
-    summary = TimeSeriesAggregator(sample_fraction_model()).process_annual_averages(_water_year_flow())
+def test_p_m3_01_the_chart_plots_the_flow_and_the_mass_of_every_year():
+    table = _table(True)
 
-    table = BedloadVisualizer.prepare_summary_table(summary)
+    figure = bedload_trend_figure(table)
 
-    assert list(table.columns)[0] == WATER_YEAR_COLUMN
+    assert isinstance(figure, Figure) and len(figure.axes) == 2
+    flow_axis, mass_axis = figure.axes
+    assert list(flow_axis.lines[0].get_ydata()) == list(table["Mean_Flow_m3_s"])
+    assert list(mass_axis.lines[0].get_ydata()) == list(table["Mass_t_yr"])
+    assert list(flow_axis.lines[0].get_xdata()) == [2010, 2011]
 
 
-def test_p_m3_01_the_trend_chart_labels_water_years_from_the_index_name(agg_backend):
-    aggregator = TimeSeriesAggregator(sample_fraction_model())
-    summary = aggregator.process_annual_averages(_water_year_flow())
-    calendar = aggregator.process_annual_averages(_water_year_flow().drop(columns=[WATER_YEAR_COLUMN]))
-    # Re-deriving the frame (which drops .attrs) must not lose the water-year label.
-    rederived = summary.reset_index().set_index(WATER_YEAR_COLUMN)
+def test_p_m3_01_an_empty_table_is_an_error():
+    with pytest.raises(ValueError, match="empty"):
+        bedload_trend_figure(_table(True).iloc[0:0])
 
-    figures = [BedloadVisualizer().generate_trend_graph(df) for df in (summary, rederived, calendar)]
-    try:
-        labels = [fig.axes[0].get_xlabel() for fig in figures]
-    finally:
-        for fig in figures:
-            plt.close(fig)
 
-    assert labels == ["Water Year (Oct–Sep)", "Water Year (Oct–Sep)", "Year"]
+def test_p_m3_01_the_chart_is_written_as_a_png(tmp_path):
+    path = write_bedload_trend(_table(True), tmp_path)
+
+    assert path == tmp_path / TREND_PNG == tmp_path / "bedload_trend.png"
+    assert path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n") and path.stat().st_size > 5_000
