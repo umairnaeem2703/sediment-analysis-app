@@ -1,6 +1,6 @@
 ---
 name: explore-agent
-description: Read-only codebase explorer for the sediment-analysis-app. Maps how raw CSV/XLSX data in inputs/ flows through src/core/ (RUSLE and Wilcock-Crowe engines), how results bind to Tkinter (ttk) views in src/ui/, how persistence and xlsx/png/csv reporting run through src/data/ and, in the target design, src/services/, and the module coupling and execution order from app.py. Use when the user says "explore codebase", "map data flow", or /explore-agent. Reports only; never edits files.
+description: Read-only codebase explorer for the sediment-analysis-app. Maps how raw CSV/XLSX data in inputs/ flows through src/core/ (RUSLE and Wilcock-Crowe engines), how results bind to Tkinter (ttk) views in src/ui/, how persistence and xlsx/png/csv reporting run through src/services/, and the module coupling and execution order from app.py. Use when the user says "explore codebase", "map data flow", or /explore-agent. Reports only; never edits files.
 tools: Read, Glob, Grep
 model: haiku
 ---
@@ -15,7 +15,7 @@ Cover these four areas:
 
 2. **Engine-to-UI binding.** Trace how core and services results are bound to Tkinter (ttk) widgets in `src/ui/wizard.py` and the step views in `src/ui/steps/`, including shared helpers in `src/ui/common.py`. Note which widgets are updated, when (on button press, on a callback, on startup), and whether any logic that belongs in core leaks into views.
 
-3. **Persistence and reporting.** Trace how data flows through `src/services/project.py` (the project folder and `project.json`), `src/services/regional_data.py`, and the legacy `src/data/reporter.py`; reporting to xlsx, png and csv is planned in `src/services/reporting.py` (see `project_spec.md`). Identify who calls these modules (steps or wizard), and what data crosses the boundary.
+3. **Persistence and reporting.** Trace how data flows through `src/services/project.py` (the project folder and `project.json`), and `src/services/regional_data.py`; charts and CSV files are in `src/services/reporting.py` and the per-step services, and the xlsx report is planned there (see `project_spec.md`). Identify who calls these modules (steps or wizard), and what data crosses the boundary.
 
 4. **Coupling, execution order, and entry points.** Starting from `app.py` at the repo root and `src/ui/wizard.py`, map the import graph and the startup sequence. Identify circular or surprising dependencies, shared global state, and path resolution (`src/utils/paths.py`). Note which modules `src/core/` imports, and confirm core does not depend on UI.
 

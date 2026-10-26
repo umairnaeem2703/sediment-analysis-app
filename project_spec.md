@@ -95,7 +95,7 @@ The main window is a wizard (D17, D18) with a step list on the left and Back/Nex
 
 ## A6. Functional requirements
 
-Test IDs follow `<layer>-<milestone>-<nn>`; the layers are `U` unit, `C` input contract, `P` per-dam pipeline, `W` wizard (B6). Tests for the M1 to M3 requirements, FR-M4-01, FR-M4-02 and the cross-cutting ones exist; those for FR-M4-03 to FR-M4-05 and M5 are still planned.
+Test IDs follow `<layer>-<milestone>-<nn>`; the layers are `U` unit, `C` input contract, `P` per-dam pipeline, `W` wizard (B6). Tests for the M1 to M4 requirements and the cross-cutting ones exist; those for M5 are still planned.
 
 ### M1: Regional data ingestion
 
@@ -134,9 +134,9 @@ Test IDs follow `<layer>-<milestone>-<nn>`; the layers are `U` unit, `C` input c
 |---|---|---|---|
 | FR-M4-01 | Curve inputs are prefilled from the dam sheet and validated | Hbed < Hmin < Hmax <= Hcrest and 0 < Vactive < Vmax. Hmin may be empty (shape class used). Warnings: fitted m outside [1, 4.5]; Hmax - Hbed below 10 m; computed surface area at Hmax above the sheet's drainage area. | U-M4-01, C-M4-01, W-M4-01 |
 | FR-M4-02 | Generate the curve (D19, B3.3) | The curve passes through (Hbed, 0) and (Hmax, Vmax), and through (Hmin, Vdead) when Hmin is given. The table is at 0.5 m steps from Hbed to Hcrest with elevation, volume (hm³) and area (km²). Chart included. | U-M4-02, U-M4-03, P-M4-01, W-M4-01 |
-| FR-M4-03 | Compute annual totals and sediment elevations (B3.4) | Total = TE x (suspended + bedload). Elevation is read from the curve; volumes above Vmax are clamped and warned. | U-M4-04, P-M4-02 |
-| FR-M4-04 | Accumulation to date (D12) | Sum of annual totals from the commissioning year up to (not including) the analysis year, using each record year's own total and the mean for years outside the record. Years in the record before commissioning are ignored. Requires a commissioning year. | U-M4-05 |
-| FR-M4-05 | Projection and lifespan (D20) | Cumulative volume to 100 years at the mean, min-year and max-year rates; lifespan = year the cumulative volume reaches Vdead. "Already exceeded in year X" when accumulation to date is above Vdead. | U-M4-06, U-M4-07, P-M4-03 |
+| FR-M4-03 | Compute annual totals and sediment elevations (B3.4) | Total = TE x (suspended + bedload). Elevation is read from the curve; volumes above the volume at the crest are limited to Hcrest and warned (D54). | U-M4-04, C-M4-02, P-M4-02, W-M4-02 |
+| FR-M4-04 | Accumulation to date (D12) | Sum of annual totals from the commissioning year up to (not including) the analysis year, using each record year's own total and the mean for years outside the record. Years in the record before commissioning are ignored. Requires a commissioning year. | U-M4-05, C-M4-02 |
+| FR-M4-05 | Projection and lifespan (D20) | Cumulative volume to 100 years at the mean, min-year and max-year rates; lifespan = year the cumulative volume reaches Vdead. "Already exceeded in year X" when accumulation to date is above Vdead. | U-M4-06, U-M4-07, C-M4-02, P-M4-03, W-M4-02 |
 
 ### M5: Final analysis and reporting
 
@@ -263,7 +263,7 @@ All inputs are copied into the project (FR-M1-02). Aliases are matched with `nor
 | ID | Issue | Needed by |
 |---|---|---|
 | OI-01 | Çubuk 2: Hmax - Hbed = 5.3 m for 22.4 hm³ implies a surface of about 8 to 17 km². Confirm that `Bot Elev of River` is the bed at the dam axis. | M4 |
-| OI-02 | Commissioning years and (optionally) Hmin for the three sample dams are missing. | M4 |
+| OI-02 | Commissioning years and (optionally) Hmin for the three sample dams are missing. The integration goldens use placeholder years (commissioned 1990, analysed 2020) until they are supplied. | M4 |
 | OI-03 | Convention check: "analysis year" is treated as the first year *not yet* accumulated (so the default, the current year, excludes the incomplete current year). | M4 |
 | OI-04 | Hydrologist review of the bedload before and after D35 and D36, and confirmation of the tau_ri form (D50). | M3 | Closed 2026-10-26: the hydrologist approved the formulas (D35, D36, D50), the oracle and the goldens |
 | OI-05 | Hydrologist confirmation of the shape classes (gorge 1.25, hill 2, foothill 3, lake 4) and of the plausibility thresholds in FR-M4-01. | M4 |
@@ -317,14 +317,14 @@ Three layers; imports point downward only (D16).
 | `src/core/monthly_flow_preprocessor.py` | kept, trimmed | `load`, `export_csv` and `main` moved to `services/flow_files.py` in M3.1 (`run`, which only called `load`, is gone). |
 | `src/core/reservoir.py` | new | Curve fit, table, inverse, area, plausibility checks |
 | `src/core/projection.py` | new | Accumulation, projection, lifespan |
-| `src/core/integration.py` | moved | From `src/data/reporter.py`, adapted to per-dam and TE |
+| `src/core/integration.py` | new | Annual totals with TE and the elevations they reach, limited to the crest. Replaces `src/data/reporter.py` |
 | `src/services/project.py` | new | Project model, `project.json`, import-copy |
 | `src/services/regional.py`, `suspended.py`, `bedload.py`, `reservoir.py`, `integration.py` | new | One service per wizard computation |
 | `src/services/reporting.py` | new | xlsx, png, csv, `run.json` |
 | `src/ui/wizard.py`, `src/ui/steps/` | new | Controller and one view per step |
 | `src/ui/common.py`, `src/utils/paths.py` | kept | |
 | `src/data/database.py` (`BasinDatabase`), `src/ui/{app,rusle_view,wilcock_view,integration_view}.py`, back-compat shims, `load_raster_matrix` | removed in M1 | |
-| `src/data/reporter.py` | kept until M4 | Unused by the wizard. M4.2 replaces it with `src/core/integration.py`, then `src/data/` is removed. |
+| `src/data/reporter.py` | removed in M4.2 | Replaced by `src/core/integration.py`; `src/data/` is gone |
 
 ## B3. Calculation reference
 
@@ -483,7 +483,7 @@ Each milestone is a vertical slice: services, wizard step, tests and sign-off. E
 | **M1 Regional data** | Project model, `project.json`, import-copy. Basin and dam-sheet validators, including the `Drainage Area (km2)` alias and cross-checks. Wizard shell with steps 1 to 3. Remove the old tabs, back-compat shims, `src/data/database.py` and dead code. Update the architecture section of `CLAUDE.md`. | FR-M1-* tests pass; the three sample dams load; the app opens to the wizard | Done (steps 1 to 3 and the cut-over; the old UI is tagged `legacy-ui`) |
 | **M2 Suspended** | Suspended service and step 4. Verification workbook for B3.1. Golden outputs for the three dams. | FR-M2-* tests pass; hydrologist signs off the goldens | Done (the hydrologist signed off the workbook; the goldens in `tests/benchmarks/` equal its three sample cases) |
 | **M3 Bedload** | D35 and D36 fixes. Move plotting and file I/O out of core. Bedload service and step 5. Before and after table for the hydrologist. | FR-M3-* tests pass; OI-04 closed | Built and signed off by the hydrologist (OI-04, 2026-10-26): M3.1 (formulas, oracle, core clean-up, before and after table) and M3.2 (bedload service, step 5, goldens) |
-| **M4 Reservoir and projection** | `reservoir.py`, `projection.py`, `integration.py`. Steps 6 and 7. Commissioning years and Hmin collected (OI-02). | FR-M4-* tests pass; OI-01, OI-03, OI-05 closed | In progress: M4.1 (curve, service and step 6) built, its goldens awaiting the hydrologist (OI-01, OI-05); M4.2 (integration, projection, step 7) not started |
+| **M4 Reservoir and projection** | `reservoir.py`, `projection.py`, `integration.py`. Steps 6 and 7. Commissioning years and Hmin collected (OI-02). | FR-M4-* tests pass; OI-01, OI-03, OI-05 closed | In progress: M4.1 (curve, service and step 6) built, its goldens awaiting the hydrologist (OI-01, OI-05); M4.2 (integration, projection, step 7, `src/data/` removed) built, its goldens awaiting the hydrologist (OI-02, OI-03) |
 | **M5 Reporting** | Reporting service and step 8. `run.json` with the app version. Delete `tests/legacy/`. | FR-M5-* tests pass; end-to-end sign-off for the three dams; version 1.0.0 (no build) | Not started |
 
 ## B9. Gap analysis: current code vs target
@@ -492,10 +492,10 @@ Each milestone is a vertical slice: services, wizard step, tests and sign-off. E
 |---|---|---|---|---|
 | Dams mixed | The RUSLE tab sums every row, so three dams give 118,933 m³/yr (`src/ui/rusle_view.py:321`) | Per-dam total (FR-M2-03) | M2 | Done (M2): `compute_suspended` takes one dam's rows |
 | Silent sample fallbacks | Integration loads bundled samples when nothing is chosen (`src/ui/integration_view.py:154-185`) | Error naming the missing input (FR-X-01) | M1 | Done (M1): the wizard loads only files the user chose |
-| Logic in views | `_ensure_phase2_volume`, `_load_default_phase3`, report text (`integration_view.py:86-135, 225-251`) | Services (B2) | M1 to M4 | Partly: the old views are gone; M2 to M4 add the services |
+| Logic in views | `_ensure_phase2_volume`, `_load_default_phase3`, report text (`integration_view.py:86-135, 225-251`) | Services (B2) | M1 to M4 | Done (M4.2): the old views are gone and each step has its service |
 | Not a curve | `inputs/bathymetry.csv` had one row per dam; the user has since removed it. `prepare_bathymetry` treats rows as one curve. | Generated per-dam curve (FR-M4-02) | M4 | Done (M4.1): `core/reservoir.py`, `services/reservoir.py` and step 6; goldens await sign-off |
-| No accumulation or lifespan | One year's volume is mapped to an elevation (`integration_view.py:194-205`) | FR-M4-03 to FR-M4-05 | M4 | Open |
-| Duplicate elevation columns | `Interpolated_Elevation_m`, `Elevation_m`, `Elevation` (`integration_view.py:199-205`) | One `Elevation_m` | M4 | Open |
+| No accumulation or lifespan | One year's volume is mapped to an elevation (`integration_view.py:194-205`) | FR-M4-03 to FR-M4-05 | M4 | Done (M4.2): `core/integration.py`, `core/projection.py` and step 7; goldens await sign-off |
+| Duplicate elevation columns | `Interpolated_Elevation_m`, `Elevation_m`, `Elevation` (`integration_view.py:199-205`) | One `Elevation_m` | M4 | Done (M4.2): every table has one `Elevation_m` column |
 | W* high branch | Missing square root (`src/core/wilcock.py:63, 85`) | D35 | M3 | Done (M3.1): both code paths, pinned by `tests/unit/test_wilcock_formulas.py` |
 | tau_ri precedence | File column wins (`wilcock.py:106-115`) | D36 | M3 | Done (M3.1): `bi` and `tau_ri` are computed, in the hydrologist's form (D50); supplied columns are cross-checked into `FractionalModel.warnings` |
 | Plotting in core | matplotlib in `src/core/wilcock.py:5` and `BedloadVisualizer` | `services/reporting.py` | M3 | Done (M3.1); `tests/unit/test_layering.py` keeps it that way |
@@ -503,7 +503,7 @@ Each milestone is a vertical slice: services, wizard step, tests and sign-off. E
 | Area header | `find_basin_table_columns` does not match `Drainage Area (km2)`; 9 tests fail since the `inputs/` edits | Alias added (FR-M1-03) | M1 | Done (M1.1) |
 | Dead code | `BasinDatabase` (`src/data/database.py`), `load_raster_matrix` (`src/utils/paths.py:67`), `raster_mean_t_ha_yr` and `to_phase2_handoff` (`rusle.py`), the "Antigravity" docstring (`src/__init__.py`) | Removed | M1 | Done (M1.5) |
 | Back-compat shims | Aliases and properties on `SedimentApp` (`src/ui/app.py:58-178`) | Removed with the old UI | M1 | Done (M1.5) |
-| Suspended averaging | `merge_sediment_data` averages across years before adding (`src/data/reporter.py:26-29`) | One static value per dam | M4 | Open (`reporter.py` stays until M4.2) |
+| Suspended averaging | `merge_sediment_data` averages across years before adding (`src/data/reporter.py:26-29`) | One static value per dam | M4 | Done (M4.2): `compute_integration` takes the dam's one suspended total; `reporter.py` is removed |
 | No CI or lint | No `.github/`, no ruff config, no README | D25 | M0 | Done (M0) |
 | Tests | 150 tests written without a plan; 9 fail on the edited inputs | Rebuilt (D24, D28) | M0 to M5 | In progress: the new layout is in use; `tests/legacy` has 4 failures from removed fixtures |
 | `.gitignore` | `*.csv` and `*.xlsx` ignored outside `inputs/` | Exceptions for `tests/**` | M0 | Done (M0) |
@@ -570,3 +570,9 @@ The evidence column describes the code before M1. Files removed in M1.5 can be r
 | D51 | The curve table steps 0.5 m from Hbed; a crest that is not on that grid is added as the last row, so the table always ends at Hcrest. The surface area is written `m·Vmax/(Hmax - Hbed)·x^(m-1)`, equal to `m·V/(H - Hbed)` above the bed and defined at the bed itself (zero for m above 1) | FR-M4-02 asks for 0.5 m steps from Hbed to Hcrest, and Çubuk 1's crest (908.6 m) is not a multiple of 0.5 m; B3.3's form divides 0 by 0 at the bed |
 | D52 | Step 6 prefills Hbed, Hmax, Hcrest, Vactive and Vmax from the dam sheet. An input the user changes is kept on the dam in an optional `curve` block of `project.json` (`null` keeps the sheet's value), and the step lists the differences from the sheet. `schema_version` stays 1: a project written before step 6 opens with no edits. Hmin stays the one field of step 3: editing it in step 6 writes `h_min_m`, updates step 3's field, and clears only the steps after step 6. The shape class is stored on the dam and has no default; Hmin or a shape class must be given | The sheet stays the source of the numbers, so a re-imported sheet is not hidden by copied values; two copies of Hmin would disagree; a silent default class would move every Hmin and result |
 | D53 | The reservoir service writes `reservoir_curve.csv` (elevation, volume, area) into a folder it is given, and `reporting.py` saves `reservoir_curve.png` the same way; step 6 creates no run folder. The goldens use the shape classes of the worked examples in B3.3 (Kavşakkaya foothill, Çubuk 1 and 2 hill) and no Hmin | Same boundary as D45 and D49; the hydrologist confirms the classes under OI-05 |
+| D54 | A sediment volume above the volume at the crest, V(Hcrest), is limited to the crest elevation and counted into one warning per table, instead of being limited at Vmax as the wording of FR-M4-03 says | B3.3 defines the curve up to Hcrest and B3.4 limits to Hcrest; Vmax is only the volume at Hmax, and a reservoir can fill above it |
+| D55 | The elevation of a year of the record is H of that year's own total, the elevation of the accumulation to date is H(S0), and each projected year has H(S(a+k)) | B3.4 defines H for a cumulative volume; a year's own total read alone is what FR-M4-03 and the old code did, and the other two follow from the same function |
+| D56 | Lifespan is `a + (Vdead - S0) / r` as a fractional year, not rounded and not cut at the 100-year projection. S0 >= Vdead is "already exceeded" and wins over r = 0; the year X is the first year from the commissioning year whose cumulative total reaches Vdead. r = 0 with S0 < Vdead is "not reached". The mean for years outside the record is the mean of the whole record, including record years before commissioning | B3.4 gives the formula; a rounded year would hide the small differences between the three rates; the mean of the record is the best estimate of an unrecorded year |
+| D57 | Step 7 has nothing to enter: it uses steps 3 to 6 and needs the commissioning year, and without it says so and names step 3. The service writes `integration.csv` (per year: suspended and bedload as they stay after TE, total, elevation) and `projection.csv` (cumulative volume and elevation at each rate) into a folder it is given; the year-by-year accumulation stays in the result. The chart is drawn by `reporting.py`; saving it is M5 | Same boundary as D45, D49 and D53; D42 lets steps 4 to 6 run without a commissioning year, so this is the first step that cannot |
+| D58 | `src/data/` and `tests/legacy/test_reporter.py` are removed | Nothing used them after M4.2 and the new modules replace them |
+| D59 | The M4.2 oracle is a workbook with one sheet of live formulas for each of seven cases, plus four CSVs worked out with `math` in `tests/verification/make_integration_oracle.py`. The goldens use placeholder commissioning and analysis years (1990 and 2020, OI-02) | Same method as D46. The real years of the three dams are not known |
