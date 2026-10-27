@@ -472,7 +472,7 @@ The traceability matrix is the Tests column in A6.
 
 **CI** (`.github/workflows/ci.yml`, D25): on push and pull request, on `windows-latest`: checkout, `setup-python` 3.14, `pip install -r requirements.txt`, `ruff check .`, `ruff format --check .`, `pytest`. A failing run blocks the merge to `main` through branch protection. There is no mypy or coverage gate.
 
-**Local tooling.** Shared Claude config (`.claude/` and `.agents/`, except `.claude/settings.local.json`) is tracked (D27), so the team works with the same skills, hooks and agents. CI never depends on them. `/validate-calc-engine` and `.claude/agents/explore-agent.md` are updated locally in M0 (the agent still mentions CustomTkinter and PDF output).
+**Local tooling.** Shared Claude config (`.claude/` and `.agents/`, except `.claude/settings.local.json`) is tracked (D27), so the team works with the same skills, hooks and agents. CI never depends on them. `/validate-calc-engine` is updated locally in M0.
 
 **Packaging and release** are out of scope (D30).
 
