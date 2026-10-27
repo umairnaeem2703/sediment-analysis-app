@@ -58,17 +58,17 @@ def test_c_m1_03_sample_basin_table_loads_to_canonical_columns():
     assert loaded.warnings == []
 
 
-def test_c_m1_03_turkish_headers_are_recognised(tmp_path):
+def test_c_m1_03_turkish_headers_are_refused_naming_the_canonical_labels(tmp_path):
     path = _write(
         tmp_path,
         "tr.csv",
         "Baraj Adı,Havza,Alt Havza Adı,Alan (km2),Eğim\nÇubuk 1,Sakarya,Ankara Alt Havzası,834.7,0.09\n",
     )
 
-    data = load_basin_table(path).data
+    with pytest.raises(ValueError, match="required column") as error:
+        load_basin_table(path)
 
-    assert list(data.columns) == CANONICAL
-    assert data.loc[0, "Sub-basin Name"] == "Ankara Alt Havzası"
+    assert all(label in str(error.value) for label in CANONICAL) and "Baraj Adı" in str(error.value)
 
 
 def test_c_m1_04_blank_rows_are_skipped(tmp_path):
@@ -278,14 +278,14 @@ def test_c_m1_07_sample_zonal_means_load():
     assert loaded.warnings == []
 
 
-def test_c_m1_07_columns_are_found_by_alias(tmp_path):
-    path = _write(tmp_path, "z.csv", "Alt Havza,Ortalama\nAnkara Alt Havzası,3.1\n")
+def test_c_m1_07_labels_are_found_whatever_their_case_and_spacing(tmp_path):
+    path = _write(tmp_path, "z.csv", "sub-basin  NAME,Mean\nAnkara Alt Havzası,3.1\n")
 
     assert load_zonal_means(path).data["MEAN"].tolist() == [3.1]
 
 
 def test_c_m1_07_rows_with_empty_or_non_numeric_means_are_skipped_and_counted(tmp_path):
-    path = _write(tmp_path, "z.csv", "Sub-basin,MEAN\nA,1.5\nB,\nC,n/a\n,2.0\nD,2.5\n")
+    path = _write(tmp_path, "z.csv", "Sub-basin Name,MEAN\nA,1.5\nB,\nC,n/a\n,2.0\nD,2.5\n")
 
     loaded = load_zonal_means(path)
 
@@ -299,9 +299,9 @@ def test_c_m1_07_rows_with_empty_or_non_numeric_means_are_skipped_and_counted(tm
 @pytest.mark.parametrize(
     ("text", "fragment"),
     [
-        ("Sub-basin,Value\nA,1\n", "MEAN"),
-        ("Zone,MEAN\nA,1\n", "sub-basin name"),
-        ("Sub-basin,MEAN\nA,\nB,x\n", "no valid"),
+        ("Sub-basin Name,Value\nA,1\n", "MEAN"),
+        ("Zone,MEAN\nA,1\n", "Sub-basin Name"),
+        ("Sub-basin Name,MEAN\nA,\nB,x\n", "no valid"),
     ],
 )
 def test_c_m1_07_unusable_zonal_files_are_errors(tmp_path, text, fragment):
@@ -341,11 +341,10 @@ TURKISH_ROWS = [
     ("Kavşakkaya", "Sakarya", "Ankara Alt Havzası", 309.2, 0.23),
     ("İznik Barajı", "Marmara", "Göksu Alt Havzası", 12.5, 0.16),
 ]
-TURKISH_HEADER = ["Baraj Adı", "Havza Adı", "Alt Havza Adı", "Alan (km2)", "Eğim"]
 
 
 def _turkish_csv(separator, decimal):
-    lines = [separator.join(TURKISH_HEADER)]
+    lines = [separator.join(CANONICAL)]
     for dam, basin, sub, area, slope in TURKISH_ROWS:
         numbers = [str(area).replace(".", decimal), str(slope).replace(".", decimal)]
         lines.append(separator.join([dam, basin, sub, *numbers]))
@@ -406,7 +405,7 @@ def test_c_x_01_a_corrupt_excel_file_is_an_error_naming_it(tmp_path, name):
 
 
 def test_c_m1_07_validate_zonal_means_accepts_an_in_memory_table():
-    grid = pd.DataFrame({"Sub-basin": ["A", "B"], "MEAN": [1.5, None]})
+    grid = pd.DataFrame({"Sub-basin Name": ["A", "B"], "MEAN": [1.5, None]})
 
     loaded = validate_zonal_means(grid, "grid")
 

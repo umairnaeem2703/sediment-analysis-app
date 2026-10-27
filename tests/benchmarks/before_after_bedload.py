@@ -30,7 +30,7 @@ FLOW_FILES = ("cubuk_1_flow.csv", "cubuk_2_flow.csv", "kavsakkaya_flow.csv")
 
 def annual_volumes(daily: pd.DataFrame, model: FractionalModel, tau_ri: np.ndarray, square_root: bool) -> pd.Series:
     """Annual bedload (m³/yr) by water year with the given tau_ri and the W* high branch with or without the root."""
-    q = daily["Flow"].to_numpy(dtype=float)
+    q = daily["Flow Q (m3/s)"].to_numpy(dtype=float)
     velocity = q / (model.bed_width * model.depth)
     tau = model.rho_w * model.g * model.manning_n**2 * velocity**2 / model.depth ** (1.0 / 3.0)
     u_star = np.sqrt(tau / model.rho_w)
@@ -62,7 +62,7 @@ def main() -> None:
         }
         replica = annual_volumes(daily, model, computed_tau_ri, square_root=True)
         assert np.allclose(replica, after, rtol=1e-9, atol=0), f"{name}: the copy of the formulas drifted from src"
-        mean_flow = daily.groupby(WATER_YEAR_COLUMN)["Flow"].mean()
+        mean_flow = daily.groupby(WATER_YEAR_COLUMN)["Flow Q (m3/s)"].mean()
         for year in mean_flow.index:
             rows.append(
                 [name.removesuffix("_flow.csv"), year, mean_flow[year], *(column[year] for column in columns.values())]

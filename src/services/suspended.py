@@ -11,6 +11,7 @@ from typing import List, NamedTuple
 import pandas as pd
 
 from src.core.rusle import YieldCalculator, ZonalMatcher
+from src.services.labels import MEAN
 from src.services.regional import AREA, DAM, SLOPE, SUBBASIN, name_key
 
 CSV_NAME = "suspended.csv"
@@ -57,7 +58,9 @@ def compute_suspended(
     """Suspended sediment of each sub-basin of one dam. `zonal_source` names the zonal file in error messages."""
     if sub_basins[DAM].map(name_key).nunique() > 1:
         raise ValueError(f"Suspended sediment is computed for one dam at a time; got {sorted(set(sub_basins[DAM]))}.")
-    resolution = ZonalMatcher.resolve_all(ZonalMatcher.build_lookup(zonal), list(sub_basins[SUBBASIN]))
+    resolution = ZonalMatcher.resolve_all(
+        ZonalMatcher.build_lookup(zonal[SUBBASIN], zonal[MEAN]), list(sub_basins[SUBBASIN])
+    )
     if resolution.unresolved:
         raise ValueError(
             f"{zonal_source}: no zonal mean can be assigned to sub-basin(s): {', '.join(resolution.unresolved)}. "

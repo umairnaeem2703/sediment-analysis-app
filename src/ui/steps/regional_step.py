@@ -2,11 +2,11 @@ import tkinter as tk
 from tkinter import ttk
 from typing import List
 
-from src.services.regional import BASIN_COLUMNS
+from src.services.labels import BASIN_TABLE
 from src.ui.common import browse_open_file, browse_open_files, show_error, show_warning
 from src.ui.steps.base import Step
 
-COLUMNS = list(BASIN_COLUMNS.values())
+COLUMNS = list(BASIN_TABLE)
 FLAG = "⚠ "
 
 

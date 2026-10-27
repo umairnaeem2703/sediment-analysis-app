@@ -69,9 +69,15 @@ def test_c_m1_04_table_errors_locate_the_invalid_cells():
 
 
 def test_c_m1_08_read_basin_grid_keeps_cell_text_under_canonical_headers(tmp_path):
-    path = _csv(tmp_path, "t.csv", "A,B,S1,10.50,steep", ",,,,", header="Baraj,Havza,Alt Havza,Alan,Eğim")
+    path = _csv(
+        tmp_path,
+        "t.csv",
+        "A,B,S1,10.50,steep",
+        ",,,,",
+        header="DAM NAME,basin name,Sub-basin  Name,Drainage Area (km²),main waterway slope",
+    )
 
-    grid = read_basin_grid(path)
+    grid = read_basin_grid(path).data
 
     assert list(grid.columns) == HEADER.split(",")
     assert grid.loc[0].tolist() == ["A", "B", "S1", "10.50", "steep"]  # text exactly as written
@@ -229,7 +235,7 @@ def test_c_m1_07_zonal_means_are_validated_then_copied(project, data):
 
 def test_c_m1_07_skipped_zonal_rows_come_back_as_warnings(tmp_path, data):
     path = tmp_path / "z.csv"
-    path.write_text("Sub-basin,MEAN\nA,1.5\nB,\n", encoding="utf-8")
+    path.write_text("Sub-basin Name,MEAN\nA,1.5\nB,\n", encoding="utf-8")
 
     warnings = data.import_zonal_means(path)
 
@@ -239,7 +245,7 @@ def test_c_m1_07_skipped_zonal_rows_come_back_as_warnings(tmp_path, data):
 
 def test_c_m1_07_an_unusable_zonal_file_is_rejected_and_nothing_is_copied(tmp_path, project, data):
     path = tmp_path / "z.csv"
-    path.write_text("Sub-basin,Value\nA,1\n", encoding="utf-8")
+    path.write_text("Sub-basin Name,Value\nA,1\n", encoding="utf-8")
 
     with pytest.raises(ValueError, match="MEAN"):
         data.import_zonal_means(path)

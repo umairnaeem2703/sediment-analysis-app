@@ -81,85 +81,6 @@ def to_ascii_turkish(text: str) -> str:
     return str(text).translate(ascii_map)
 
 
-def normalize_header(text) -> str:
-    """Normalise a column header for lookup: Turkish-aware lowercase, ASCII-folded,
-    ³ -> 3, whitespace removed, '.' and ':' stripped (e.g. 'Flow Q (m³/s)' -> 'flowq(m3/s)')."""
-    folded = to_ascii_turkish(turkish_lower(text)).replace("³", "3")
-    return "".join(folded.split()).replace(".", "").replace(":", "")
-
-
-def find_basin_table_columns(columns) -> dict:
-    """Identify column names for dam, basin, subbasin, area, slope, year across English and Turkish."""
-    cols = list(columns)
-
-    def match_col(candidates):
-        for candidate in candidates:
-            cand_norm = to_ascii_turkish(turkish_lower(candidate)).strip()
-            for col in cols:
-                c_norm = to_ascii_turkish(turkish_lower(col)).strip()
-                if c_norm == cand_norm:
-                    return col
-        return None
-
-    return {
-        "basin": match_col(["Basin Name", "Basin", "Havza Adı", "Havza Adi", "Havza", "Havzası", "Havzasi"]),
-        "subbasin": match_col(
-            [
-                "Sub-basin Name",
-                "Subbasin Name",
-                "Sub-basin",
-                "Subbasin",
-                "Alt Havza Adı",
-                "Alt Havza Adi",
-                "Alt Havza",
-                "Alt-Havza Adı",
-                "Alt-Havza Adi",
-                "Alt-Havza",
-                "Alt Havzası",
-                "Alt Havzasi",
-            ]
-        ),
-        "dam": match_col(["Dam Name", "Dam", "Baraj Adı", "Baraj Adi", "Baraj", "Barajı", "Baraji"]),
-        "area": match_col(
-            [
-                "Drainage Area (km2)",
-                "Drainage Area",
-                "Area",
-                "Area_km2",
-                "Area (km2)",
-                "Area(km2)",
-                "Alan",
-                "Alan (km2)",
-                "Alan(km2)",
-                "Alan_km2",
-            ]
-        ),
-        "slope": match_col(
-            [
-                "Main Waterway Slope",
-                "Slope",
-                "Slope_m_per_m",
-                "Eğim",
-                "Egim",
-                "Ana Su Yolu Eğimi",
-                "Ana Su Yolu Egimi",
-                "Su Yolu Eğimi",
-                "Su Yolu Egimi",
-            ]
-        ),
-        "year": match_col(["Year", "Yıl", "Yil"]),
-    }
-
-
-@dataclass
-class BasinRow:
-    dam: str
-    basin: str
-    subbasin: str
-    area_km2: float
-    slope: float
-
-
 @dataclass
 class RusleMetrics:
     raster_mean_t_ha_yr: float
@@ -251,42 +172,15 @@ class ZonalMatcher:
         return {alias for alias in aliases if alias}
 
     @classmethod
-    def build_lookup(cls, zonal_df: pd.DataFrame) -> Dict[str, float]:
-        if zonal_df.empty:
-            raise ValueError("The selected zonal statistics file is empty.")
-
-        mean_candidates = ("MEAN", "mean", "Mean", "ORTALAMA", "Ortalama", "ortalama")
-        mean_cols = [col for col in mean_candidates if col in zonal_df.columns]
-        if not mean_cols:
-            raise ValueError("Zonal statistics file must contain a MEAN column.")
-        mean_col = mean_cols[0]
-
-        name_col = None
-        for candidate in zonal_df.columns:
-            normalized = to_ascii_turkish(turkish_lower(candidate)).strip()
-            if ("sub" in normalized and "basin" in normalized) or "alt" in normalized or "havza" in normalized:
-                name_col = candidate
-                break
-        if name_col is None:
-            for candidate in zonal_df.columns:
-                normalized = to_ascii_turkish(turkish_lower(candidate)).strip()
-                if "basin" in normalized or "havza" in normalized:
-                    name_col = candidate
-                    break
-        if name_col is None:
-            non_mean = [c for c in zonal_df.columns if c not in mean_candidates]
-            if non_mean:
-                name_col = non_mean[0]
-            else:
-                raise ValueError("Zonal statistics file must include a sub-basin name column.")
-
+    def build_lookup(cls, names, means) -> Dict[str, float]:
+        """Map every spelling of each sub-basin name to its zonal MEAN. `names` and `means` are the two columns of a
+        validated zonal table; a name with no number is skipped."""
         lookup: Dict[str, float] = {}
         conflicting: Set[str] = set()
-        for _, row in zonal_df.iterrows():
-            name = row.get(name_col)
+        for name, mean in zip(names, means):
             if pd.isna(name) or str(name).strip() == "":
                 continue
-            mean_value = pd.to_numeric(row.get(mean_col), errors="coerce")
+            mean_value = pd.to_numeric(mean, errors="coerce")
             if pd.isna(mean_value):
                 continue
 
@@ -301,10 +195,6 @@ class ZonalMatcher:
         for key in conflicting:
             del lookup[key]
         return lookup
-
-    @classmethod
-    def resolve_zonal_mean(cls, zonal_lookup: Dict[str, float], subbasin_value) -> Optional[float]:
-        return cls.resolve_zonal_match(zonal_lookup, subbasin_value).value
 
     @classmethod
     def resolve_zonal_match(cls, zonal_lookup: Dict[str, float], subbasin_value) -> "ZonalMatch":
@@ -373,13 +263,6 @@ class ZonalMatcher:
             elif match.method == "loose":
                 loose[str(name)] = match.candidates[0]
         return ZonalResolution(means, loose, unresolved)
-
-    @staticmethod
-    def unresolved_error(zonal_lookup: Dict[str, float], unresolved: List[str]) -> ValueError:
-        keys = ", ".join(sorted(zonal_lookup.keys())[:25])
-        return ValueError(
-            f"MEAN value missing for sub-basin(s): {', '.join(sorted(set(unresolved)))}. Available zonal keys: {keys}"
-        )
 
 
 class YieldCalculator:

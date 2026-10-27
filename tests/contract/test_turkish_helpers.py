@@ -1,8 +1,9 @@
-"""C-X-02: the Turkish-first helpers behind column and name matching (FR-X-02)."""
+"""C-X-02: the Turkish-first helpers behind header and name matching (FR-X-02)."""
 
 import pytest
 
-from src.core.rusle import normalize_header, to_ascii_turkish, turkish_lower
+from src.core.rusle import to_ascii_turkish, turkish_lower
+from src.services.labels import fold
 
 
 @pytest.mark.parametrize(
@@ -19,8 +20,8 @@ from src.core.rusle import normalize_header, to_ascii_turkish, turkish_lower
         ("Water_Year", "water_year"),
     ],
 )
-def test_c_x_02_headers_are_normalized_to_lowercase_ascii_without_spaces(header, expected):
-    assert normalize_header(header) == expected
+def test_c_x_02_headers_are_folded_to_lowercase_ascii_without_spaces(header, expected):
+    assert fold(header) == expected
 
 
 @pytest.mark.parametrize(

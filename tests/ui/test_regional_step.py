@@ -189,7 +189,7 @@ def test_w_m1_02_dam_sheet_warnings_are_shown(app, dialogs):
 def test_w_m1_02_zonal_warnings_are_shown(app, dialogs):
     wizard, step, _, tmp_path = app
     z = tmp_path / "z.csv"
-    z.write_text("Sub-basin,MEAN\nA,1.5\nB,\n", encoding="utf-8")
+    z.write_text("Sub-basin Name,MEAN\nA,1.5\nB,\n", encoding="utf-8")
 
     step.import_zonal_means(str(z))
 
@@ -330,7 +330,7 @@ def test_w_m1_02_a_disk_error_while_saving_dam_sheets_is_shown_not_raised(app, d
 def test_w_m1_02_zonal_warnings_stay_visible_and_survive_reopening(app, tk_root, dialogs):
     wizard, step, _, tmp_path = app
     z = tmp_path / "z.csv"
-    z.write_text("Sub-basin,MEAN\nA,1.5\nB,\n", encoding="utf-8")
+    z.write_text("Sub-basin Name,MEAN\nA,1.5\nB,\n", encoding="utf-8")
     step.import_zonal_means(str(z))
     assert any("skipped 1 row(s)" in step.problem_list.get(i) for i in range(step.problem_list.size()))
 

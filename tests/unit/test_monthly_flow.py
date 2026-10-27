@@ -12,10 +12,10 @@ from src.core.monthly_flow_preprocessor import (
     SECONDS_PER_DAY,
     WATER_YEAR_COLUMN,
     MonthlyFlowPreprocessor,
-    is_monthly_flow_table,
     prepare_daily_flow,
 )
 from src.core.wilcock import TimeSeriesAggregator
+from src.services.labels import is_monthly_flow_table
 from tests.flows import ASCII_HEADER, TURKISH_HEADER, dsi_table, sample_values
 from tests.samples import sample_fraction_model
 
@@ -25,10 +25,9 @@ def _monthly(values=None, **kwargs):
     return pre, pre.parse_table(dsi_table(values or sample_values(), summary_rows=False))
 
 
-@pytest.mark.parametrize("header", [TURKISH_HEADER, ASCII_HEADER], ids=["turkish", "ascii"])
-def test_u_m3_01_parses_turkish_and_ascii_headers(header):
+def test_u_m3_01_parses_the_dsi_table():
     values = sample_values()
-    monthly = MonthlyFlowPreprocessor().parse_table(dsi_table(values, header=header))
+    monthly = MonthlyFlowPreprocessor().parse_table(dsi_table(values))
 
     assert list(monthly.columns) == [WATER_YEAR_COLUMN, "Year", "Month", "Volume_hm3"]
     assert len(monthly) == 24
@@ -51,7 +50,7 @@ def test_u_m3_01_missing_year_column_raises():
 
 def test_u_m3_01_missing_month_column_raises():
     df = dsi_table(sample_values()).drop(columns=["Şubat"])
-    with pytest.raises(KeyError, match="subat"):
+    with pytest.raises(KeyError, match="Şubat"):
         MonthlyFlowPreprocessor().parse_table(df)
 
 
@@ -119,7 +118,7 @@ def test_u_m3_01_mass_conservation_per_month():
     daily = pre.disaggregate(monthly)
 
     vol = daily.assign(Year=daily["Date"].dt.year, Month=daily["Date"].dt.month)
-    vol["m3"] = vol["Flow"] * SECONDS_PER_DAY
+    vol["m3"] = vol["Flow Q (m3/s)"] * SECONDS_PER_DAY
     per_month = vol.groupby(["Year", "Month"])["m3"].sum()
     expected = monthly.set_index(["Year", "Month"])["Volume_hm3"] * HM3_TO_M3
     np.testing.assert_allclose(per_month.loc[expected.index], expected, rtol=1e-12, atol=1e-6)
@@ -150,23 +149,23 @@ def test_u_m3_01_sigma_zero_is_uniform():
     pre, monthly = _monthly({1974: [3.0] * 12}, sigma=0.0)
     daily = pre.disaggregate(monthly)
     expected = 3.0 * HM3_TO_M3 / (daily["Date"].dt.days_in_month * SECONDS_PER_DAY)
-    np.testing.assert_allclose(daily["Flow"], expected, rtol=1e-12)
+    np.testing.assert_allclose(daily["Flow Q (m3/s)"], expected, rtol=1e-12)
 
 
 def test_u_m3_01_zero_volume_month_gives_zero_flow():
     values = {1974: [0.0] + [2.0] * 11}
     pre, monthly = _monthly(values)
     daily = pre.disaggregate(monthly)
-    october = daily[daily["Date"].dt.month == 10]["Flow"]
+    october = daily[daily["Date"].dt.month == 10]["Flow Q (m3/s)"]
     assert len(october) == 31
     assert (october == 0.0).all()
-    assert not daily["Flow"].isna().any()
+    assert not daily["Flow Q (m3/s)"].isna().any()
 
 
 def test_u_m3_01_lognormal_produces_peaks():
     pre, monthly = _monthly({1974: [10.0] * 12})
     daily = pre.disaggregate(monthly)
-    ratio = daily.groupby(daily["Date"].dt.month)["Flow"].agg(lambda s: s.max() / s.mean())
+    ratio = daily.groupby(daily["Date"].dt.month)["Flow Q (m3/s)"].agg(lambda s: s.max() / s.mean())
     assert (ratio > 1.3).all()
 
 
@@ -179,7 +178,7 @@ def test_u_m3_01_different_seed_changes_series():
     _, monthly = _monthly()
     a = MonthlyFlowPreprocessor(seed=1).disaggregate(monthly)
     b = MonthlyFlowPreprocessor(seed=2).disaggregate(monthly)
-    assert not np.allclose(a["Flow"], b["Flow"])
+    assert not np.allclose(a["Flow Q (m3/s)"], b["Flow Q (m3/s)"])
 
 
 def test_u_m3_01_month_seed_independent_of_other_years():
@@ -195,13 +194,13 @@ def test_u_m3_01_month_seed_independent_of_other_years():
 def test_u_m3_01_output_schema():
     pre, monthly = _monthly()
     daily = pre.disaggregate(monthly)
-    assert list(daily.columns) == ["Date", "Flow", WATER_YEAR_COLUMN]
+    assert list(daily.columns) == ["Date", "Flow Q (m3/s)", WATER_YEAR_COLUMN]
     assert pd.api.types.is_datetime64_any_dtype(daily["Date"])
-    assert pd.api.types.is_float_dtype(daily["Flow"])
+    assert pd.api.types.is_float_dtype(daily["Flow Q (m3/s)"])
     assert pd.api.types.is_integer_dtype(daily[WATER_YEAR_COLUMN])
     assert daily["Date"].is_monotonic_increasing
     assert not daily["Date"].duplicated().any()
-    assert (daily["Flow"] >= 0).all()
+    assert (daily["Flow Q (m3/s)"] >= 0).all()
 
 
 @pytest.mark.parametrize("sigma", [-0.1, float("nan"), float("inf")], ids=["negative", "nan", "inf"])
@@ -240,8 +239,8 @@ def test_u_m3_01_lognormal_increases_bedload_vs_flat():
     flat_pre, monthly = _monthly(values, sigma=0.0)
     peaky_pre = MonthlyFlowPreprocessor(sigma=0.6)
 
-    flat = model.compute_transport_series(flat_pre.disaggregate(monthly)["Flow"].to_numpy()).sum()
-    peaky = model.compute_transport_series(peaky_pre.disaggregate(monthly)["Flow"].to_numpy()).sum()
+    flat = model.compute_transport_series(flat_pre.disaggregate(monthly)["Flow Q (m3/s)"].to_numpy()).sum()
+    peaky = model.compute_transport_series(peaky_pre.disaggregate(monthly)["Flow Q (m3/s)"].to_numpy()).sum()
     assert peaky > flat
 
 
@@ -267,10 +266,10 @@ def test_u_m3_01_prepare_daily_flow_matches_disaggregate_and_reports_conversion(
 
 
 def test_u_m3_01_is_monthly_flow_table_rejects_daily_series():
-    daily = pd.DataFrame({"Date": ["01/01/2000"], "Flow": [1.0]})
+    daily = pd.DataFrame({"Date": ["01/01/2000"], "Flow Q (m3/s)": [1.0]})
 
     assert not is_monthly_flow_table(daily)
-    assert not is_monthly_flow_table(daily.rename(columns={"Date": "Tarih", "Flow": "Debi"}))
+    assert not is_monthly_flow_table(daily.rename(columns={"Date": "Tarih", "Flow Q (m3/s)": "Debi"}))
 
 
 # --- the AR(1) lag-1 component (D62) -----------------------------------------------------------
@@ -294,7 +293,7 @@ def _reference_flow(monthly, sigma, phi, seed=0):
 
 def _lag1_within_months(daily):
     """The mean lag-1 autocorrelation of log flow, taken within each month about the month's mean."""
-    log_flow = np.log(daily["Flow"])
+    log_flow = np.log(daily["Flow Q (m3/s)"])
     deviation = log_flow - log_flow.groupby([daily["Date"].dt.year, daily["Date"].dt.month]).transform("mean")
     same_month = daily["Date"].dt.month.to_numpy()[1:] == daily["Date"].dt.month.to_numpy()[:-1]
     return float(np.corrcoef(deviation.to_numpy()[1:][same_month], deviation.to_numpy()[:-1][same_month])[0, 1])
@@ -314,7 +313,7 @@ def test_u_m3_01_phi_zero_reproduces_the_independent_lognormal_split():
         rng = np.random.default_rng(np.random.SeedSequence([0, int(year), int(month)]))
         weights = rng.lognormal(mean=-0.5 * pre.sigma**2, sigma=pre.sigma, size=days)
         expected.extend(volume * HM3_TO_M3 * weights / weights.sum() / SECONDS_PER_DAY)
-    assert daily["Flow"].to_numpy() == pytest.approx(expected, rel=1e-12)
+    assert daily["Flow Q (m3/s)"].to_numpy() == pytest.approx(expected, rel=1e-12)
 
 
 @pytest.mark.parametrize("phi", [0.3, 0.8, 0.95])
@@ -323,14 +322,16 @@ def test_u_m3_01_phi_series_matches_the_day_by_day_reference_across_months(phi):
 
     daily = pre.disaggregate(monthly)
 
-    assert daily["Flow"].to_numpy() == pytest.approx(_reference_flow(monthly, 0.9, phi, seed=4), rel=1e-12)
+    assert daily["Flow Q (m3/s)"].to_numpy() == pytest.approx(_reference_flow(monthly, 0.9, phi, seed=4), rel=1e-12)
 
 
 def test_u_m3_01_phi_keeps_every_months_volume_exact():
     pre, monthly = _monthly(phi=0.8)
     daily = pre.disaggregate(monthly)
 
-    got = (daily["Flow"] * SECONDS_PER_DAY).groupby([daily["Date"].dt.year, daily["Date"].dt.month]).sum() / HM3_TO_M3
+    got = (daily["Flow Q (m3/s)"] * SECONDS_PER_DAY).groupby(
+        [daily["Date"].dt.year, daily["Date"].dt.month]
+    ).sum() / HM3_TO_M3
     assert got.to_numpy() == pytest.approx(monthly["Volume_hm3"].to_numpy(), rel=1e-12)
 
 
@@ -352,10 +353,12 @@ def test_u_m3_01_the_chain_carries_over_a_month_boundary_and_restarts_after_a_ga
     daily = pre.disaggregate(monthly)
 
     reference = _reference_flow(monthly, 1.0, 0.9)
-    assert daily["Flow"].to_numpy() == pytest.approx(reference, rel=1e-12)
+    assert daily["Flow Q (m3/s)"].to_numpy() == pytest.approx(reference, rel=1e-12)
     restarted = MonthlyFlowPreprocessor(sigma=1.0, phi=0.9).disaggregate(monthly[monthly["Year"] >= 1975])
     first = restarted.iloc[0]["Date"]
-    assert daily.loc[daily["Date"] == first, "Flow"].iloc[0] == pytest.approx(restarted.iloc[0]["Flow"], rel=1e-12)
+    assert daily.loc[daily["Date"] == first, "Flow Q (m3/s)"].iloc[0] == pytest.approx(
+        restarted.iloc[0]["Flow Q (m3/s)"], rel=1e-12
+    )
 
 
 @pytest.mark.parametrize("phi", [-0.1, 1.0, 1.5, float("nan"), float("inf")])
@@ -373,4 +376,4 @@ def test_u_m3_01_prepare_daily_flow_with_phi_is_reported_and_deterministic():
 
     pd.testing.assert_frame_equal(first, again)
     assert "AR(1)" in notes[0] and "φ=0.8" in notes[0] and "AR(1)" not in flat_notes[0]
-    assert not np.allclose(first["Flow"], flat["Flow"])
+    assert not np.allclose(first["Flow Q (m3/s)"], flat["Flow Q (m3/s)"])

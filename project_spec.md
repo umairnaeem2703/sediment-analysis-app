@@ -155,41 +155,42 @@ Test IDs follow `<layer>-<milestone>-<nn>`; the layers are `U` unit, `C` input c
 | FR-X-03 | Validation errors name the file, row or cell and the expected form | Error text contains the offending location | C-X-04 |
 | FR-X-04 | Editing a step invalidates later steps | Later steps become locked and their results are cleared | W-X-02 |
 | FR-X-05 | Long computations run off the Tk thread | The UI stays responsive; the result is delivered via `run_in_background` | W-X-03 |
+| FR-X-06 | Each input has one canonical label per column, matched by one rule (D67) | Every shipped sample loads without a warning; a retired alias or a Turkish header is refused naming the canonical label; columns outside the format give one warning per file | C-X-05 |
 
 ## A7. Data contracts
 
-All inputs are copied into the project (FR-M1-02). Aliases are matched with `normalize_header` or `find_basin_table_columns`; the first column name is canonical. The sample files in `inputs/` are the reference layouts.
+All inputs are copied into the project (FR-M1-02). Every column has **one canonical label** (`src/services/labels.py`, D67); `INPUT_FORMAT.md` is the same table written for the user. A header matches its label when the two are equal after folding case, Turkish letters, spaces, `.` `:` `%` and the superscripts `²` `³` (`labels.fold`), so `drainage area (km²)` matches `Drainage Area (km2)`. No other spelling and no other language is accepted. A missing required label is refused with the canonical labels and the columns the file has; two headers that fold to one label are refused; columns outside the format are ignored, with one warning per file naming them. Numbers use a point (D66). The sample files in `inputs/` are the reference layouts and load without a warning.
 
-**Basin table** (sample: `inputs/master_yield.csv`)
+**Basin table** (sample: `inputs/master_yield.csv`; all five columns required)
 
-| Column (canonical) | Aliases | Unit | Rule |
-|---|---|---|---|
-| Dam Name | Dam, Baraj, Baraj Adı | | Required |
-| Basin Name | Basin, Havza, Havza Adı | | Required |
-| Sub-basin Name | Sub-basin, Alt Havza, Alt Havza Adı | | Required, unique within a dam |
-| Drainage Area (km2) | Area, Area_km2, Alan, Alan (km2) | km² | Required, > 0. **The alias `Drainage Area (km2)` is new (M1).** Downstream dams hold the *incremental* catchment (D21). |
-| Main Waterway Slope | Slope, Slope_m_per_m, Eğim | m/m | Required, numeric. Read as a decimal fraction (D23). |
+| Column | Unit | Rule |
+|---|---|---|
+| Dam Name | | Required |
+| Basin Name | | Required |
+| Sub-basin Name | | Required, unique within a dam |
+| Drainage Area (km2) | km² | Required, > 0. Downstream dams hold the *incremental* catchment (D21). |
+| Main Waterway Slope | m/m | Required, numeric. Read as a decimal fraction (D23). |
 
-**Zonal means** (sample: `inputs/raw_zonal_means.csv`): a sub-basin name column (`Sub-basin`, `Alt Havza`, ...) and `MEAN` (t/ha/yr).
+**Zonal means** (sample: `inputs/raw_zonal_means.csv`; both columns required): `Sub-basin Name` (the same label as the basin table, the join key) and `MEAN` (t/ha/yr).
 
-**Dam sheet** (samples: `inputs/bathymetry/*_bathymetry.csv`; one row per dam)
+**Dam sheet** (samples: `inputs/bathymetry/*_bathymetry.csv`; one row per dam). Required: Dam Name, Bot Elev of River, Cret Elev, Max Res. Elev, Active Vol., Max Vol. The other columns are optional.
 
 | Column | Symbol | Unit | Use |
 |---|---|---|---|
 | Dam Name | | | Match with the basin table |
-| Drainage Area (km2) | | km² | Cross-check only |
-| Longest River Length (km) | | km | Informational |
-| Top Elev of River, Bot Elev of River | | m | **Bot Elev of River = Hbed**, must be the bed at the dam axis (OI-01). Top is informational. |
-| Avg. Slope | | m/m | Cross-check only. **Values are decimal m/m, not percent (D23).** |
+| Drainage Area (km2) | | km² | Optional. Cross-check only |
+| Longest River Length (km) | | km | Optional. Informational |
+| Top Elev of River, Bot Elev of River | | m | **Bot Elev of River = Hbed**, must be the bed at the dam axis (OI-01). Top is optional and informational. |
+| Avg. Slope | | m/m | Optional. Cross-check only. **Values are decimal m/m, not percent (D23).** |
 | Cret Elev | Hcrest | m | Curve upper end |
 | Max Res. Elev | Hmax | m | Curve |
 | Active Vol. | Vactive | hm³ | Curve; Vdead = Vmax - Vactive |
 | Max Vol. | Vmax | hm³ | Curve |
-| Avg. Flow | | hm³/yr | Cross-check against the DSİ `ORT.` row when present |
+| Avg. Flow | | hm³/yr | Optional. Shown in step 3 |
 
-**Daily flow**: `Date` (dd/mm/yyyy; ISO also accepted) or `Tarih`; `Flow`, `Flow Q (m3/s)` or `Debi` (m³/s); optional `Water_Year`.
+**Daily flow**: `Date` (dd/mm/yyyy; ISO also accepted) and `Flow Q (m3/s)` (m³/s) required; `Water_Year` optional.
 
-**DSİ monthly flow** (samples: `inputs/dam_flow_data/*_flow.csv`): `Yıllar` and `Ekim` ... `Eylül` in hm³, plus the `TOP.` column and the `TOP.`/`ORT.` rows, which are ignored.
+**DSİ monthly flow** (samples: `inputs/dam_flow_data/*_flow.csv`): `Yıllar` and `Ekim` ... `Eylül` required, in hm³; the `TOP.` column is optional and the `TOP.`/`ORT.` rows are ignored. This keeps the DSİ's own Turkish layout; the one folding rule also accepts `Yillar`, `Kasim` and so on.
 
 **Fractions** (sample: `inputs/fractional_parameters.csv`)
 
@@ -197,7 +198,7 @@ All inputs are copied into the project (FR-M1-02). Aliases are matched with `nor
 |---|---|---|
 | di | m | Required, > 0 |
 | Fi | | Required, sums to 1 within 0.02 |
-| tau_ri (Pa), bi | | Optional, cross-checked only (D36) |
+| tau_ri, bi | | Optional, cross-checked only (D36) |
 
 **`project.json`** (schema version 1; paths are relative to the project folder)
 
@@ -441,7 +442,7 @@ The current suite is not trusted (D24). It is rebuilt in four layers (D28), plan
 | Layer | ID prefix | Folder | Oracle |
 |---|---|---|---|
 | Unit: formula verification | `U` | `tests/unit/` | Independent hand calculations in a spreadsheet in `tests/verification/`, reviewed by the hydrologist. Never the code's own output. |
-| Input contract | `C` | `tests/contract/` | The data contracts in A7: aliases, encodings, refused commas in numbers, mislabelled headers, malformed files |
+| Input contract | `C` | `tests/contract/` | The data contracts in A7: canonical labels, encodings, refused commas in numbers, mislabelled headers, malformed files |
 | Pipeline | `P` | `tests/pipeline/` | Reviewed golden outputs in `tests/benchmarks/`, one set per sample dam |
 | Wizard | `W` | `tests/ui/` | Behaviour: navigation, gating, invalidation. Dialogs patched. |
 
@@ -585,3 +586,4 @@ The evidence column describes the code before M1. Files removed in M1.5 can be r
 | D64 | `results.xlsx` has the eight sheets of FR-M5-02. Suspended, Bedload, Annual, Curve and Projection are the tables of the CSV goldens (Suspended with its `Total` row). Inputs has the columns Group, Item, Value, Unit and SHA-256 (groups Run, Parameter and File). Extremes holds the Minimum and Maximum rows (Year, Total_hm3, Elevation_m), then a blank row and a table of the accumulation to date, the dead volume, the annual rates and the lifespan at each rate (a year, or the text "Already exceeded in X" or "Not reached"). Warnings has Phase and Warning, one row for each warning of the zonal means and dam sheet (Inputs), suspended, bedload, curve and integration, headed even when empty (NFR-04). The CSVs are the five of the phases; the extremes are in the workbook only | FR-M5-02 names the sheets but not their columns. The accumulation and lifespans appear in no other sheet, and Extremes is where the reader looks for the years that bound the record. `tests/pipeline/test_run_export.py` compares the tables with the existing goldens, so no new golden or sign-off is needed |
 | D65 | `src.__version__ = "1.0.0"` is the app version that `run.json` and the Inputs sheet record. `tests/legacy/` is deleted, `addopts` is removed from `pytest.ini` and the validate-calc-engine skill no longer runs it; every legacy case was already in the new layout except the Turkish helper tests, which are ported to `tests/contract/test_turkish_helpers.py` (C-X-02). Computing step 7 again resets step 8 when its annual or projection table changed, and keeps it when they did not (FR-X-04). `to_phase3_handoff`, `compute_daily_fractional_transport` and `year_column` in `core/wilcock.py` are removed: nothing called them and the deleted legacy tests were the only ones that did; no calculated number changes | The roadmap fixes version 1.0.0 and the deletion for M5. A report written from a superseded integration must not stay marked as complete |
 | D66 | Numbers are read with a point as the decimal separator. A comma in a number cell (`834,7`, `1,234`) is refused as not a number, in tables, monthly flow and the step fields | A comma cannot be told apart from a thousands separator (`1,234` was read as 1.234), so it is refused rather than guessed. Supersedes the decimal-comma reading in FR-X-02 |
+| D67 | One canonical English label per column and one matching rule for every input. A header matches its label after folding case, Turkish letters, spaces, `.` `:` `%` and `²` `³`; alias lists, the Turkish header aliases (Havza, Eğim, Alan, Debi, Tarih, ORTALAMA ...) and the column-guessing in the zonal matcher are removed. All labels live in `src/services/labels.py`; `src/core` receives canonical columns only. Columns outside the format are ignored with one warning per file. The DSİ monthly layout keeps its own Turkish labels. All five basin-table columns are required; the daily flow label is `Flow Q (m3/s)` and the zonal join key is `Sub-basin Name` | Three matching rules and long alias lists accepted too many spellings, matched the same concept differently per file and dropped columns without a word. A user now has one format to follow (`INPUT_FORMAT.md`). Files with retired labels are refused with the standard missing-column message; no numeric result changes |

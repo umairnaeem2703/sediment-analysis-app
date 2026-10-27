@@ -1,13 +1,11 @@
 """U-M2-01: matching a dam's sub-basins to zonal means (FR-M2-01)."""
 
-import pandas as pd
-
 from src.core.rusle import ZonalMatcher
-from src.services.regional import SUBBASIN
 
 
 def _lookup(*rows):
-    return ZonalMatcher.build_lookup(pd.DataFrame(rows, columns=[SUBBASIN, "MEAN"]))
+    names, means = zip(*rows)
+    return ZonalMatcher.build_lookup(names, means)
 
 
 def test_u_m2_01_an_exact_name_is_matched():

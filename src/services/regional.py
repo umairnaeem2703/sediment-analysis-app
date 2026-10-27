@@ -13,16 +13,33 @@ from typing import Any, List, NamedTuple, Optional, Tuple
 
 import pandas as pd
 
-from src.core.rusle import find_basin_table_columns, normalize_header, to_ascii_turkish, turkish_lower
+from src.core.rusle import to_ascii_turkish, turkish_lower
+from src.services.labels import (
+    ACTIVE_VOL,
+    AREA,
+    AVG_FLOW,
+    BASIN,
+    BASIN_TABLE,
+    BED_ELEV,
+    CREST_ELEV,
+    DAM,
+    MAX_ELEV,
+    MAX_VOL,
+    MEAN,
+    RIVER_LENGTH,
+    SHEET_OPTIONAL,
+    SHEET_REQUIRED,
+    SHEET_SLOPE,
+    SLOPE,
+    SUBBASIN,
+    TOP_ELEV,
+    ZONAL,
+    match_columns,
+)
 from src.utils.paths import read_table
 
 CROSS_CHECK_TOLERANCE = 0.01
 MAX_LISTED = 10
-
-DAM, BASIN, SUBBASIN = "Dam Name", "Basin Name", "Sub-basin Name"
-AREA, SLOPE = "Drainage Area (km2)", "Main Waterway Slope"
-BASIN_COLUMNS = {"dam": DAM, "basin": BASIN, "subbasin": SUBBASIN, "area": AREA, "slope": SLOPE}
-ZONAL_COLUMNS = [SUBBASIN, "MEAN"]
 
 
 class Loaded(NamedTuple):
@@ -65,21 +82,21 @@ class DamSheet:
     avg_flow_hm3_yr: Optional[float] = None
 
 
-# DamSheet field -> (header shown in messages, accepted headers after normalize_header)
+# DamSheet field -> its label on the dam sheet (the dam name and, when present, the drainage area are read as well)
 _SHEET_REQUIRED = {
-    "bed_elev_m": ("Bot Elev of River", ("botelevofriver",)),
-    "crest_elev_m": ("Cret Elev", ("cretelev", "crestelev")),
-    "max_elev_m": ("Max Res. Elev", ("maxreselev",)),
-    "active_vol_hm3": ("Active Vol.", ("activevol",)),
-    "max_vol_hm3": ("Max Vol.", ("maxvol",)),
+    "bed_elev_m": BED_ELEV,
+    "crest_elev_m": CREST_ELEV,
+    "max_elev_m": MAX_ELEV,
+    "active_vol_hm3": ACTIVE_VOL,
+    "max_vol_hm3": MAX_VOL,
 }
 _SHEET_OPTIONAL = {
-    "slope_m_per_m": ("Avg. Slope", ("avgslope%", "avgslope")),
-    "river_length_km": ("Longest River Length (km)", ("longestriverlength(km)", "longestriverlength")),
-    "top_elev_m": ("Top Elev of River", ("topelevofriver",)),
-    "avg_flow_hm3_yr": ("Avg. Flow", ("avgflow",)),
+    "drainage_area_km2": AREA,
+    "slope_m_per_m": SHEET_SLOPE,
+    "river_length_km": RIVER_LENGTH,
+    "top_elev_m": TOP_ELEV,
+    "avg_flow_hm3_yr": AVG_FLOW,
 }
-_SHEET_FIELDS = {**_SHEET_REQUIRED, **_SHEET_OPTIONAL}
 
 
 def name_key(text) -> str:
@@ -118,11 +135,6 @@ def quote_cell(value) -> str:
     return repr(text) if text else "an empty cell"
 
 
-def _missing_columns_error(source: str, missing: List[str], df: pd.DataFrame) -> ValueError:
-    present = ", ".join(str(column) for column in df.columns)
-    return ValueError(f"{source}: required column(s) not found: {', '.join(missing)}. Columns present: {present}.")
-
-
 def _is_blank(record) -> bool:
     return not any(cell_text(value) for value in record)
 
@@ -130,27 +142,22 @@ def _is_blank(record) -> bool:
 # --- basin table ------------------------------------------------------------------------------
 
 
-def basin_grid(df: pd.DataFrame, source: str) -> pd.DataFrame:
-    """The basin table's five columns under their canonical names, every cell as text and not yet checked."""
-    found = find_basin_table_columns(df.columns)
-    missing = [label for key, label in BASIN_COLUMNS.items() if found[key] is None]
-    if missing:
-        raise _missing_columns_error(source, missing, df)
-    grid = df[[found[key] for key in BASIN_COLUMNS]].copy()
-    grid.columns = list(BASIN_COLUMNS.values())
-    grid = grid.apply(lambda column: column.map(cell_text)).reset_index(drop=True)
+def basin_grid(df: pd.DataFrame, source: str) -> Loaded:
+    """The basin table's five columns under their canonical labels, every cell as text and not yet checked."""
+    table, warnings = match_columns(df, source, BASIN_TABLE)
+    grid = table.apply(lambda column: column.map(cell_text)).reset_index(drop=True)
     if all(_is_blank(record) for _, record in grid.iterrows()):
         raise ValueError(f"{source}: no data rows found.")
-    return grid
+    return Loaded(grid, warnings)
 
 
-def read_basin_grid(path) -> pd.DataFrame:
+def read_basin_grid(path) -> Loaded:
     """Read a basin table for editing. Cell problems are allowed here; unreadable files and missing columns are not."""
     return basin_grid(read_input(path, dtype=str), Path(path).name)
 
 
 def validate_basin_table(df: pd.DataFrame, source: str) -> Loaded:
-    table = basin_grid(df, source)
+    table, warnings = basin_grid(df, source)
 
     rows, problems, first_seen = [], [], {}
     for position, (_, record) in enumerate(table.iterrows()):
@@ -184,7 +191,7 @@ def validate_basin_table(df: pd.DataFrame, source: str) -> Loaded:
 
     if problems:
         raise TableError(source, problems)
-    return Loaded(pd.DataFrame(rows, columns=list(BASIN_COLUMNS.values())), [])
+    return Loaded(pd.DataFrame(rows, columns=list(BASIN_TABLE)), warnings)
 
 
 def load_basin_table(path) -> Loaded:
@@ -195,35 +202,25 @@ def load_basin_table(path) -> Loaded:
 
 
 def validate_zonal_means(df: pd.DataFrame, source: str) -> Loaded:
-    name_column = find_basin_table_columns(df.columns)["subbasin"]
-    mean_column = next((c for c in df.columns if normalize_header(c) in ("mean", "ortalama")), None)
-    present = ", ".join(str(column) for column in df.columns)
-    if mean_column is None:
-        raise ValueError(f"{source}: column MEAN (or ORTALAMA) not found. Columns present: {present}.")
-    if name_column is None:
-        raise ValueError(
-            f"{source}: sub-basin name column not found (for example 'Sub-basin' or 'Alt Havza'). "
-            f"Columns present: {present}."
-        )
+    table, warnings = match_columns(df, source, ZONAL)
 
     kept, skipped = [], []
-    for position, (_, record) in enumerate(df.iterrows()):
-        name, mean = cell_text(record[name_column]), parse_number(record[mean_column])
+    for position, (_, record) in enumerate(table.iterrows()):
+        name, mean = cell_text(record[SUBBASIN]), parse_number(record[MEAN])
         if name and mean is not None:
             kept.append((name, mean))
-        elif name or cell_text(record[mean_column]):  # fully blank rows are not counted
+        elif name or cell_text(record[MEAN]):  # fully blank rows are not counted
             skipped.append(position + 2)
     if not kept:
         raise ValueError(f"{source}: no valid sub-basin MEAN values found.")
 
-    warnings = []
     if skipped:
         listed = ", ".join(str(row) for row in skipped[:MAX_LISTED]) + (", ..." if len(skipped) > MAX_LISTED else "")
         warnings.append(
             f"{source}: skipped {len(skipped)} row(s) with an empty sub-basin name or an empty or "
             f"non-numeric MEAN (rows {listed})."
         )
-    return Loaded(pd.DataFrame(kept, columns=ZONAL_COLUMNS), warnings)
+    return Loaded(pd.DataFrame(kept, columns=list(ZONAL)), warnings)
 
 
 def load_zonal_means(path) -> Loaded:
@@ -235,21 +232,9 @@ def load_zonal_means(path) -> Loaded:
 
 def validate_dam_sheet(df: pd.DataFrame, source: str, basin_table: pd.DataFrame) -> Loaded:
     """Check one dam sheet and cross-check it against the dam's rows in a validated basin table."""
-    normalized = {normalize_header(column): column for column in df.columns}
-    found = find_basin_table_columns(df.columns)
+    table, warnings = match_columns(df, source, SHEET_REQUIRED, SHEET_OPTIONAL)
 
-    def locate(aliases):
-        return next((normalized[alias] for alias in aliases if alias in normalized), None)
-
-    columns = {field: locate(aliases) for field, (_, aliases) in _SHEET_FIELDS.items()}
-    columns["name"], columns["drainage_area_km2"] = found["dam"], found["area"]
-    missing = ([DAM] if columns["name"] is None else []) + [
-        label for field, (label, _) in _SHEET_REQUIRED.items() if columns[field] is None
-    ]
-    if missing:
-        raise _missing_columns_error(source, missing, df)
-
-    records = [(position + 2, record) for position, (_, record) in enumerate(df.iterrows()) if not _is_blank(record)]
+    records = [(position + 2, record) for position, (_, record) in enumerate(table.iterrows()) if not _is_blank(record)]
     if len(records) != 1:
         raise ValueError(f"{source}: a dam sheet must hold exactly one dam row; found {len(records)}.")
     row, record = records[0]
@@ -257,7 +242,7 @@ def validate_dam_sheet(df: pd.DataFrame, source: str, basin_table: pd.DataFrame)
     dams = {}
     for name in basin_table[DAM]:
         dams.setdefault(name_key(name), name)  # the table's first spelling names the dam
-    sheet_name = cell_text(record[columns["name"]])
+    sheet_name = cell_text(record[DAM])
     if name_key(sheet_name) not in dams:
         raise ValueError(
             f"{source}: dam '{sheet_name}' is not in the basin table (dams: {', '.join(sorted(set(dams.values())))})."
@@ -265,12 +250,11 @@ def validate_dam_sheet(df: pd.DataFrame, source: str, basin_table: pd.DataFrame)
     dam = dams[name_key(sheet_name)]
 
     values, problems = {}, []
-    for field, (label, _) in {**_SHEET_FIELDS, "drainage_area_km2": (AREA, ())}.items():
-        column = columns[field]
-        if column is None:
+    for field, label in {**_SHEET_REQUIRED, **_SHEET_OPTIONAL}.items():
+        if label not in table.columns:
             values[field] = None
             continue
-        raw = record[column]
+        raw = record[label]
         values[field] = parse_number(raw)
         if values[field] is None and (field in _SHEET_REQUIRED or cell_text(raw)):
             problems.append(
@@ -279,7 +263,6 @@ def validate_dam_sheet(df: pd.DataFrame, source: str, basin_table: pd.DataFrame)
     if problems:
         raise TableError(source, problems)
 
-    warnings = []
     own = basin_table[basin_table[DAM].map(name_key) == name_key(dam)]
     table_area = float(own[AREA].sum())
     area = values["drainage_area_km2"]

@@ -43,7 +43,7 @@ def test_p_m2_01_a_dam_totals_only_its_own_sub_basins(tmp_path):
     )
     zonal = tmp_path / "zonal.csv"
     zonal.write_text(
-        "Sub-basin,MEAN\n" + "".join(f"{s},{c['Zonal_Mean_t_ha_yr']}\n" for _, s, c in rows), encoding="utf-8"
+        "Sub-basin Name,MEAN\n" + "".join(f"{s},{c['Zonal_Mean_t_ha_yr']}\n" for _, s, c in rows), encoding="utf-8"
     )
     data = sample_regional(tmp_path / "project")
     data.import_basin_table(table)

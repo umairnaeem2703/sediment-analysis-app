@@ -221,7 +221,7 @@ def test_w_m3_01_a_daily_flow_can_be_chosen_while_sigma_and_seed_hold_invalid_te
     wizard, step, _, top, tmp_path = app
     _reach_step(wizard, top)
     daily = tmp_path / "daily.csv"
-    daily.write_text("Date,Flow\n01/01/2000,10\n02/01/2000,20\n", encoding="utf-8")
+    daily.write_text("Date,Flow Q (m3/s)\n01/01/2000,10\n02/01/2000,20\n", encoding="utf-8")
     step.seed_var.set("x")
 
     step.use_flow_file(str(daily))

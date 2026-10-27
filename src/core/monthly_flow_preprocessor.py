@@ -4,7 +4,7 @@ DSI tables give natural inflow as monthly volumes (hm³) per water year. Spreadi
 month evenly over its days flattens flood peaks, and the steep Wilcock & Crowe
 threshold (tau > tau_ri) then yields little or no bedload. This module allocates each
 monthly volume across its days with a mean-one log-normal multiplier whose log follows
-an AR(1) chain, so a day depends partly on the day before (volume is conserved exactly) and returns daily discharge in the Date/Flow/Water_Year layout read
+an AR(1) chain, so a day depends partly on the day before (volume is conserved exactly) and returns daily discharge in the Date/Flow Q (m3/s)/Water_Year layout read
 by TimeSeriesAggregator, which groups by Water_Year when that column is present.
 """
 
@@ -13,8 +13,8 @@ import math
 import numpy as np
 import pandas as pd
 
-from src.core.rusle import normalize_header
-from src.core.wilcock import WATER_YEAR_COLUMN
+from src.core.rusle import to_ascii_turkish, turkish_lower
+from src.core.wilcock import FLOW_COLUMN, WATER_YEAR_COLUMN
 
 HM3_TO_M3 = 1_000_000.0
 SECONDS_PER_DAY = 86_400.0
@@ -22,23 +22,28 @@ DEFAULT_SIGMA = 0.6
 DEFAULT_SEED = 0
 DEFAULT_PHI = 0.0  # lag-1 autocorrelation of the daily log-flow; 0 gives independent days
 
-# Water-year order (Ekim -> Eylül) mapped to calendar month numbers.
+# Water-year order (Ekim -> Eylül), as the DSİ labels the columns, mapped to calendar month numbers.
 WATER_YEAR_MONTHS = (
-    ("ekim", 10),
-    ("kasim", 11),
-    ("aralik", 12),
-    ("ocak", 1),
-    ("subat", 2),
-    ("mart", 3),
-    ("nisan", 4),
-    ("mayis", 5),
-    ("haziran", 6),
-    ("temmuz", 7),
-    ("agustos", 8),
-    ("eylul", 9),
+    ("Ekim", 10),
+    ("Kasım", 11),
+    ("Aralık", 12),
+    ("Ocak", 1),
+    ("Şubat", 2),
+    ("Mart", 3),
+    ("Nisan", 4),
+    ("Mayıs", 5),
+    ("Haziran", 6),
+    ("Temmuz", 7),
+    ("Ağustos", 8),
+    ("Eylül", 9),
 )
-YEAR_HEADER = "yillar"
+YEAR_HEADER = "Yıllar"
 SUMMARY_LABELS = {"top", "ort"}
+
+
+def _summary_key(label: str) -> str:
+    """A row label of the TOP. / ORT. summary rows, folded: 'TOP.' -> 'top'."""
+    return "".join(to_ascii_turkish(turkish_lower(label)).split()).replace(".", "")
 
 
 class MonthlyFlowPreprocessor:
@@ -66,21 +71,20 @@ class MonthlyFlowPreprocessor:
         if df is None or df.empty:
             raise ValueError("Monthly flow table is empty.")
 
-        lookup = {normalize_header(col): col for col in df.columns}
-        year_col = lookup.get(YEAR_HEADER)
-        if year_col is None:
-            raise KeyError("Monthly flow table must contain a 'Yıllar' (year) column.")
-        missing = [name for name, _ in WATER_YEAR_MONTHS if name not in lookup]
+        year_col = YEAR_HEADER
+        if year_col not in df.columns:
+            raise KeyError(f"Monthly flow table must contain a '{YEAR_HEADER}' (year) column.")
+        month_cols = [name for name, _ in WATER_YEAR_MONTHS]
+        missing = [name for name in month_cols if name not in df.columns]
         if missing:
             raise KeyError(f"Monthly flow table missing month columns: {missing}")
-        month_cols = [lookup[name] for name, _ in WATER_YEAR_MONTHS]
 
         # Blanks and the TOP./ORT. summary rows are skipped; any other label must be a year.
         labels = df[year_col].astype(str).str.strip()
         years = pd.to_numeric(df[year_col], errors="coerce")
         valid = years.notna() & (years % 1 == 0) & years.between(1900, 2100)
         blank = df[year_col].isna() | (labels == "")
-        summary = labels.map(normalize_header).isin(SUMMARY_LABELS)
+        summary = labels.map(_summary_key).isin(SUMMARY_LABELS)
         rejected = ~valid & ~blank & ~summary
         if rejected.any():
             raise ValueError(
@@ -143,7 +147,7 @@ class MonthlyFlowPreprocessor:
                 pd.DataFrame(
                     {
                         "Date": pd.date_range(start, periods=n_days, freq="D"),
-                        "Flow": daily_m3 / SECONDS_PER_DAY,
+                        FLOW_COLUMN: daily_m3 / SECONDS_PER_DAY,
                         WATER_YEAR_COLUMN: int(water_year),
                     }
                 )
@@ -153,20 +157,6 @@ class MonthlyFlowPreprocessor:
         if daily["Date"].duplicated().any():
             raise ValueError("Disaggregated series contains duplicate dates; check for overlapping water years.")
         return daily
-
-
-def is_monthly_flow_table(df: pd.DataFrame) -> bool:
-    """True if the table looks like a DSI monthly table rather than a Date/Flow daily series.
-
-    Deliberately broad: a malformed DSI file (e.g. a missing month column) still routes to
-    parse_table, which reports the specific problem instead of a generic Date/Flow error.
-    """
-    if df is None or df.empty:
-        return False
-    names = {normalize_header(col) for col in df.columns}
-    if names & {"date", "tarih"}:
-        return False
-    return YEAR_HEADER in names or any(month in names for month, _ in WATER_YEAR_MONTHS)
 
 
 def prepare_daily_flow(

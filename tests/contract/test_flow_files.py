@@ -4,9 +4,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.core.monthly_flow_preprocessor import MonthlyFlowPreprocessor, is_monthly_flow_table, prepare_daily_flow
+from src.core.monthly_flow_preprocessor import MonthlyFlowPreprocessor, prepare_daily_flow
 from src.core.wilcock import WATER_YEAR_COLUMN, TimeSeriesAggregator
 from src.services.flow_files import export_daily_csv, load_monthly_flow, main
+from src.services.labels import is_monthly_flow_table
 from src.utils.paths import read_table, resource_path
 from tests.flows import dsi_table, sample_values
 from tests.samples import sample_fraction_model
@@ -24,9 +25,9 @@ def test_c_m3_02_export_csv_roundtrip(tmp_path):
     export_daily_csv(daily, str(out))
 
     reloaded = read_table(str(out))
-    assert list(reloaded.columns) == ["Date", "Flow", WATER_YEAR_COLUMN]
+    assert list(reloaded.columns) == ["Date", "Flow Q (m3/s)", WATER_YEAR_COLUMN]
     assert reloaded["Date"].iloc[0] == "01/10/1973"
-    np.testing.assert_allclose(reloaded["Flow"], daily["Flow"], rtol=1e-12)
+    np.testing.assert_allclose(reloaded["Flow Q (m3/s)"], daily["Flow Q (m3/s)"], rtol=1e-12)
 
     # A CLI-exported CSV groups the same way as the direct DSI run.
     summary = TimeSeriesAggregator(sample_fraction_model()).process_annual_averages(reloaded)
@@ -89,6 +90,6 @@ def test_c_m3_02_cli_takes_the_lag_1_phi(tmp_path):
     main([str(src), str(flat), "--seed", "3"])
     main([str(src), str(persistent), "--seed", "3", "--phi", "0.8"])
 
-    assert not np.allclose(read_table(str(flat))["Flow"], read_table(str(persistent))["Flow"])
+    assert not np.allclose(read_table(str(flat))["Flow Q (m3/s)"], read_table(str(persistent))["Flow Q (m3/s)"])
     with pytest.raises(ValueError, match="phi"):
         main([str(src), str(tmp_path / "bad.csv"), "--phi", "1"])

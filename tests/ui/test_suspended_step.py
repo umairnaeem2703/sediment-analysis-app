@@ -16,7 +16,7 @@ from tests.ui.fakes import FakeStep
 from tests.ui.helpers import wait_until
 
 CUBUK_1_SHEET = resource_path("inputs", "bathymetry", "cubuk_1_bathymetry.csv")
-UNRELATED_ZONAL = "Sub-basin,MEAN\nKonya Alt Havzası,1.5\n"
+UNRELATED_ZONAL = "Sub-basin Name,MEAN\nKonya Alt Havzası,1.5\n"
 
 
 @pytest.fixture()

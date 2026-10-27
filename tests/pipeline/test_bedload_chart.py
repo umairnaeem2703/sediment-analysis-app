@@ -10,7 +10,7 @@ from tests.samples import sample_fraction_model
 
 
 def _table(water_year: bool) -> pd.DataFrame:
-    flow = pd.DataFrame({"Date": ["30/09/2010", "01/10/2010"], "Flow": [10.0, 80.0]})
+    flow = pd.DataFrame({"Date": ["30/09/2010", "01/10/2010"], "Flow Q (m3/s)": [10.0, 80.0]})
     if water_year:
         flow["Water_Year"] = [2010, 2011]
     fractions = pd.DataFrame(sample_fraction_model().fractions)[["di", "Fi"]]

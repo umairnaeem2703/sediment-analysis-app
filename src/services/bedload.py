@@ -12,16 +12,24 @@ from typing import List, NamedTuple, Tuple
 
 import pandas as pd
 
-from src.core.monthly_flow_preprocessor import DEFAULT_PHI, is_monthly_flow_table, prepare_daily_flow
-from src.core.rusle import normalize_header
+from src.core.monthly_flow_preprocessor import DEFAULT_PHI, prepare_daily_flow
 from src.core.wilcock import FractionalModel, TimeSeriesAggregator
+from src.services.labels import (
+    DAILY_FLOW,
+    DAILY_FLOW_OPTIONAL,
+    DSI_OPTIONAL,
+    DSI_REQUIRED,
+    FRACTIONS_OPTIONAL,
+    FRACTIONS_REQUIRED,
+    is_monthly_flow_table,
+    match_columns,
+)
 from src.services.project import Dam, Flow, Project
 from src.services.regional import (
     Loaded,
     Problem,
     TableError,
     _is_blank,
-    _missing_columns_error,
     cell_text,
     parse_number,
     quote_cell,
@@ -42,7 +50,6 @@ VALUE_COLUMNS = list(_SUMMARY_COLUMNS.values())
 
 # Any valid fractions will do: summarising with them only checks the flow series.
 _CHECK_FRACTIONS = pd.DataFrame({"di": [0.02], "Fi": [1.0]})
-_FRACTION_ALIASES = {"di": ("di",), "Fi": ("fi",), "bi": ("bi",), "tau_ri": ("tau_ri", "tau_ri(pa)", "tauri")}
 
 
 class FlowSeries(NamedTuple):
@@ -79,33 +86,29 @@ def load_flow(path, sigma: float, seed: int, phi: float = DEFAULT_PHI) -> FlowSe
     source = Path(path).name
     table = read_input(path)
     if not is_monthly_flow_table(table):
-        return FlowSeries(table, False, [])
+        table, ignored = match_columns(table, source, DAILY_FLOW, DAILY_FLOW_OPTIONAL)
+        return FlowSeries(table, False, ignored)
+    table, ignored = match_columns(table, source, DSI_REQUIRED, DSI_OPTIONAL)
     try:
         daily, notes = prepare_daily_flow(table, sigma, seed, phi)
     except (KeyError, ValueError) as exc:
         raise ValueError(f"{source}: {_message(exc)}") from exc
-    return FlowSeries(daily, True, notes)
+    return FlowSeries(daily, True, [*ignored, *notes])
 
 
 def load_fractions(path) -> Loaded:
     """The grain fractions as numbers: `di` (m) and `Fi`, plus `bi` and `tau_ri` when the file has them. The warnings are
     the cross-check of those two columns (D36)."""
     source = Path(path).name
-    table = read_input(path)
-    names = {normalize_header(column): column for column in table.columns}
-    found = {key: next((names[a] for a in aliases if a in names), None) for key, aliases in _FRACTION_ALIASES.items()}
-    missing = [key for key in ("di", "Fi") if found[key] is None]
-    if missing:
-        raise _missing_columns_error(source, missing, table)
+    table, ignored = match_columns(read_input(path), source, FRACTIONS_REQUIRED, FRACTIONS_OPTIONAL)
 
-    present_keys = [key for key, column in found.items() if column is not None]
     rows, problems = [], []
     for position, (_, record) in enumerate(table.iterrows()):
         if _is_blank(record):
             continue
         row, entry = position + 2, {}
-        for key in present_keys:
-            raw = record[found[key]]
+        for key in table.columns:
+            raw = record[key]
             entry[key] = parse_number(raw)
             if entry[key] is None and (key in ("di", "Fi") or cell_text(raw)):
                 problems.append(
@@ -119,13 +122,13 @@ def load_fractions(path) -> Loaded:
     if not rows:
         raise ValueError(f"{source}: no grain fractions found.")
 
-    frame = pd.DataFrame(rows, columns=present_keys)
+    frame = pd.DataFrame(rows, columns=list(table.columns))
     model = FractionalModel()
     try:
         model.load_fractional_parameters(frame)
     except (KeyError, ValueError) as exc:
         raise ValueError(f"{source}: {_message(exc)}") from exc
-    return Loaded(frame, [f"{source}: {warning}" for warning in model.warnings])
+    return Loaded(frame, [*ignored, *[f"{source}: {warning}" for warning in model.warnings]])
 
 
 def validate_flow_settings(sigma, seed, phi="0") -> Tuple[float, int, float]:

@@ -36,7 +36,7 @@ def _write(folder, name, text, encoding="utf-8"):
 
 def _daily(*flows, dates=None, **extra):
     dates = dates or [f"{day:02d}/01/2000" for day in range(1, len(flows) + 1)]
-    return pd.DataFrame({"Date": dates, "Flow": list(flows), **extra})
+    return pd.DataFrame({"Date": dates, "Flow Q (m3/s)": list(flows), **extra})
 
 
 def _compute(frame, source="flow.csv"):
@@ -46,12 +46,14 @@ def _compute(frame, source="flow.csv"):
 # --- C-M3-01: a daily series ------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("flow_header", ["Flow", "Flow Q (m3/s)", "Flow Q (m³/s)", "FLOW Q (M³/S)", "Debi"])
-@pytest.mark.parametrize("date_header", ["Date", "Tarih"])
-def test_c_m3_01_the_date_and_flow_headers_are_found_by_alias(date_header, flow_header):
-    frame = pd.DataFrame({date_header: ["01/01/2000", "02/01/2000"], flow_header: [10.0, 20.0]})
+@pytest.mark.parametrize("flow_header", ["Flow Q (m3/s)", "Flow Q (m³/s)", "FLOW Q (M³/S)"])
+@pytest.mark.parametrize("date_header", ["Date", "DATE"])
+def test_c_m3_01_the_date_and_flow_labels_are_found_whatever_their_case_and_superscript(
+    tmp_path, date_header, flow_header
+):
+    path = _write(tmp_path, "flow.csv", f"{date_header},{flow_header}\n01/01/2000,10\n02/01/2000,20\n")
 
-    result = _compute(frame)
+    result = compute_bedload(load_flow(path, 0.6, 0), FRACTIONS, path.name)
 
     assert list(result.table["Year"]) == [2000]
     assert result.table[VALUE_COLUMNS[0]].iloc[0] == 15.0
@@ -64,16 +66,16 @@ def test_c_m3_01_iso_dates_are_accepted():
 
 
 def test_c_m3_01_a_daily_file_is_read_as_it_is_and_is_not_flagged_synthetic(tmp_path):
-    path = _write(tmp_path, "flow.csv", "Date,Flow\n01/01/2000,10\n02/01/2000,20\n")
+    path = _write(tmp_path, "flow.csv", "Date,Flow Q (m3/s)\n01/01/2000,10\n02/01/2000,20\n")
 
     series = load_flow(path, 0.6, 0)
 
     assert not series.synthetic and series.notes == []
-    assert list(series.daily["Flow"]) == [10, 20]
+    assert list(series.daily["Flow Q (m3/s)"]) == [10, 20]
 
 
-def test_c_m3_01_a_semicolon_file_with_turkish_headers_loads(tmp_path):
-    path = _write(tmp_path, "debi.csv", "Tarih;Debi\n01/01/2000;1.5\n02/01/2000;2.5\n", encoding="cp1254")
+def test_c_m3_01_a_semicolon_file_loads(tmp_path):
+    path = _write(tmp_path, "flow.csv", "Date;Flow Q (m3/s)\n01/01/2000;1.5\n02/01/2000;2.5\n", encoding="cp1254")
 
     result = compute_bedload(load_flow(path, 0.6, 0), FRACTIONS, path.name)
 
@@ -107,8 +109,8 @@ def test_c_m3_02_a_monthly_table_is_detected_converted_and_flagged_synthetic(tmp
 
     assert series.synthetic
     assert len(series.notes) == 1 and "0.6" in series.notes[0] and "seed 3" in series.notes[0]
-    assert list(series.daily.columns) == ["Date", "Flow", WATER_YEAR_COLUMN]
-    volume_hm3 = (series.daily["Flow"] * 86_400).sum() / 1e6
+    assert list(series.daily.columns) == ["Date", "Flow Q (m3/s)", WATER_YEAR_COLUMN]
+    volume_hm3 = (series.daily["Flow Q (m3/s)"] * 86_400).sum() / 1e6
     assert volume_hm3 == pytest.approx(sum(sum(months) for months in values.values()), rel=1e-12)
 
 
@@ -128,14 +130,14 @@ def test_c_m3_02_the_same_sigma_and_seed_give_the_same_series_and_another_seed_d
     first, again, other = load_flow(path, 0.6, 1), load_flow(path, 0.6, 1), load_flow(path, 0.6, 2)
 
     pd.testing.assert_frame_equal(first.daily, again.daily)
-    assert not first.daily["Flow"].equals(other.daily["Flow"])
+    assert not first.daily["Flow Q (m3/s)"].equals(other.daily["Flow Q (m3/s)"])
 
 
 def test_c_m3_02_a_malformed_monthly_table_is_an_error_naming_the_file_and_the_month(tmp_path):
     path = tmp_path / "broken.csv"
     dsi_table(sample_values()).drop(columns=["Şubat"]).to_csv(path, index=False, encoding="utf-8")
 
-    with pytest.raises(ValueError, match=r"^broken\.csv: .*subat"):
+    with pytest.raises(ValueError, match=r"^broken\.csv: .*Şubat"):
         load_flow(path, 0.6, 0)
 
 
@@ -238,7 +240,7 @@ def test_c_m3_04_rows_with_a_bad_date_or_flow_are_dropped_and_counted_in_the_war
     frame = pd.DataFrame(
         {
             "Date": ["01/01/2000", "02/01/2000", "not a date", "04/01/2000"],
-            "Flow": [10.0, None, 30.0, 20.0],
+            "Flow Q (m3/s)": [10.0, None, 30.0, 20.0],
         }
     )
 
@@ -263,7 +265,7 @@ def test_c_m3_04_a_negative_flow_is_an_error_naming_the_file_and_the_date():
 
 def test_c_m3_04_a_series_with_no_valid_row_is_an_error_naming_the_file():
     with pytest.raises(ValueError, match=r"^flow\.csv: .*no rows"):
-        _compute(pd.DataFrame({"Date": ["x", "y"], "Flow": [None, None]}))
+        _compute(pd.DataFrame({"Date": ["x", "y"], "Flow Q (m3/s)": [None, None]}))
 
 
 def test_c_m3_04_summarising_leaves_the_input_table_unchanged():
@@ -297,7 +299,7 @@ def project(tmp_path):
 
 
 def test_c_m3_01_importing_a_flow_copies_it_into_the_project_and_leaves_the_original_alone(project, tmp_path):
-    source = _write(tmp_path, "mine.csv", "Date,Flow\n01/01/2000,10\n")
+    source = _write(tmp_path, "mine.csv", "Date,Flow Q (m3/s)\n01/01/2000,10\n")
     before = source.read_bytes()
     dam = project.dams[0]
 
@@ -312,10 +314,10 @@ def test_c_m3_01_importing_a_flow_copies_it_into_the_project_and_leaves_the_orig
 
 def test_c_m3_01_a_new_flow_replaces_the_old_copy(project, tmp_path):
     dam = project.dams[0]
-    import_flow(project, dam, _write(tmp_path, "one.csv", "Date,Flow\n01/01/2000,10\n"), 0.6, 0)
+    import_flow(project, dam, _write(tmp_path, "one.csv", "Date,Flow Q (m3/s)\n01/01/2000,10\n"), 0.6, 0)
     old = project.folder / dam.flow.path
     xlsx = tmp_path / "two.xlsx"
-    pd.DataFrame({"Date": ["01/01/2000"], "Flow": [10.0]}).to_excel(xlsx, index=False)
+    pd.DataFrame({"Date": ["01/01/2000"], "Flow Q (m3/s)": [10.0]}).to_excel(xlsx, index=False)
 
     import_flow(project, dam, xlsx, 0.6, 0)
 
@@ -326,15 +328,15 @@ def test_c_m3_01_a_new_flow_replaces_the_old_copy(project, tmp_path):
     ("name", "text", "named"),
     [
         ("wrong.csv", "Day,Q\n01/01/2000,1\n", "Date"),
-        ("negative.csv", "Date,Flow\n01/01/2000,-1\n", "negative"),
-        ("blank.csv", "Date,Flow\nx,\n", "no rows"),
+        ("negative.csv", "Date,Flow Q (m3/s)\n01/01/2000,-1\n", "negative"),
+        ("blank.csv", "Date,Flow Q (m3/s)\nx,\n", "no rows"),
     ],
 )
 def test_c_m3_01_a_daily_file_that_cannot_be_summarised_is_refused_and_the_old_copy_is_kept(
     project, tmp_path, name, text, named
 ):
     dam = project.dams[0]
-    import_flow(project, dam, _write(tmp_path, "good.csv", "Date,Flow\n01/01/2000,10\n"), 0.6, 0)
+    import_flow(project, dam, _write(tmp_path, "good.csv", "Date,Flow Q (m3/s)\n01/01/2000,10\n"), 0.6, 0)
     copy = project.folder / dam.flow.path
     kept = copy.read_bytes()
 
@@ -352,10 +354,10 @@ def _failing_save():
 
 def test_c_m3_02_a_failed_save_leaves_the_dam_and_the_old_flow_copy_as_they_were(project, tmp_path, monkeypatch):
     dam = project.dams[0]
-    import_flow(project, dam, _write(tmp_path, "one.csv", "Date,Flow\n01/01/2000,10\n"), 0.6, 0)
+    import_flow(project, dam, _write(tmp_path, "one.csv", "Date,Flow Q (m3/s)\n01/01/2000,10\n"), 0.6, 0)
     before, old_copy = dam.flow, project.folder / dam.flow.path
     xlsx = tmp_path / "two.xlsx"
-    pd.DataFrame({"Date": ["01/01/2000"], "Flow": [10.0]}).to_excel(xlsx, index=False)
+    pd.DataFrame({"Date": ["01/01/2000"], "Flow Q (m3/s)": [10.0]}).to_excel(xlsx, index=False)
     monkeypatch.setattr(project, "save", _failing_save)
 
     with pytest.raises(OSError, match="disk full"):
@@ -455,14 +457,14 @@ def test_x_01_a_missing_flow_is_an_error_naming_the_dam(project):
 
 
 def test_x_01_missing_fractions_are_an_error_naming_them(project, tmp_path):
-    import_flow(project, project.dams[0], _write(tmp_path, "flow.csv", "Date,Flow\n01/01/2000,10\n"), 0.6, 0)
+    import_flow(project, project.dams[0], _write(tmp_path, "flow.csv", "Date,Flow Q (m3/s)\n01/01/2000,10\n"), 0.6, 0)
 
     with pytest.raises(ValueError, match="No grain fractions file has been chosen"):
         compute_dam_bedload(project, project.dams[0])
 
 
 def test_c_m3_04_the_project_copies_are_what_is_computed(project, tmp_path):
-    source = _write(tmp_path, "mine.csv", "Date,Flow\n01/01/2000,10\n02/01/2000,20\n")
+    source = _write(tmp_path, "mine.csv", "Date,Flow Q (m3/s)\n01/01/2000,10\n02/01/2000,20\n")
     import_flow(project, project.dams[0], source, 0.6, 0)
     import_fractions(project, write_fractions_with_wrong_tau_ri(tmp_path))
     source.unlink()  # the project must not depend on the original
@@ -477,9 +479,9 @@ def test_c_m3_04_the_project_copies_are_what_is_computed(project, tmp_path):
 
 
 def test_c_m3_04_an_error_in_the_project_copy_names_the_copy(project, tmp_path):
-    import_flow(project, project.dams[0], _write(tmp_path, "mine.csv", "Date,Flow\n01/01/2000,10\n"), 0.6, 0)
+    import_flow(project, project.dams[0], _write(tmp_path, "mine.csv", "Date,Flow Q (m3/s)\n01/01/2000,10\n"), 0.6, 0)
     import_fractions(project, SAMPLE_FRACTIONS)
-    (project.folder / project.dams[0].flow.path).write_text("Date,Flow\n01/01/2000,-4\n", encoding="utf-8")
+    (project.folder / project.dams[0].flow.path).write_text("Date,Flow Q (m3/s)\n01/01/2000,-4\n", encoding="utf-8")
 
     with pytest.raises(ValueError, match=r"^alpha_flow\.csv: Flow values must not be negative"):
         compute_dam_bedload(project, project.dams[0])
@@ -501,8 +503,8 @@ def test_c_m3_02_the_lag_1_phi_changes_the_series_keeps_the_volume_and_is_report
 
     independent, persistent = load_flow(path, 0.6, 1), load_flow(path, 0.6, 1, 0.8)
 
-    assert not persistent.daily["Flow"].equals(independent.daily["Flow"])
-    assert persistent.daily["Flow"].sum() == pytest.approx(independent.daily["Flow"].sum(), rel=1e-12)
+    assert not persistent.daily["Flow Q (m3/s)"].equals(independent.daily["Flow Q (m3/s)"])
+    assert persistent.daily["Flow Q (m3/s)"].sum() == pytest.approx(independent.daily["Flow Q (m3/s)"].sum(), rel=1e-12)
     assert "AR(1)" in persistent.notes[0] and "φ=0.8" in persistent.notes[0]
     assert "AR(1)" not in independent.notes[0]
 

@@ -55,7 +55,7 @@ class RegionalData:
         basins = self.project.inputs.get("basins")
         if basins:
             try:
-                self.grid = read_basin_grid(self.project.folder / basins)
+                self.grid = read_basin_grid(self.project.folder / basins).data
             except (ValueError, OSError) as exc:
                 self.load_errors.append(str(exc))
             else:
@@ -73,10 +73,10 @@ class RegionalData:
 
     def import_basin_table(self, path) -> List[str]:
         """Copy a basin table into the project and validate it. Returns notices about dams that were removed."""
-        grid = read_basin_grid(path)  # refuses unreadable files and missing columns before anything is copied
+        loaded = read_basin_grid(path)  # refuses unreadable files and missing columns before anything is copied
         self._replace_basin_copy(self.project.import_file(path, f"inputs/basins{Path(path).suffix.lower()}"))
-        self.grid = grid
-        return self._validate_and_sync()
+        self.grid = loaded.data
+        return [*self._validate_and_sync(), *loaded.warnings]
 
     def edit_cell(self, position: int, column: str, value: str) -> List[str]:
         """Change one grid cell (position is the 0-based grid row), rewrite the project's copy and re-validate."""

@@ -189,7 +189,7 @@ def test_u_m3_04_a_supplied_tau_ri_does_not_change_the_transport():
 
 def _series(with_water_year: bool) -> pd.DataFrame:
     rows = bedload_series()
-    frame = pd.DataFrame({"Date": [row["Date"] for row in rows], "Flow": [row["Flow"] for row in rows]})
+    frame = pd.DataFrame({"Date": [row["Date"] for row in rows], "Flow Q (m3/s)": [row["Flow"] for row in rows]})
     if with_water_year:
         frame[WATER_YEAR_COLUMN] = [int(row["Water_Year"]) for row in rows]
     return frame

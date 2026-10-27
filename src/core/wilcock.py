@@ -5,10 +5,10 @@ from typing import List, Tuple
 import numpy as np
 import pandas as pd
 
-from src.core.rusle import normalize_header
-
 SECONDS_PER_YEAR = 365.25 * 24.0 * 3600.0
 YEAR_COLUMN = "Year"
+DATE_COLUMN = "Date"
+FLOW_COLUMN = "Flow Q (m3/s)"
 WATER_YEAR_COLUMN = "Water_Year"  # Oct (Y-1) to Sep (Y), carried by DSI-derived daily series
 PHI_BREAK = 1.35
 SUPPLIED_TOLERANCE = 0.01  # a supplied tau_ri or bi this far (relative) from the computed value is warned about
@@ -144,22 +144,10 @@ class TimeSeriesAggregator:
             raise ValueError("Flow table is empty.")
 
         self.warnings = []
-        lookup = {normalize_header(col): col for col in df_flow.columns}
-        water_year_col = lookup.get(normalize_header(WATER_YEAR_COLUMN))
-
-        date_col = next((lookup[name] for name in ("date", "tarih") if name in lookup), None)
-        flow_col = next((lookup[name] for name in ("flow", "flowq(m3/s)", "debi") if name in lookup), None)
-
-        if date_col is None or flow_col is None:
-            raise KeyError(
-                "Flow table must contain the columns: Date (or Tarih) and Flow (or Flow Q (m3/s), Debi), "
-                "or be a DSI monthly table with the columns Yıllar and Ekim...Eylül."
-            )
-
-        renames = {date_col: "Date", flow_col: "Flow Q (m3/s)"}
-        if water_year_col is not None:
-            renames[water_year_col] = WATER_YEAR_COLUMN
-        df = df_flow.rename(columns=renames)
+        if DATE_COLUMN not in df_flow.columns or FLOW_COLUMN not in df_flow.columns:
+            raise KeyError(f"Flow table must contain the columns '{DATE_COLUMN}' and '{FLOW_COLUMN}'.")
+        water_year_col = WATER_YEAR_COLUMN if WATER_YEAR_COLUMN in df_flow.columns else None
+        df = df_flow.copy()
 
         raw_dates = df["Date"]
         dates = pd.to_datetime(raw_dates, format="%d/%m/%Y", errors="coerce")
