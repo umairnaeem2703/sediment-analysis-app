@@ -11,9 +11,8 @@ import numpy as np
 import pandas as pd
 
 RATE_NAMES = ("Mean", "Min", "Max")
-HORIZON_YEARS = (
-    100  # the default length of the projection, in years past the analysis year (the user may enter another)
-)
+# The default length of the projection, in years past the analysis year (the user may enter another).
+HORIZON_YEARS = 100
 
 YEAR, EXCEEDED, NOT_REACHED = "year", "exceeded", "not reached"
 
@@ -52,8 +51,7 @@ def accumulate(years, totals, commissioning_year: int, analysis_year: int) -> Ac
             "In_Record": [int(year in record) for year in span],
             "Total_Used_hm3": used,
             "Cumulative_hm3": cumulative,
-        },
-        columns=["Year", "In_Record", "Total_Used_hm3", "Cumulative_hm3"],
+        }
     )
     return Accumulation(table, float(cumulative[-1]) if used else 0.0)  # the same sum as the table's, to the last digit
 
