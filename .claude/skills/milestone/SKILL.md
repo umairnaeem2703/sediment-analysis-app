@@ -1,13 +1,13 @@
 ---
 name: milestone
-description: Start the next work package from the roadmap in project_spec.md, state its success criteria, and cut a task branch before any code changes. Use when the user says "start the next milestone", "start M2", "next work package", or runs /milestone.
+description: Start the next work package from the roadmap in docs/project_spec.md, state its success criteria, and cut a task branch before any code changes. Use when the user says "start the next milestone", "start M2", "next work package", or runs /milestone.
 ---
 
-Begin one milestone or work package from `project_spec.md`. Do not edit code until steps 1 to 3 are done and the user has confirmed the plan.
+Begin one milestone or work package from `docs/project_spec.md`. Do not edit code until steps 1 to 3 are done and the user has confirmed the plan.
 
 ## 1. Find the milestone
 
-Read the roadmap table in `project_spec.md` under **B8. Roadmap**. Take the milestone the user named (for example `M2`). If they named none, take the first row whose status is not `Done`. Report which one you chose.
+Read the roadmap table in `docs/project_spec.md` under **B8. Roadmap**. Take the milestone the user named (for example `M2`). If they named none, take the first row whose status is not `Done`. Report which one you chose.
 
 If the milestone's status is `Not started`, continue. If it is `Done`, stop and say so. If the user asks for a sub-task, use the matching row in the spec's requirement sections (A6 and B3).
 
@@ -35,7 +35,7 @@ After approval:
 
 ## 5. Work the Definition of Done
 
-Follow project_spec.md B7 in order:
+Follow docs/project_spec.md B7 in order:
 
 1. Write failing tests that reference the requirement IDs.
 2. Implement the smallest change that passes.
@@ -48,7 +48,7 @@ Keep the change to the milestone's scope. Record any new design decision in the 
 
 ## 6. Update the roadmap
 
-When the PR is merged and the exit criteria are met, change the milestone's Status cell in `project_spec.md` to `Done` on the same branch. If the hydrologist sign-off is still pending, write `Done (sign-off pending)` instead.
+When the PR is merged and the exit criteria are met, change the milestone's Status cell in `docs/project_spec.md` to `Done` on the same branch. If the hydrologist sign-off is still pending, write `Done (sign-off pending)` instead.
 
 ## 7. Report
 

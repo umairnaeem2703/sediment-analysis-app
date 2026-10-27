@@ -13,7 +13,7 @@ Activate the virtualenv if it is not active (`.venv\Scripts\Activate.ps1`), then
 pytest tests/unit tests/contract tests/pipeline -v
 ```
 
-This is the rebuilt suite (`project_spec.md` B6); the old `tests/legacy/` suites were deleted in M5. The monthly flow preprocessor tests are in `tests/unit/test_monthly_flow.py` (U-M3-01: the DSI monthly parser, the log-normal daily disaggregation, volume conservation, seeding, leap years, the hand-off into `TimeSeriesAggregator`) and `tests/contract/test_flow_files.py` (C-M3-02: the files on disk and the three sample DSI tables). The Wilcock formulas are checked against `tests/verification/make_bedload_oracle.py` by `tests/unit/test_wilcock_formulas.py`. These are Tk-free and need no display.
+This is the rebuilt suite (`docs/project_spec.md` B6); the old `tests/legacy/` suites were deleted in M5. The monthly flow preprocessor tests are in `tests/unit/test_monthly_flow.py` (U-M3-01: the DSI monthly parser, the log-normal daily disaggregation, volume conservation, seeding, leap years, the hand-off into `TimeSeriesAggregator`) and `tests/contract/test_flow_files.py` (C-M3-02: the files on disk and the three sample DSI tables). The Wilcock formulas are checked against `tests/verification/make_bedload_oracle.py` by `tests/unit/test_wilcock_formulas.py`. These are Tk-free and need no display.
 
 Tests under `tests/ui` need a display. If collection fails with an `ImportError`/`ModuleNotFoundError`, or Tk errors such as "Can't find a usable tk.tcl" or "no display", record it as a **missing dependency / environment problem**, name the module or error, and suggest `pip install -r requirements.txt`. Do not treat it as a numerical failure.
 

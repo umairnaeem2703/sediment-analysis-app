@@ -19,7 +19,7 @@ Run these and stop if any fails. Report the output, do not work around it:
 2. `python -m ruff format --check .`
 3. `python -m pytest`
 
-If the change touches `src/core/`, also run `/validate-calc-engine`. A change to a calculated number also needs hydrologist sign-off (project_spec.md B7, step 7), so mention that in the PR body.
+If the change touches `src/core/`, also run `/validate-calc-engine`. A change to a calculated number also needs hydrologist sign-off (docs/project_spec.md B7, step 7), so mention that in the PR body.
 
 ## 3. Push
 
@@ -45,7 +45,7 @@ Body, in this order:
 - Findings from /code-review, each marked fixed or declined with the reason
 ```
 
-The Review section is required by project_spec.md D44: every review finding is fixed or declined here before merge. If no review ran, write "No review run yet" and say so to the user.
+The Review section is required by docs/project_spec.md D44: every review finding is fixed or declined here before merge. If no review ran, write "No review run yet" and say so to the user.
 
 End the body with this line, exactly:
 
