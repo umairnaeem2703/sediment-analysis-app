@@ -16,7 +16,17 @@ from src.core.monthly_flow_preprocessor import DEFAULT_PHI, is_monthly_flow_tabl
 from src.core.rusle import normalize_header
 from src.core.wilcock import FractionalModel, TimeSeriesAggregator
 from src.services.project import Dam, Flow, Project
-from src.services.regional import Loaded, Problem, TableError, cell_text, parse_number, quote_cell, read_input
+from src.services.regional import (
+    Loaded,
+    Problem,
+    TableError,
+    _is_blank,
+    _missing_columns_error,
+    cell_text,
+    parse_number,
+    quote_cell,
+    read_input,
+)
 
 CSV_NAME = "bedload.csv"
 
@@ -86,13 +96,12 @@ def load_fractions(path) -> Loaded:
     found = {key: next((names[a] for a in aliases if a in names), None) for key, aliases in _FRACTION_ALIASES.items()}
     missing = [key for key in ("di", "Fi") if found[key] is None]
     if missing:
-        present = ", ".join(str(column) for column in table.columns)
-        raise ValueError(f"{source}: required column(s) not found: {', '.join(missing)}. Columns present: {present}.")
+        raise _missing_columns_error(source, missing, table)
 
     present_keys = [key for key, column in found.items() if column is not None]
     rows, problems = [], []
     for position, (_, record) in enumerate(table.iterrows()):
-        if not any(cell_text(value) for value in record):
+        if _is_blank(record):
             continue
         row, entry = position + 2, {}
         for key in present_keys:

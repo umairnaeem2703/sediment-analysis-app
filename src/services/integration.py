@@ -43,9 +43,8 @@ PROJECTION_COLUMNS = (
 
 
 class IntegrationResult(NamedTuple):
-    annual: (
-        pd.DataFrame
-    )  # the year key, then what stays in the reservoir: suspended, bedload, total (hm³) and its elevation
+    # The year key, then what stays in the reservoir: suspended, bedload, total (hm³) and its elevation.
+    annual: pd.DataFrame
     accumulation: pd.DataFrame  # Year, In_Record, Total_Used_hm3, Cumulative_hm3, for c <= y < a
     rates: Dict[str, float]  # Mean, Min and Max annual total, hm³/yr
     accumulated_hm3: float  # S0
@@ -149,7 +148,9 @@ def compute_integration(
     )
 
 
-def _warnings(curve: ReservoirCurve, annual_over: int, accumulated_over: int, projected_over: int, outside: int):
+def _warnings(
+    curve: ReservoirCurve, annual_over: int, accumulated_over: int, projected_over: int, outside: int
+) -> List[str]:
     crest = f"the volume at the crest ({curve.volume(curve.crest_elev_m):,.1f} hm³)"
     warnings = []
     if outside:

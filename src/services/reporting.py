@@ -21,6 +21,18 @@ CURVE_PNG = "reservoir_curve.png"
 ANNUAL_PNG = "annual_volume.png"
 PROJECTION_PNG = "projection.png"
 
+_RATE_COLORS = {"Mean": "blue", "Min": "green", "Max": "red"}
+
+
+def _year_label(key: str) -> str:
+    return "Water Year (Oct–Sep)" if key == WATER_YEAR_COLUMN else "Year"
+
+
+def _save(figure: Figure, folder, name: str) -> Path:
+    path = Path(folder) / name
+    figure.savefig(path, dpi=150)
+    return path
+
 
 def bedload_trend_figure(table: pd.DataFrame) -> Figure:
     """Annual mean flow and annual bedload mass against the year, from a `BedloadResult.table`."""
@@ -32,7 +44,7 @@ def bedload_trend_figure(table: pd.DataFrame) -> Figure:
     figure = Figure(figsize=(10, 6), layout="tight")
     flow_axis = figure.subplots()
     flow_line = flow_axis.plot(years, table[FLOW_M3_S], color="blue", marker="o", label="Mean Flow")[0]
-    flow_axis.set_xlabel("Water Year (Oct–Sep)" if key == WATER_YEAR_COLUMN else "Year", fontweight="bold")
+    flow_axis.set_xlabel(_year_label(key), fontweight="bold")
     flow_axis.set_ylabel("Annual Mean Flow (m³/s)", color="blue", fontweight="bold")
     flow_axis.tick_params(axis="y", labelcolor="blue")
     flow_axis.grid(True, linestyle="--", alpha=0.6)
@@ -49,9 +61,7 @@ def bedload_trend_figure(table: pd.DataFrame) -> Figure:
 
 def write_bedload_trend(table: pd.DataFrame, folder) -> Path:
     """Write the trend chart to `folder/bedload_trend.png`."""
-    path = Path(folder) / TREND_PNG
-    bedload_trend_figure(table).savefig(path, dpi=150)
-    return path
+    return _save(bedload_trend_figure(table), folder, TREND_PNG)
 
 
 def reservoir_curve_figure(result: CurveResult) -> Figure:
@@ -86,15 +96,17 @@ def projection_figure(result: IntegrationResult) -> Figure:
     if not history.empty:  # the volume at the end of each year, which is the volume at the start of the next
         years = [result.commissioning_year, *(history["Year"] + 1)]
         axis.plot(years, [0.0, *history["Cumulative_hm3"]], color="gray", label="Accumulated to date")
-    colors = {"Mean": "blue", "Min": "green", "Max": "red"}
     for name in RATE_NAMES:
         label = f"{name} rate ({result.rates[name]:,.2f} hm³/yr)"
         axis.plot(
-            result.projection["Year"], result.projection[f"Cumulative_{name}_hm3"], color=colors[name], label=label
+            result.projection["Year"],
+            result.projection[f"Cumulative_{name}_hm3"],
+            color=_RATE_COLORS[name],
+            label=label,
         )
         reached = result.lifespans[name]
         if reached.status == YEAR and reached.year <= result.projection["Year"].iloc[-1]:
-            axis.plot(reached.year, result.dead_vol_hm3, color=colors[name], marker="o")
+            axis.plot(reached.year, result.dead_vol_hm3, color=_RATE_COLORS[name], marker="o")
     axis.axhline(
         result.dead_vol_hm3,
         color="black",
@@ -115,15 +127,14 @@ def annual_volume_figure(result: IntegrationResult) -> Figure:
     figure = Figure(figsize=(10, 6), layout="tight")
     axis = figure.subplots()
     axis.bar(annual[result.year_column], annual[TOTAL_HM3], color="steelblue", label="Annual total")
-    colors = {"Mean": "blue", "Min": "green", "Max": "red"}
     for name in RATE_NAMES:
         axis.axhline(
             result.rates[name],
-            color=colors[name],
+            color=_RATE_COLORS[name],
             linestyle="--",
             label=f"{name} ({result.rates[name]:,.4f} hm³/yr)",
         )
-    axis.set_xlabel("Water Year (Oct–Sep)" if result.year_column == WATER_YEAR_COLUMN else "Year", fontweight="bold")
+    axis.set_xlabel(_year_label(result.year_column), fontweight="bold")
     axis.set_ylabel("Sediment volume (hm³/yr)", fontweight="bold")
     axis.grid(True, axis="y", linestyle="--", alpha=0.6)
     axis.legend(loc="upper right")
@@ -133,20 +144,14 @@ def annual_volume_figure(result: IntegrationResult) -> Figure:
 
 def write_annual_volume(result: IntegrationResult, folder) -> Path:
     """Write the annual volume chart to `folder/annual_volume.png`."""
-    path = Path(folder) / ANNUAL_PNG
-    annual_volume_figure(result).savefig(path, dpi=150)
-    return path
+    return _save(annual_volume_figure(result), folder, ANNUAL_PNG)
 
 
 def write_projection(result: IntegrationResult, folder) -> Path:
     """Write the projection chart to `folder/projection.png`."""
-    path = Path(folder) / PROJECTION_PNG
-    projection_figure(result).savefig(path, dpi=150)
-    return path
+    return _save(projection_figure(result), folder, PROJECTION_PNG)
 
 
 def write_reservoir_curve(result: CurveResult, folder) -> Path:
     """Write the curve chart to `folder/reservoir_curve.png`."""
-    path = Path(folder) / CURVE_PNG
-    reservoir_curve_figure(result).savefig(path, dpi=150)
-    return path
+    return _save(reservoir_curve_figure(result), folder, CURVE_PNG)
