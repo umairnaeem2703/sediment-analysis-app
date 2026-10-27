@@ -1,5 +1,4 @@
 import tkinter as tk
-from tkinter import font as tkfont
 from tkinter import ttk
 from typing import Optional
 
@@ -17,7 +16,7 @@ from src.services.integration import (
     parse_horizon,
 )
 from src.services.reporting import projection_figure
-from src.ui.common import show_error
+from src.ui.common import add_table, bold_font, show_error
 from src.ui.steps.base import Step
 from src.ui.steps.bedload_step import BedloadStep
 from src.ui.steps.dam_step import DamStep
@@ -82,8 +81,7 @@ class IntegrationStep(Step):
 
         info = ttk.Frame(frame)
         info.grid(row=1, column=0, sticky="ew", padx=10)
-        self.bold_font = tkfont.nametofont("TkDefaultFont").copy()
-        self.bold_font.configure(weight="bold")
+        self.bold_font = bold_font()
         ttk.Label(info, textvariable=self.summary_var, font=self.bold_font, wraplength=640, justify=tk.LEFT).pack(
             anchor="w"
         )
@@ -91,32 +89,14 @@ class IntegrationStep(Step):
 
         results = ttk.Notebook(frame)
         results.grid(row=2, column=0, sticky="nsew", padx=10, pady=4)
-        self.annual_tree = self._add_table(results, "Annual totals", ANNUAL_COLUMNS)
-        self.projection_tree = self._add_table(results, "Projection", PROJECTION_COLUMNS)
+        self.annual_tree = add_table(results, "Annual totals", ANNUAL_COLUMNS)
+        self.projection_tree = add_table(results, "Projection", PROJECTION_COLUMNS)
         self.chart_frame = ttk.Frame(results)
         results.add(self.chart_frame, text="Projection chart")
 
         ttk.Label(frame, textvariable=self.warning_var, foreground="firebrick", wraplength=640, justify=tk.LEFT).grid(
             row=3, column=0, sticky="w", padx=10, pady=4
         )
-
-    @staticmethod
-    def _add_table(notebook: ttk.Notebook, title: str, columns) -> ttk.Treeview:
-        page = ttk.Frame(notebook)
-        page.columnconfigure(0, weight=1)
-        page.rowconfigure(0, weight=1)
-        notebook.add(page, text=title)
-        tree = ttk.Treeview(page, columns=[key for key, *_ in columns], show="headings", selectmode="none")
-        for key, heading, width, _ in columns:
-            tree.heading(key, text=heading)
-            tree.column(key, width=width, stretch=False, anchor="e")
-        vertical = ttk.Scrollbar(page, orient=tk.VERTICAL, command=tree.yview)
-        horizontal = ttk.Scrollbar(page, orient=tk.HORIZONTAL, command=tree.xview)
-        tree.configure(yscrollcommand=vertical.set, xscrollcommand=horizontal.set)
-        tree.grid(row=0, column=0, sticky="nsew")
-        vertical.grid(row=0, column=1, sticky="ns")
-        horizontal.grid(row=1, column=0, sticky="ew")
-        return tree
 
     # --- Step contract ------------------------------------------------------------------------
 

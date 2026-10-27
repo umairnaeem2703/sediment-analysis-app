@@ -1,10 +1,9 @@
 import tkinter as tk
-from tkinter import font as tkfont
 from tkinter import ttk
 from typing import List, Optional
 
 from src.services.run_export import RunExport, collect_warnings, export_run
-from src.ui.common import show_error
+from src.ui.common import bold_font, show_error
 from src.ui.steps.base import Step
 from src.ui.steps.bedload_step import BedloadStep
 from src.ui.steps.dam_step import DamStep
@@ -48,9 +47,7 @@ class ReportStep(Step):
         ttk.Label(top, textvariable=self.dam_var).pack(side=tk.LEFT)
         ttk.Button(top, text="Export", command=self.export).pack(side=tk.RIGHT)
 
-        bold = tkfont.nametofont("TkDefaultFont").copy()
-        bold.configure(weight="bold")
-        ttk.Label(frame, textvariable=self.extremes_var, font=bold, justify=tk.LEFT).grid(
+        ttk.Label(frame, textvariable=self.extremes_var, font=bold_font(), justify=tk.LEFT).grid(
             row=1, column=0, sticky="w", padx=10, pady=4
         )
         ttk.Label(frame, textvariable=self.folder_var, wraplength=640, justify=tk.LEFT).grid(

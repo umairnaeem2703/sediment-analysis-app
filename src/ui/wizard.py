@@ -134,9 +134,12 @@ class Wizard:
     def refresh(self) -> None:
         """Re-draw the step list and the Back/Next buttons from the steps' current state."""
         for index, step in enumerate(self.steps):
-            done, locked = step.is_complete(), not self.can_enter(index)
-            mark = "✓" if done else ("-" if locked else " ")
-            tags = ("done",) if done else (("locked",) if locked else ())
+            if step.is_complete():
+                mark, tags = "✓", ("done",)
+            elif not self.can_enter(index):
+                mark, tags = "-", ("locked",)
+            else:
+                mark, tags = " ", ()
             self.step_list.item(str(index), text=f"{mark} {index + 1}. {step.title}", tags=tags)
         self._sync_selection()
         idle = not self.busy

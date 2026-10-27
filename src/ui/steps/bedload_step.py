@@ -1,6 +1,5 @@
 import tkinter as tk
 from pathlib import Path
-from tkinter import font as tkfont
 from tkinter import ttk
 from typing import Optional, Tuple
 
@@ -19,7 +18,7 @@ from src.services.bedload import (
     import_fractions,
 )
 from src.services.reporting import bedload_trend_figure
-from src.ui.common import browse_open_file, show_error, show_warning
+from src.ui.common import add_table, bold_font, browse_open_file, show_error, show_warning
 from src.ui.steps.base import Step
 from src.ui.steps.dam_step import DamStep
 
@@ -47,9 +46,7 @@ class BedloadStep(Step):
         super().__init__()
         self.dam_step = dam_step
         self.result: Optional[BedloadResult] = None
-        self._result_entries: Optional[Tuple[str, str, str]] = (
-            None  # sigma, seed and phi as entered when the result was made
-        )
+        self._result_entries: Optional[Tuple[str, str, str]] = None  # sigma, seed and phi when the result was made
         self._fields_slug: Optional[str] = None  # the dam whose stored sigma, seed and phi the fields were loaded from
         self._canvas: Optional[FigureCanvasTkAgg] = None
 
@@ -90,8 +87,7 @@ class BedloadStep(Step):
 
         info = ttk.Frame(frame)
         info.grid(row=1, column=0, sticky="ew", padx=10)
-        self.bold_font = tkfont.nametofont("TkDefaultFont").copy()
-        self.bold_font.configure(weight="bold")
+        self.bold_font = bold_font()
         ttk.Label(info, textvariable=self.flag_var, foreground="darkorange4", wraplength=640, justify=tk.LEFT).pack(
             anchor="w"
         )
@@ -99,20 +95,7 @@ class BedloadStep(Step):
 
         results = ttk.Notebook(frame)
         results.grid(row=2, column=0, sticky="nsew", padx=10, pady=4)
-        table = ttk.Frame(results)
-        table.columnconfigure(0, weight=1)
-        table.rowconfigure(0, weight=1)
-        results.add(table, text="Annual table")
-        self.tree = ttk.Treeview(table, columns=[key for key, *_ in GRID_COLUMNS], show="headings", selectmode="none")
-        for key, heading, width, _ in GRID_COLUMNS:
-            self.tree.heading(key, text=heading)
-            self.tree.column(key, width=width, stretch=False, anchor="e")
-        vertical = ttk.Scrollbar(table, orient=tk.VERTICAL, command=self.tree.yview)
-        horizontal = ttk.Scrollbar(table, orient=tk.HORIZONTAL, command=self.tree.xview)
-        self.tree.configure(yscrollcommand=vertical.set, xscrollcommand=horizontal.set)
-        self.tree.grid(row=0, column=0, sticky="nsew")
-        vertical.grid(row=0, column=1, sticky="ns")
-        horizontal.grid(row=1, column=0, sticky="ew")
+        self.tree = add_table(results, "Annual table", GRID_COLUMNS)
         self.chart_frame = ttk.Frame(results)
         results.add(self.chart_frame, text="Trend chart")
 
