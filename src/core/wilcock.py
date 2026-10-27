@@ -147,17 +147,8 @@ class TimeSeriesAggregator:
         lookup = {normalize_header(col): col for col in df_flow.columns}
         water_year_col = lookup.get(normalize_header(WATER_YEAR_COLUMN))
 
-        date_col = None
-        for candidate in ["date", "tarih"]:
-            if candidate in lookup:
-                date_col = lookup[candidate]
-                break
-
-        flow_col = None
-        for candidate in ["flow", "flowq(m3/s)", "debi"]:
-            if candidate in lookup:
-                flow_col = lookup[candidate]
-                break
+        date_col = next((lookup[name] for name in ("date", "tarih") if name in lookup), None)
+        flow_col = next((lookup[name] for name in ("flow", "flowq(m3/s)", "debi") if name in lookup), None)
 
         if date_col is None or flow_col is None:
             raise KeyError(
@@ -168,8 +159,7 @@ class TimeSeriesAggregator:
         renames = {date_col: "Date", flow_col: "Flow Q (m3/s)"}
         if water_year_col is not None:
             renames[water_year_col] = WATER_YEAR_COLUMN
-        df = df_flow.copy()
-        df = df.rename(columns=renames)
+        df = df_flow.rename(columns=renames)
 
         raw_dates = df["Date"]
         dates = pd.to_datetime(raw_dates, format="%d/%m/%Y", errors="coerce")

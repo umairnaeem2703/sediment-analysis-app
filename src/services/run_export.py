@@ -64,11 +64,12 @@ def _input_files(project: Project, dam: Dam) -> List[InputFile]:
     entries += [("dam_sheet", dam.sheet), ("flow", dam.flow.path)]
     files = []
     for role, relative in entries:
+        label = role.replace("_", " ")
         if not relative:
-            raise ValueError(f"The project has no {role.replace('_', ' ')} file for {dam.name}.")
+            raise ValueError(f"The project has no {label} file for {dam.name}.")
         path = project.folder / relative
         if not path.is_file():
-            raise ValueError(f"The {role.replace('_', ' ')} file {relative} is missing from the project folder.")
+            raise ValueError(f"The {label} file {relative} is missing from the project folder.")
         files.append(InputFile(role, relative, _sha256(path)))
     return files
 
@@ -159,10 +160,7 @@ def _write_workbook(
     warnings: List[Tuple[str, str]],
 ) -> None:
     lowest, highest = integration.extremes
-    extremes = pd.DataFrame(
-        [("Minimum", *lowest), ("Maximum", *highest)],
-        columns=EXTREME_COLUMNS,
-    )
+    extremes = pd.DataFrame([("Minimum", *lowest), ("Maximum", *highest)], columns=EXTREME_COLUMNS)
     with pd.ExcelWriter(path, engine="openpyxl") as writer:
         inputs.to_excel(writer, sheet_name=INPUTS_SHEET, index=False)
         table_with_total(suspended).to_excel(writer, sheet_name="Suspended", index=False)

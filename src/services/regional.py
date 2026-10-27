@@ -79,6 +79,7 @@ _SHEET_OPTIONAL = {
     "top_elev_m": ("Top Elev of River", ("topelevofriver",)),
     "avg_flow_hm3_yr": ("Avg. Flow", ("avgflow",)),
 }
+_SHEET_FIELDS = {**_SHEET_REQUIRED, **_SHEET_OPTIONAL}
 
 
 def name_key(text) -> str:
@@ -240,7 +241,7 @@ def validate_dam_sheet(df: pd.DataFrame, source: str, basin_table: pd.DataFrame)
     def locate(aliases):
         return next((normalized[alias] for alias in aliases if alias in normalized), None)
 
-    columns = {field: locate(aliases) for field, (_, aliases) in {**_SHEET_REQUIRED, **_SHEET_OPTIONAL}.items()}
+    columns = {field: locate(aliases) for field, (_, aliases) in _SHEET_FIELDS.items()}
     columns["name"], columns["drainage_area_km2"] = found["dam"], found["area"]
     missing = ([DAM] if columns["name"] is None else []) + [
         label for field, (label, _) in _SHEET_REQUIRED.items() if columns[field] is None
@@ -264,7 +265,7 @@ def validate_dam_sheet(df: pd.DataFrame, source: str, basin_table: pd.DataFrame)
     dam = dams[name_key(sheet_name)]
 
     values, problems = {}, []
-    for field, (label, _) in {**_SHEET_REQUIRED, **_SHEET_OPTIONAL, "drainage_area_km2": (AREA, ())}.items():
+    for field, (label, _) in {**_SHEET_FIELDS, "drainage_area_km2": (AREA, ())}.items():
         column = columns[field]
         if column is None:
             values[field] = None

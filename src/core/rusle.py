@@ -1,13 +1,27 @@
 import math
+import unicodedata
 from dataclasses import asdict, dataclass
 from typing import Dict, List, NamedTuple, Optional, Set
 
 import pandas as pd
 
-import unicodedata
-
 HA_PER_KM2 = 100.0
 _MIN_LOOSE_MATCH_LEN = 3
+
+# Sub-basin name prefixes and suffixes (English & Turkish), tried in this order.
+_NAME_PREFIXES = (
+    "subbasin",
+    "basin",
+    "sub",
+    "sb",
+    "althavzasi",
+    "althavzası",
+    "althavza",
+    "havzasi",
+    "havzası",
+    "havza",
+)
+_NAME_SUFFIXES = ("althavzasi", "althavzası", "althavza", "havzasi", "havzası", "havza", "subbasin", "basin")
 
 
 class ZonalMatch(NamedTuple):
@@ -185,29 +199,14 @@ class ZonalMatcher:
 
         normalized = "".join(ch for ch in lower if ch.isalnum())
 
-        # Strip prefixes (English & Turkish)
-        prefixes = (
-            "subbasin",
-            "basin",
-            "sub",
-            "sb",
-            "althavzasi",
-            "althavzası",
-            "althavza",
-            "havzasi",
-            "havzası",
-            "havza",
-        )
-        for prefix in prefixes:
+        for prefix in _NAME_PREFIXES:
             if normalized.startswith(prefix):
                 remainder = normalized[len(prefix) :]
                 if remainder:
                     normalized = remainder
                     break
 
-        # Strip suffixes (English & Turkish)
-        suffixes = ("althavzasi", "althavzası", "althavza", "havzasi", "havzası", "havza", "subbasin", "basin")
-        for suffix in suffixes:
+        for suffix in _NAME_SUFFIXES:
             if normalized.endswith(suffix):
                 remainder = normalized[: -len(suffix)]
                 if remainder:
@@ -238,21 +237,10 @@ class ZonalMatcher:
             aliases.add(digits_only)
 
         for k in list(aliases):
-            for pfx in (
-                "subbasin",
-                "basin",
-                "sub",
-                "sb",
-                "althavzasi",
-                "althavzası",
-                "althavza",
-                "havzasi",
-                "havzası",
-                "havza",
-            ):
+            for pfx in _NAME_PREFIXES:
                 if k.startswith(pfx) and len(k) > len(pfx):
                     aliases.add(k[len(pfx) :])
-            for sfx in ("althavzasi", "althavzası", "althavza", "havzasi", "havzası", "havza", "subbasin", "basin"):
+            for sfx in _NAME_SUFFIXES:
                 if k.endswith(sfx) and len(k) > len(sfx):
                     aliases.add(k[: -len(sfx)])
 

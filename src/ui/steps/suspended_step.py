@@ -1,12 +1,11 @@
 import tkinter as tk
 from pathlib import Path
-from tkinter import font as tkfont
 from tkinter import ttk
 from typing import Optional
 
 from src.services.regional import SUBBASIN
 from src.services.suspended import SuspendedResult, compute_suspended
-from src.ui.common import show_error
+from src.ui.common import bold_font, show_error
 from src.ui.steps.base import Step
 from src.ui.steps.dam_step import DamStep
 
@@ -61,8 +60,7 @@ class SuspendedStep(Step):
         self.tree.grid(row=0, column=0, sticky="nsew")
         scroll.grid(row=1, column=0, sticky="ew")
 
-        self.total_font = tkfont.nametofont("TkDefaultFont").copy()
-        self.total_font.configure(weight="bold")
+        self.total_font = bold_font()
         ttk.Label(frame, textvariable=self.total_var, font=self.total_font).grid(
             row=2, column=0, sticky="w", padx=10, pady=(8, 0)
         )

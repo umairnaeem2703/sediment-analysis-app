@@ -1,5 +1,4 @@
 import tkinter as tk
-from tkinter import font as tkfont
 from tkinter import ttk
 from typing import Optional, Tuple
 
@@ -16,7 +15,7 @@ from src.services.reservoir import (
     parse_table_step,
     sheet_differences,
 )
-from src.ui.common import format_number, show_error
+from src.ui.common import bold_font, format_number, show_error
 from src.ui.steps.base import Step
 from src.ui.steps.dam_step import DamStep
 
@@ -97,8 +96,7 @@ class ReservoirStep(Step):
 
         info = ttk.Frame(frame)
         info.grid(row=1, column=0, sticky="ew", padx=10)
-        self.bold_font = tkfont.nametofont("TkDefaultFont").copy()
-        self.bold_font.configure(weight="bold")
+        self.bold_font = bold_font()
         ttk.Label(info, textvariable=self.edits_var, foreground="darkorange4", wraplength=640, justify=tk.LEFT).pack(
             anchor="w"
         )
