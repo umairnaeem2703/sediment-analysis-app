@@ -47,7 +47,8 @@ class ReportStep(Step):
         ttk.Label(top, textvariable=self.dam_var).pack(side=tk.LEFT)
         ttk.Button(top, text="Export", command=self.export).pack(side=tk.RIGHT)
 
-        ttk.Label(frame, textvariable=self.extremes_var, font=bold_font(), justify=tk.LEFT).grid(
+        self.bold_font = bold_font()
+        ttk.Label(frame, textvariable=self.extremes_var, font=self.bold_font, justify=tk.LEFT).grid(
             row=1, column=0, sticky="w", padx=10, pady=4
         )
         ttk.Label(frame, textvariable=self.folder_var, wraplength=640, justify=tk.LEFT).grid(
