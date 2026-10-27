@@ -70,11 +70,11 @@ def test_u_m3_01_duplicate_year_raises():
         MonthlyFlowPreprocessor().parse_table(df)
 
 
-def test_u_m3_01_decimal_comma_values_are_accepted():
+def test_u_m3_01_decimal_comma_values_are_refused():
     df = dsi_table({1974: [1.5] * 12}, summary_rows=False).astype(object)
     df.loc[0, "Ekim"] = "1,5"
-    monthly = MonthlyFlowPreprocessor().parse_table(df)
-    assert monthly["Volume_hm3"].tolist() == [1.5] * 12
+    with pytest.raises(ValueError, match="1974 Ekim"):
+        MonthlyFlowPreprocessor().parse_table(df)
 
 
 @pytest.mark.parametrize("top_value", [999.0, None, "abc"], ids=["wrong", "blank", "text"])

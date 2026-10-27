@@ -107,7 +107,7 @@ def parse_number(value) -> Optional[float]:
         number = float(value)
     else:
         try:
-            number = float(cell_text(value).replace(",", "."))
+            number = float(cell_text(value))
         except ValueError:
             return None
     return number if math.isfinite(number) else None

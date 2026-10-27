@@ -1,4 +1,3 @@
-import re
 import sys
 from pathlib import Path
 
@@ -13,23 +12,6 @@ def resource_path(*parts: str) -> Path:
         # Resolve to project root (two levels above src/utils)
         base = Path(__file__).resolve().parent.parent.parent
     return base.joinpath(*parts)
-
-
-_DECIMAL_COMMA_RE = re.compile(r"^\s*-?\d+(,\d+)?\s*$")
-
-
-def _coerce_decimal_comma(df: pd.DataFrame) -> pd.DataFrame:
-    """Convert text columns that hold only decimal-comma numbers (e.g. "1,76") to floats."""
-    for col in df.columns:
-        if not (pd.api.types.is_object_dtype(df[col]) or pd.api.types.is_string_dtype(df[col])):
-            continue
-        values = df[col].dropna()
-        if values.empty:
-            continue
-        text = values.astype(str)
-        if text.map(lambda v: bool(_DECIMAL_COMMA_RE.match(v))).all() and text.str.contains(",").any():
-            df[col] = pd.to_numeric(df[col].astype(str).str.strip().str.replace(",", ".", regex=False), errors="coerce")
-    return df
 
 
 def read_table(file_path: str, dtype=None) -> pd.DataFrame:
@@ -50,10 +32,10 @@ def read_table(file_path: str, dtype=None) -> pd.DataFrame:
                     try:
                         df_semi = pd.read_csv(path, encoding=enc, sep=";", dtype=dtype)
                         if len(df_semi.columns) > 1:
-                            return _coerce_decimal_comma(df_semi)
+                            return df_semi
                     except Exception:
                         pass
-                return _coerce_decimal_comma(df)
+                return df
             except (UnicodeDecodeError, UnicodeError) as exc:
                 last_exc = exc
                 continue

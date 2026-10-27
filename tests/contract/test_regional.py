@@ -3,10 +3,12 @@ import pytest
 
 from src.services.regional import (
     DamSheet,
+    TableError,
     load_basin_table,
     load_dam_sheet,
     load_zonal_means,
     name_key,
+    parse_number,
     validate_basin_table,
     validate_dam_sheet,
     validate_zonal_means,
@@ -351,23 +353,29 @@ def _turkish_csv(separator, decimal):
 
 
 @pytest.mark.parametrize(
-    ("encoding", "separator", "decimal"),
-    [
-        ("utf-8-sig", ",", "."),
-        ("utf-8", ",", "."),
-        ("cp1254", ",", "."),
-        ("cp1254", ";", ","),
-        ("iso-8859-9", ";", ","),
-    ],
+    ("encoding", "separator"),
+    [("utf-8-sig", ","), ("utf-8", ","), ("cp1254", ","), ("cp1254", ";"), ("iso-8859-9", ";")],
 )
-def test_c_x_02_encodings_and_decimal_commas_load_identically(tmp_path, encoding, separator, decimal):
+def test_c_x_02_encodings_and_separators_load_identically(tmp_path, encoding, separator):
     reference = load_basin_table(_write(tmp_path, "reference.csv", _turkish_csv(",", "."))).data
-    path = _write(tmp_path, "variant.csv", _turkish_csv(separator, decimal), encoding)
+    path = _write(tmp_path, "variant.csv", _turkish_csv(separator, "."), encoding)
 
     loaded = load_basin_table(path).data
 
     pd.testing.assert_frame_equal(loaded, reference)
     assert loaded["Dam Name"].tolist() == [row[0] for row in TURKISH_ROWS]
+
+
+@pytest.mark.parametrize("text", ["1,5", "834,7", "1,234", "1.234,5"])
+def test_c_x_02_a_comma_is_never_read_as_a_decimal_point(text):
+    assert parse_number(text) is None
+
+
+def test_c_x_02_a_decimal_comma_in_a_semicolon_file_is_refused(tmp_path):
+    path = _write(tmp_path, "comma.csv", _turkish_csv(";", ","), "cp1254")
+
+    with pytest.raises(TableError):
+        load_basin_table(path)
 
 
 def test_c_x_03_name_key_folds_turkish_case_and_spacing():

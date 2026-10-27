@@ -100,9 +100,7 @@ class MonthlyFlowPreprocessor:
             dupes = sorted(data.loc[data[year_col].duplicated(), year_col].unique().tolist())
             raise ValueError(f"Monthly flow table has duplicate years: {dupes}")
 
-        volumes = data[month_cols].apply(
-            lambda s: pd.to_numeric(s.astype(str).str.replace(",", ".", regex=False).str.strip(), errors="coerce")
-        )
+        volumes = data[month_cols].apply(lambda s: pd.to_numeric(s.astype(str).str.strip(), errors="coerce"))
         bad = volumes.isna() | (volumes < 0)
         if bad.any().any():
             rows, cols = np.nonzero(bad.to_numpy())

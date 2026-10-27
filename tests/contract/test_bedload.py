@@ -72,8 +72,8 @@ def test_c_m3_01_a_daily_file_is_read_as_it_is_and_is_not_flagged_synthetic(tmp_
     assert list(series.daily["Flow"]) == [10, 20]
 
 
-def test_c_m3_01_a_semicolon_file_with_decimal_commas_and_turkish_headers_loads(tmp_path):
-    path = _write(tmp_path, "debi.csv", "Tarih;Debi\n01/01/2000;1,5\n02/01/2000;2,5\n", encoding="cp1254")
+def test_c_m3_01_a_semicolon_file_with_turkish_headers_loads(tmp_path):
+    path = _write(tmp_path, "debi.csv", "Tarih;Debi\n01/01/2000;1.5\n02/01/2000;2.5\n", encoding="cp1254")
 
     result = compute_bedload(load_flow(path, 0.6, 0), FRACTIONS, path.name)
 
@@ -163,8 +163,8 @@ def test_c_m3_03_only_di_and_fi_are_needed_and_then_there_is_nothing_to_warn_abo
     assert list(loaded.data.columns) == ["di", "Fi"] and loaded.warnings == []
 
 
-def test_c_m3_03_a_semicolon_file_with_decimal_commas_and_blank_lines_loads(tmp_path):
-    text = "di;Fi\n0,004;0,1\n;\n0,01;0,2\n0,02;0,35\n0,032;0,25\n0,05;0,1\n"
+def test_c_m3_03_a_semicolon_file_with_blank_lines_loads(tmp_path):
+    text = "di;Fi\n0.004;0.1\n;\n0.01;0.2\n0.02;0.35\n0.032;0.25\n0.05;0.1\n"
 
     loaded = load_fractions(_write(tmp_path, "fractions.csv", text, encoding="cp1254"))
 
@@ -421,7 +421,7 @@ def test_c_m3_03_the_new_fractions_replace_the_old_copy(project, tmp_path):
 def test_c_m3_02_the_settings_are_validated_stored_and_reported_as_changed_or_not(project):
     dam = project.dams[0]
 
-    assert apply_flow_settings(project, dam, "0,8", "7") is True
+    assert apply_flow_settings(project, dam, "0.8", "7") is True
     assert (dam.flow.sigma, dam.flow.seed) == (0.8, 7)
     assert Project.open(project.folder).dams[0].flow.sigma == 0.8
     assert apply_flow_settings(project, dam, "0.8", " 7 ") is False
@@ -510,7 +510,7 @@ def test_c_m3_02_the_lag_1_phi_changes_the_series_keeps_the_volume_and_is_report
 def test_c_m3_02_phi_is_validated_stored_and_reported_as_changed_or_not(project):
     dam = project.dams[0]
 
-    assert apply_flow_settings(project, dam, "0.6", "0", "0,8") is True
+    assert apply_flow_settings(project, dam, "0.6", "0", "0.8") is True
     assert dam.flow.phi == 0.8 and Project.open(project.folder).dams[0].flow.phi == 0.8
     assert apply_flow_settings(project, dam, "0.6", "0", " 0.8 ") is False
     assert validate_flow_settings("0.6", "0") == (0.6, 0, 0.0)

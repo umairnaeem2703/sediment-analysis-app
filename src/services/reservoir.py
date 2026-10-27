@@ -116,7 +116,7 @@ def validate_curve_entries(
 
 
 def parse_table_step(text) -> float:
-    """The level interval of the table, in m, as entered in step 6 (a decimal comma is read as a point). Raises
+    """The level interval of the table, in m, as entered in step 6 (a decimal comma is refused). Raises
     ValueError when it is blank, not a number, or not above 0."""
     step = parse_number(text)
     if step is None:

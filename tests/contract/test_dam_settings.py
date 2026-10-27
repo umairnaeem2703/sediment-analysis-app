@@ -38,13 +38,13 @@ def test_c_m1_09_the_optional_fields_may_be_blank():
     ("overrides", "converted"),
     [
         ({"commissioning_year": "1965.0"}, ("commissioning_year", 1965)),
-        ({"trap_efficiency_pct": "87,5"}, ("trap_efficiency_pct", 87.5)),
-        ({"h_min_m": "892,5"}, ("h_min_m", 892.5)),
+        ({"trap_efficiency_pct": "87.5"}, ("trap_efficiency_pct", 87.5)),
+        ({"h_min_m": "892.5"}, ("h_min_m", 892.5)),
         ({"trap_efficiency_pct": "100"}, ("trap_efficiency_pct", 100.0)),
         ({"trap_efficiency_pct": "0.5"}, ("trap_efficiency_pct", 0.5)),
     ],
 )
-def test_c_m1_09_decimal_commas_and_whole_number_years_are_accepted(overrides, converted):
+def test_c_m1_09_decimal_points_and_whole_number_years_are_accepted(overrides, converted):
     key, expected = converted
 
     assert validate_dam_settings(**_valid(**overrides))[key] == expected

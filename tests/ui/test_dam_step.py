@@ -86,7 +86,7 @@ def test_w_m1_03_the_list_selection_drives_the_view(app):
 def test_w_m1_03_using_a_dam_saves_its_settings_and_completes_the_step(app):
     wizard, step, _, _ = app
     step.select_dam("cubuk_1")
-    _fill(step, commissioning="1965", analysis="2025", efficiency="85,5", h_min="892.5")
+    _fill(step, commissioning="1965", analysis="2025", efficiency="85.5", h_min="892.5")
 
     step.use_dam()
 

@@ -101,7 +101,7 @@ def test_c_m4_01_the_differences_from_the_sheet_are_listed(project):
 
 
 def test_c_m4_01_entered_texts_become_numbers():
-    inputs = validate_curve_entries(**_entered(max_elev_m=" 1122,3 ", h_min_m="1090", shape_class="hill"))
+    inputs = validate_curve_entries(**_entered(max_elev_m=" 1122.3 ", h_min_m="1090", shape_class="hill"))
 
     assert inputs == CurveInputs(1063.0, 1090.0, 1122.3, 1124.0, 74.1, 80.8, "hill")
 
@@ -147,7 +147,7 @@ def test_c_m4_01_every_problem_is_listed_at_once():
 def test_c_m4_01_values_equal_to_the_sheet_are_not_stored_as_edits(project):
     dam = project.dams[0]
 
-    changed = apply_curve_settings(project, dam, _sheet(), **_entered(max_elev_m="1122,3"))
+    changed = apply_curve_settings(project, dam, _sheet(), **_entered(max_elev_m="1122.3"))
 
     assert changed and dam.shape_class == "foothill"  # the shape class was new
     assert dam.curve == CurveOverrides() and dam.h_min_m is None
@@ -282,12 +282,12 @@ def test_c_m4_01_a_curve_through_a_given_hmin_ignores_the_shape_class():
     assert result.curve.exponent == pytest.approx(3.1647, abs=1e-4) and result.curve.h_min_m == pytest.approx(1090.0)
 
 
-@pytest.mark.parametrize(("text", "step"), [("0.25", 0.25), ("0,25", 0.25), (" 1 ", 1.0)])
-def test_c_m4_01_the_level_interval_is_read_with_a_point_or_a_comma(text, step):
+@pytest.mark.parametrize(("text", "step"), [("0.25", 0.25), (" 1 ", 1.0)])
+def test_c_m4_01_the_level_interval_is_read_with_a_point(text, step):
     assert parse_table_step(text) == step
 
 
-@pytest.mark.parametrize("text", ["", "x", "nan", "0", "-0.5"])
+@pytest.mark.parametrize("text", ["", "x", "nan", "0", "-0.5", "0,25"])
 def test_c_m4_01_a_level_interval_that_is_blank_not_a_number_or_not_above_zero_is_refused(text):
     with pytest.raises(ValueError, match="level interval"):
         parse_table_step(text)
