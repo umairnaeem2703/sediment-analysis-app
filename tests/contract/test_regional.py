@@ -20,8 +20,8 @@ BASIN_HEADER = ",".join(CANONICAL)
 SAMPLE_BASINS = resource_path("inputs", "master_yield.csv")
 SAMPLE_ZONAL = resource_path("inputs", "raw_zonal_means.csv")
 SHEET_HEADER = (
-    "Dam Name,Drainage Area (km2),Longest River Length (km),Top Elev of River,Bot Elev of River,"
-    "Avg. Slope,Cret Elev,Max Res. Elev,Active Vol.,Max Vol.,Avg. Flow"
+    "Dam Name,Drainage Area (km2),Longest River Length (km),Top Elevation of River,Bottom Elevation of River,"
+    "Average Slope,Crest Elevation,Maximum Reservoir Elevation,Active Volume,Maximum Volume,Average Flow"
 )
 CUBUK_1_ROW = "Çubuk 1,834.7,25.5,1109,888,0.09,908.6,907.6,5.28,5.6,62.6"
 
@@ -190,14 +190,14 @@ def test_c_m1_05_unknown_dam_is_an_error_naming_it(tmp_path, sample_table):
 
 
 def test_c_m1_05_missing_required_columns_are_named(tmp_path, sample_table):
-    header = SHEET_HEADER.replace("Bot Elev of River,", "").replace("Max Vol.,", "")
+    header = SHEET_HEADER.replace("Bottom Elevation of River,", "").replace("Maximum Volume,", "")
     row = "Çubuk 1,834.7,25.5,1109,0.09,908.6,907.6,5.28,62.6"
 
     with pytest.raises(ValueError) as error:
         load_dam_sheet(_sheet(tmp_path, row, header), sample_table)
 
-    assert "Bot Elev of River" in str(error.value)
-    assert "Max Vol." in str(error.value)
+    assert "Bottom Elevation of River" in str(error.value)
+    assert "Maximum Volume" in str(error.value)
 
 
 def test_c_m1_05_blank_or_non_numeric_required_values_are_named(tmp_path, sample_table):
@@ -207,8 +207,8 @@ def test_c_m1_05_blank_or_non_numeric_required_values_are_named(tmp_path, sample
         load_dam_sheet(_sheet(tmp_path, row), sample_table)
 
     message = str(error.value)
-    assert "Bot Elev of River" in message
-    assert "Max Res. Elev" in message
+    assert "Bottom Elevation of River" in message
+    assert "Maximum Reservoir Elevation" in message
     assert "'high'" in message
 
 
@@ -224,7 +224,9 @@ def test_c_m1_05_a_sheet_holds_exactly_one_dam(tmp_path, sample_table):
 
 
 def test_c_m1_05_optional_columns_may_be_absent(tmp_path, sample_table):
-    header = "Dam Name,Bot Elev of River,Cret Elev,Max Res. Elev,Active Vol.,Max Vol."
+    header = (
+        "Dam Name,Bottom Elevation of River,Crest Elevation,Maximum Reservoir Elevation,Active Volume,Maximum Volume"
+    )
     path = _sheet(tmp_path, "Çubuk 1,888,908.6,907.6,5.28,5.6", header)
 
     sheet = load_dam_sheet(path, sample_table).data

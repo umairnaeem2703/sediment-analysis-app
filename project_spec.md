@@ -173,20 +173,20 @@ All inputs are copied into the project (FR-M1-02). Every column has **one canoni
 
 **Zonal means** (sample: `inputs/raw_zonal_means.csv`; both columns required): `Sub-basin Name` (the same label as the basin table, the join key) and `MEAN` (t/ha/yr).
 
-**Dam sheet** (samples: `inputs/bathymetry/*_bathymetry.csv`; one row per dam). Required: Dam Name, Bot Elev of River, Cret Elev, Max Res. Elev, Active Vol., Max Vol. The other columns are optional.
+**Dam sheet** (samples: `inputs/bathymetry/*_bathymetry.csv`; one row per dam). Required: Dam Name, Bottom Elevation of River, Crest Elevation, Maximum Reservoir Elevation, Active Volume, Maximum Volume The other columns are optional.
 
 | Column | Symbol | Unit | Use |
 |---|---|---|---|
 | Dam Name | | | Match with the basin table |
 | Drainage Area (km2) | | km² | Optional. Cross-check only |
 | Longest River Length (km) | | km | Optional. Informational |
-| Top Elev of River, Bot Elev of River | | m | **Bot Elev of River = Hbed**, must be the bed at the dam axis (OI-01). Top is optional and informational. |
-| Avg. Slope | | m/m | Optional. Cross-check only. **Values are decimal m/m, not percent (D23).** |
-| Cret Elev | Hcrest | m | Curve upper end |
-| Max Res. Elev | Hmax | m | Curve |
-| Active Vol. | Vactive | hm³ | Curve; Vdead = Vmax - Vactive |
-| Max Vol. | Vmax | hm³ | Curve |
-| Avg. Flow | | hm³/yr | Optional. Shown in step 3 |
+| Top Elevation of River, Bottom Elevation of River | | m | **Bottom Elevation of River = Hbed**, must be the bed at the dam axis (OI-01). Top is optional and informational. |
+| Average Slope | | m/m | Optional. Cross-check only. **Values are decimal m/m, not percent (D23).** |
+| Crest Elevation | Hcrest | m | Curve upper end |
+| Maximum Reservoir Elevation | Hmax | m | Curve |
+| Active Volume | Vactive | hm³ | Curve; Vdead = Vmax - Vactive |
+| Maximum Volume | Vmax | hm³ | Curve |
+| Average Flow | | hm³/yr | Optional. Shown in step 3 |
 
 **Daily flow**: `Date` (dd/mm/yyyy; ISO also accepted) and `Flow Q (m3/s)` (m³/s) required; `Water_Year` optional.
 
@@ -263,7 +263,7 @@ All inputs are copied into the project (FR-M1-02). Every column has **one canoni
 
 | ID | Issue | Needed by |
 |---|---|---|
-| OI-01 | Çubuk 2: Hmax - Hbed = 5.3 m for 22.4 hm³ implies a surface of about 8 to 17 km². Confirm that `Bot Elev of River` is the bed at the dam axis. | M4 | Closed 2026-10-26: the hydrologist said to take it as the bed at the dam axis |
+| OI-01 | Çubuk 2: Hmax - Hbed = 5.3 m for 22.4 hm³ implies a surface of about 8 to 17 km². Confirm that `Bottom Elevation of River` is the bed at the dam axis. | M4 | Closed 2026-10-26: the hydrologist said to take it as the bed at the dam axis |
 | OI-02 | Commissioning years and (optionally) Hmin for the three sample dams are missing. The integration goldens use placeholder years (commissioned 1990, analysed 2020) until they are supplied. | M4 | Closed 2026-10-26: the user enters the commissioning year (and Hmin) in the application, step 3 and step 6; the placeholder years stay in the goldens only |
 | OI-03 | Convention check: "analysis year" is treated as the first year *not yet* accumulated (so the default, the current year, excludes the incomplete current year). | M4 | Closed 2026-10-26: the hydrologist approved the convention (D56) |
 | OI-04 | Hydrologist review of the bedload before and after D35 and D36, and confirmation of the tau_ri form (D50). | M3 | Closed 2026-10-26: the hydrologist approved the formulas (D35, D36, D50), the oracle and the goldens |

@@ -23,13 +23,13 @@ MEAN = "MEAN"
 ZONAL = (SUBBASIN, MEAN)
 
 # Dam sheet; the dam name and the drainage area are shared with the basin table.
-BED_ELEV, CREST_ELEV, MAX_ELEV = "Bot Elev of River", "Cret Elev", "Max Res. Elev"
-ACTIVE_VOL, MAX_VOL = "Active Vol.", "Max Vol."
+BED_ELEV, CREST_ELEV, MAX_ELEV = "Bottom Elevation of River", "Crest Elevation", "Maximum Reservoir Elevation"
+ACTIVE_VOL, MAX_VOL = "Active Volume", "Maximum Volume"
 SHEET_SLOPE, RIVER_LENGTH, TOP_ELEV, AVG_FLOW = (
-    "Avg. Slope",
+    "Average Slope",
     "Longest River Length (km)",
-    "Top Elev of River",
-    "Avg. Flow",
+    "Top Elevation of River",
+    "Average Flow",
 )
 SHEET_REQUIRED = (DAM, BED_ELEV, CREST_ELEV, MAX_ELEV, ACTIVE_VOL, MAX_VOL)
 SHEET_OPTIONAL = (AREA, SHEET_SLOPE, RIVER_LENGTH, TOP_ELEV, AVG_FLOW)

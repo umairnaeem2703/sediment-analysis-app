@@ -62,19 +62,19 @@ One file per dam, holding **exactly one dam row**. The dam must already be in th
 | Label | Unit | Required | What to enter |
 |---|---|---|---|
 | `Dam Name` | | yes | As in the basin table |
-| `Bot Elev of River` | m | yes | River-bed elevation at the dam axis |
-| `Cret Elev` | m | yes | Crest elevation |
-| `Max Res. Elev` | m | yes | Maximum reservoir elevation |
-| `Active Vol.` | hm³ | yes | Active volume |
-| `Max Vol.` | hm³ | yes | Volume at the maximum reservoir elevation |
+| `Bottom Elevation of River` | m | yes | River-bed elevation at the dam axis |
+| `Crest Elevation` | m | yes | Elevation of the dam crest |
+| `Maximum Reservoir Elevation` | m | yes | Highest water level of the reservoir |
+| `Active Volume` | hm³ | yes | Storage that can be used |
+| `Maximum Volume` | hm³ | yes | Volume at the maximum reservoir elevation |
 | `Drainage Area (km2)` | km² | no | Checked against the basin table |
-| `Avg. Slope` | m/m | no | Decimal fraction, checked against the basin table |
+| `Average Slope` | m/m | no | Decimal fraction, checked against the basin table |
 | `Longest River Length (km)` | km | no | Information only |
-| `Top Elev of River` | m | no | Information only |
-| `Avg. Flow` | hm³/yr | no | Shown in step 3 |
+| `Top Elevation of River` | m | no | Information only |
+| `Average Flow` | hm³/yr | no | Shown in step 3 |
 
 ```
-Dam Name,Drainage Area (km2),Longest River Length (km),Top Elev of River,Bot Elev of River,Avg. Slope,Cret Elev,Max Res. Elev,Active Vol.,Max Vol.,Avg. Flow
+Dam Name,Drainage Area (km2),Longest River Length (km),Top Elevation of River,Bottom Elevation of River,Average Slope,Crest Elevation,Maximum Reservoir Elevation,Active Volume,Maximum Volume,Average Flow
 Çubuk 1,834.7,25.5,1109,888,0.09,908.6,907.6,5.28,5.6,62.6
 ```
 
