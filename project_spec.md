@@ -180,7 +180,7 @@ All inputs are copied into the project (FR-M1-02). Aliases are matched with `nor
 | Drainage Area (km2) | | km² | Cross-check only |
 | Longest River Length (km) | | km | Informational |
 | Top Elev of River, Bot Elev of River | | m | **Bot Elev of River = Hbed**, must be the bed at the dam axis (OI-01). Top is informational. |
-| Avg. Slope % | | m/m | Cross-check only. **The header says % but the values are decimal m/m (D23).** |
+| Avg. Slope | | m/m | Cross-check only. **Values are decimal m/m, not percent (D23).** |
 | Cret Elev | Hcrest | m | Curve upper end |
 | Max Res. Elev | Hmax | m | Curve |
 | Active Vol. | Vactive | hm³ | Curve; Vdead = Vmax - Vactive |

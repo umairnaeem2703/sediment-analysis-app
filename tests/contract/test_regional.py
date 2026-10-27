@@ -19,7 +19,7 @@ SAMPLE_BASINS = resource_path("inputs", "master_yield.csv")
 SAMPLE_ZONAL = resource_path("inputs", "raw_zonal_means.csv")
 SHEET_HEADER = (
     "Dam Name,Drainage Area (km2),Longest River Length (km),Top Elev of River,Bot Elev of River,"
-    "Avg. Slope %,Cret Elev,Max Res. Elev,Active Vol.,Max Vol.,Avg. Flow"
+    "Avg. Slope,Cret Elev,Max Res. Elev,Active Vol.,Max Vol.,Avg. Flow"
 )
 CUBUK_1_ROW = "Çubuk 1,834.7,25.5,1109,888,0.09,908.6,907.6,5.28,5.6,62.6"
 

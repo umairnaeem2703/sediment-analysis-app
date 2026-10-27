@@ -74,7 +74,7 @@ _SHEET_REQUIRED = {
     "max_vol_hm3": ("Max Vol.", ("maxvol",)),
 }
 _SHEET_OPTIONAL = {
-    "slope_m_per_m": ("Avg. Slope %", ("avgslope%", "avgslope")),
+    "slope_m_per_m": ("Avg. Slope", ("avgslope%", "avgslope")),
     "river_length_km": ("Longest River Length (km)", ("longestriverlength(km)", "longestriverlength")),
     "top_elev_m": ("Top Elev of River", ("topelevofriver",)),
     "avg_flow_hm3_yr": ("Avg. Flow", ("avgflow",)),
