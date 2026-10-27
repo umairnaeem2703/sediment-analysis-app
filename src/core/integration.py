@@ -4,13 +4,19 @@ Volumes are in hm³ from here on (m³ / 10⁶). A volume above the one at the cr
 counted, so that the caller can warn.
 """
 
-from typing import Tuple
+from typing import NamedTuple, Tuple
 
 import numpy as np
 
 from src.core.reservoir import ReservoirCurve
 
 M3_PER_HM3 = 1_000_000.0
+
+
+class Extreme(NamedTuple):
+    year: int
+    total_hm3: float
+    elevation_m: float
 
 
 def retained_hm3(volume_m3, trap_efficiency_pct: float) -> np.ndarray:
@@ -29,3 +35,15 @@ def sediment_elevations(curve: ReservoirCurve, volumes_hm3) -> Tuple[np.ndarray,
     above = volumes > curve.volume(curve.crest_elev_m)
     elevations = np.where(above, curve.crest_elev_m, curve.elevation(volumes))
     return elevations, int(above.sum())
+
+
+def extremes(years, totals_hm3, elevations_m) -> Tuple[Extreme, Extreme]:
+    """The years of the minimum and the maximum annual total (FR-M5-01), with each year's total and elevation. A tie
+    goes to the earliest year."""
+    if len(years) == 0:
+        raise ValueError("There are no years to take the minimum and maximum of.")
+    rows = [
+        Extreme(int(year), float(total), float(elevation))
+        for year, total, elevation in zip(years, totals_hm3, elevations_m)
+    ]
+    return min(rows, key=lambda row: (row.total_hm3, row.year)), min(rows, key=lambda row: (-row.total_hm3, row.year))

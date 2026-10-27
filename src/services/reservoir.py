@@ -56,6 +56,7 @@ class CurveResult(NamedTuple):
     h_min_given: bool  # False when Hmin is the one the shape class gives
     shape_class: Optional[str]  # the class that fixed the exponent; None when Hmin did
     warnings: List[str]
+    step_m: float = STEP_M  # the level interval of the table
 
 
 def _same(entered: float, on_sheet: float) -> bool:
@@ -171,7 +172,9 @@ def compute_curve(
     )
     given = inputs.h_min_m is not None
     shape = None if given else inputs.shape_class
-    return CurveResult(curve, curve_table(curve, step_m), given, shape, curve_warnings(curve, drainage_area_km2))
+    return CurveResult(
+        curve, curve_table(curve, step_m), given, shape, curve_warnings(curve, drainage_area_km2), step_m
+    )
 
 
 def compute_dam_curve(sheet: DamSheet, dam: Dam) -> CurveResult:

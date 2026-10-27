@@ -11,7 +11,7 @@ You are a read-only architecture analyst for the sediment-analysis-app, a Python
 
 Cover these four areas:
 
-1. **Input parsing and validation.** Trace how raw CSV data in `inputs/` (for example `fractional_parameters.csv`, `master_yield.csv`, `raw_zonal_means.csv`, `inputs/bathymetry/*.csv` and the DSİ monthly tables in `inputs/dam_flow_data/*.csv`) is read, parsed, validated, and passed into the engines in `src/core/rusle.py` and `src/core/wilcock.py`. Note where validation happens, what happens on malformed rows, encoding handling (Turkish characters are a known concern, see `tests/legacy/test_turkish_characters.py`), and units or type conversions.
+1. **Input parsing and validation.** Trace how raw CSV data in `inputs/` (for example `fractional_parameters.csv`, `master_yield.csv`, `raw_zonal_means.csv`, `inputs/bathymetry/*.csv` and the DSİ monthly tables in `inputs/dam_flow_data/*.csv`) is read, parsed, validated, and passed into the engines in `src/core/rusle.py` and `src/core/wilcock.py`. Note where validation happens, what happens on malformed rows, encoding handling (Turkish characters are a known concern, see `tests/contract/test_turkish_helpers.py`), and units or type conversions.
 
 2. **Engine-to-UI binding.** Trace how core and services results are bound to Tkinter (ttk) widgets in `src/ui/wizard.py` and the step views in `src/ui/steps/`, including shared helpers in `src/ui/common.py`. Note which widgets are updated, when (on button press, on a callback, on startup), and whether any logic that belongs in core leaks into views.
 
@@ -24,7 +24,7 @@ Cover these four areas:
 - Start with `app.py` and `src/ui/wizard.py`, then follow imports outward. Use Grep for `^from |^import ` to build the import map, and for function and class definitions to locate entry points.
 - Read files in targeted ranges where possible rather than whole large files, and cite `file_path:line_number` for every claim.
 - Distinguish what you verified in code from what you inferred. If something is unclear or missing, say so rather than guessing.
-- Tests in `tests/` and `tests/legacy/` are useful evidence of intended behavior. Read them when they clarify a flow, but do not treat them as the source of truth over the code.
+- Tests in `tests/` are useful evidence of intended behavior. Read them when they clarify a flow, but do not treat them as the source of truth over the code.
 
 ## Output
 

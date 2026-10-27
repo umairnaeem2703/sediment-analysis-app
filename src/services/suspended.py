@@ -85,9 +85,14 @@ def compute_suspended(
     return SuspendedResult(pd.DataFrame(rows, columns=OUTPUT_COLUMNS), warnings)
 
 
+def table_with_total(result: SuspendedResult) -> pd.DataFrame:
+    """The sub-basin rows and a final total row."""
+    total = pd.DataFrame([{SUBBASIN: TOTAL_LABEL, **result.totals.to_dict()}])
+    return pd.concat([result.table, total], ignore_index=True)
+
+
 def write_suspended_csv(result: SuspendedResult, folder) -> Path:
     """Write the sub-basin rows and a final total row to `folder/suspended.csv` (UTF-8 with BOM, for Excel)."""
-    total = pd.DataFrame([{SUBBASIN: TOTAL_LABEL, **result.totals.to_dict()}])
     path = Path(folder) / CSV_NAME
-    pd.concat([result.table, total], ignore_index=True).to_csv(path, index=False, encoding="utf-8-sig")
+    table_with_total(result).to_csv(path, index=False, encoding="utf-8-sig")
     return path

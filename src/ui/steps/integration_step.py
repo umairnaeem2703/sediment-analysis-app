@@ -146,6 +146,7 @@ class IntegrationStep(Step):
         except ValueError as exc:
             show_error("Integration and projection", str(exc))
             return
+        previous = self.result
         self._clear_result()
         self.result, self._result_years = result, years_text
         year_heading = "Water year" if result.year_column == WATER_YEAR_COLUMN else "Year"
@@ -164,6 +165,10 @@ class IntegrationStep(Step):
         self._canvas.get_tk_widget().configure(width=400, height=200)  # the canvas then follows the size of the pane
         self._canvas.draw()
         self._canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        if previous is not None and not (
+            previous.annual.equals(result.annual) and previous.projection.equals(result.projection)
+        ):
+            self.wizard.invalidate_after(self.index, "The integration changed.")
         self.wizard.refresh()
 
     @staticmethod

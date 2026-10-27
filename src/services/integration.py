@@ -8,12 +8,12 @@ service (M5).
 
 import datetime
 from pathlib import Path
-from typing import Dict, List, NamedTuple, Optional
+from typing import Dict, List, NamedTuple, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 
-from src.core.integration import annual_totals, retained_hm3, sediment_elevations
+from src.core.integration import Extreme, annual_totals, extremes, retained_hm3, sediment_elevations
 from src.core.projection import (
     HORIZON_YEARS,
     RATE_NAMES,
@@ -63,6 +63,11 @@ class IntegrationResult(NamedTuple):
     @property
     def year_column(self) -> str:
         return self.annual.columns[0]
+
+    @property
+    def extremes(self) -> Tuple[Extreme, Extreme]:
+        """The years of the minimum and the maximum annual total, with their totals and elevations (FR-M5-01)."""
+        return extremes(self.annual[self.year_column], self.annual[TOTAL_HM3], self.annual[ELEVATION_M])
 
 
 def parse_horizon(text) -> int:
