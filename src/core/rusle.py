@@ -196,8 +196,8 @@ class ZonalMatcher:
     def resolve_zonal_match(cls, zonal_lookup: Dict[str, float], subbasin_value) -> "ZonalMatch":
         """Resolve a sub-basin to its zonal MEAN.
 
-        Exact and alias matches are returned directly. Looser matches (containment, or the same name apart from
-        zero-padding) need the same number in both names and are accepted only when they point to a single value;
+        Exact and alias matches are returned directly. Looser matches (containment, or the same name with its number in
+        another place) need the same number in both names and are accepted only when they point to a single value;
         ambiguous ones return value=None with the candidate keys so the caller can report them. A number shared by two
         otherwise different names is no match (D68).
         """
@@ -223,9 +223,10 @@ class ZonalMatcher:
             cand_ascii = to_ascii_turkish(candidate_key)
             if not ascii_direct or not cand_ascii:
                 continue
+            if "".join(ch for ch in cand_ascii if ch.isdigit()) != digits_only:
+                continue
             shorter, longer = sorted((ascii_direct, cand_ascii), key=len)
-            same_number = "".join(ch for ch in cand_ascii if ch.isdigit()) == digits_only
-            if len(shorter) >= _MIN_LOOSE_MATCH_LEN and shorter in longer and same_number:
+            if len(shorter) >= _MIN_LOOSE_MATCH_LEN and shorter in longer:
                 candidates.append(candidate_key)
                 continue
             if (

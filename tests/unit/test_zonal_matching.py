@@ -90,3 +90,11 @@ def test_u_m2_01_a_name_inside_another_with_a_different_number_is_no_match():
     lookup = _lookup(("Cubuk 12", 9.0))
 
     assert ZonalMatcher.resolve_all(lookup, ["Cubuk 1"]).means == [None]
+
+
+def test_u_m2_01_a_number_that_only_contains_the_other_number_is_no_match():
+    lookup = _lookup(("Dere-11", 5.0), ("Dere-111", 6.0))
+
+    resolved = ZonalMatcher.resolve_all(lookup, ["Dere-1"])
+
+    assert resolved.means == [None] and resolved.loose == {} and resolved.unresolved == ["Dere-1"]
