@@ -12,7 +12,7 @@ from typing import List, NamedTuple, Optional, Sequence, Tuple
 
 import pandas as pd
 
-from src.core.monthly_flow_preprocessor import DEFAULT_PHI, MAX_SIGMA, prepare_daily_flow
+from src.core.monthly_flow_preprocessor import DEFAULT_PHI, MAX_SIGMA, WARN_SIGMA, prepare_daily_flow
 from src.core.wilcock import FractionalModel, TimeSeriesAggregator, check_daily_flow
 from src.services.labels import (
     DAILY_FLOW,
@@ -80,7 +80,8 @@ def _message(exc: Exception) -> str:
 
 def load_flow(path, sigma: float, seed: int, phi: float = DEFAULT_PHI) -> FlowSeries:
     """Read a flow file. A DSİ monthly table is split into a synthetic daily series with `sigma`, `seed` and the lag-1
-    `phi` (D10, D62); a daily series is returned as read and checked when it is summarised."""
+    `phi` (D10, D62), with a warning when `sigma` is above WARN_SIGMA (D73); a daily series is returned as read and
+    checked when it is summarised."""
     source = Path(path).name
     table = read_input(path)
     if not is_monthly_flow_table(table):
@@ -91,7 +92,13 @@ def load_flow(path, sigma: float, seed: int, phi: float = DEFAULT_PHI) -> FlowSe
         daily, notes = prepare_daily_flow(table, sigma, seed, phi)
     except (KeyError, ValueError) as exc:
         raise ValueError(f"{source}: {_message(exc)}") from exc
-    return FlowSeries(daily, True, notes, ignored)
+    warnings = list(ignored)
+    if sigma > WARN_SIGMA:
+        warnings.append(
+            f"Sigma {sigma:g} is above {WARN_SIGMA:g}: much of each month's volume falls on a few days, "
+            "and the bedload rises steeply with sigma."
+        )
+    return FlowSeries(daily, True, notes, warnings)
 
 
 def load_fractions(path) -> Loaded:

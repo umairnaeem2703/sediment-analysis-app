@@ -162,7 +162,7 @@ $SIO$ is the sediment delivery ratio, $Y$ the delivered mass (t/yr) and $V$ the 
 |---|---|---|
 | Flow file | none | The dam's daily flow, or its DSİ monthly table |
 | Grain fractions | none | The bed grain-size classes ([format](INPUT_FORMAT.md#31-grain-fractions)) |
-| sigma | 0.6 | Spread of the random split of monthly flow into days. Used only with a monthly table. |
+| sigma | 0.6 | Spread of the random split of monthly flow into days, from 0 to 3; above 1.5 the result carries a warning. Used only with a monthly table. |
 | lag-1 phi | 0 | Day-to-day persistence of that split (0 ≤ phi < 1). Used only with a monthly table. |
 | seed | 0 | Random seed, so the split is reproducible. Used only with a monthly table. |
 
@@ -385,6 +385,7 @@ Every warning is shown on screen, saved in `run.json` and listed in the workbook
 | Bedload | *"Fraction n (di = X mm): the supplied bi/tau_ri … differs from the computed … by P%; the computed value is used"* | Your optional column disagrees with the formula. The computed value is used; fix or delete the column. |
 | Bedload | *"Dropped N row(s) with missing/non-numeric flow and M row(s) with unparseable dates"* | Those days are missing from the flow series. Check the file if the counts are unexpected. |
 | Bedload | *"⚠ Synthetic daily flow. Converted DSI monthly table …"* | Daily flow was invented from monthly volumes. Report sigma, phi and seed with the result. |
+| Bedload | *"Sigma X is above 1.5: much of each month's volume falls on a few days, and the bedload rises steeply with sigma."* | The split is extreme: on the sample dams sigma 1.5 gives 37 to 88 times the bedload of the default 0.6. Check that you meant it, and report sigma with the result. |
 | Reservoir curve | *"The fitted exponent m = … is outside the usual range 1 to 4.5"* | The curve is unusually concave or convex. Check Hmin and the volumes. |
 | Reservoir curve | *"Hmax is only X m above Hbed, below 10 m: the curve is poorly constrained"* | A shallow range makes the fit sensitive. Check the levels. |
 | Reservoir curve | *"The surface area at Hmax (…) is above the drainage area (…)"* | The curve implies a reservoir surface larger than the catchment. Check the levels and volumes. |

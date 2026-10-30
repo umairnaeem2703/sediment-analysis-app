@@ -21,7 +21,8 @@ SECONDS_PER_DAY = 86_400.0
 DEFAULT_SIGMA = 0.6
 DEFAULT_SEED = 0
 DEFAULT_PHI = 0.0  # lag-1 autocorrelation of the daily log-flow; 0 gives independent days
-MAX_SIGMA = 30.0  # above this the daily weights of a month can underflow to zero (D69)
+MAX_SIGMA = 3.0  # above this the largest day of a month carries more than half of its volume on average (D73)
+WARN_SIGMA = 1.5  # above this it carries more than a quarter, and the bedload is reported as sensitive (D73)
 
 # Water-year order (Ekim -> Eylül), as the DSİ labels the columns, mapped to calendar month numbers.
 WATER_YEAR_MONTHS = (
