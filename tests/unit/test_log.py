@@ -5,7 +5,7 @@ import logging
 import pytest
 
 from src.utils import log
-from src.utils.log import LOG_DIR, LOG_NAME, attach_project_log, detach_project_log, get_logger, log_file
+from src.utils.log import LOG_DIR, LOG_NAME, attach_project_log, configure, detach_project_log, get_logger, log_file
 
 
 @pytest.fixture()
@@ -67,3 +67,20 @@ def test_x_nfr_04_the_file_rolls_over_instead_of_growing_without_a_limit(tmp_pat
     detach_project_log()
 
     assert path.with_name("app.log.1").is_file() and path.stat().st_size <= 300 + 200
+
+
+def test_x_nfr_04_configure_adds_one_console_handler_however_often_it_is_called(logger):
+    def consoles():
+        return [handler for handler in logger.handlers if type(handler) is logging.StreamHandler]
+
+    for handler in consoles():
+        logger.removeHandler(handler)
+    propagate = logger.propagate
+    try:
+        configure()
+        configure()
+        assert len(consoles()) == 1 and logger.propagate is False
+    finally:
+        for handler in consoles():
+            logger.removeHandler(handler)
+        logger.propagate = propagate

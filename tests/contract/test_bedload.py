@@ -601,3 +601,21 @@ def test_c_x_05_columns_ignored_in_the_flow_and_fractions_files_are_warnings_of_
         "fractions.csv: ignored column(s) Comment.",
         "dam_flow.csv: ignored column(s) Station.",
     ]
+
+
+def test_c_m3_02_the_warnings_of_the_check_come_back_when_a_flow_is_chosen(project, tmp_path):
+    path = _write(tmp_path, "flow.csv", "Date,Flow Q (m3/s)\n01/01/2000,10\n03/01/2000,20\nnot a date,5\n")
+
+    series = import_flow(project, project.dams[0], path, 0.6, 0)
+
+    assert len(series.warnings) == 2 and all(warning.startswith("flow.csv: ") for warning in series.warnings)
+    assert "unparseable dates" in series.warnings[0] and "1 day(s)" in series.warnings[1]
+
+
+def test_c_m3_02_an_infinite_flow_is_refused_when_chosen_and_nothing_is_copied(project, tmp_path):
+    path = _write(tmp_path, "flow.csv", "Date,Flow Q (m3/s)\n01/01/2000,10\n02/01/2000,inf\n")
+
+    with pytest.raises(ValueError, match="flow.csv: .*finite"):
+        import_flow(project, project.dams[0], path, 0.6, 0)
+
+    assert not project.dams[0].flow.path

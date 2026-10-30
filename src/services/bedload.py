@@ -7,6 +7,7 @@ annual table, and `compute_dam_bedload` does so from the copies held by a projec
 """
 
 import re
+from contextlib import contextmanager
 from pathlib import Path
 from typing import List, NamedTuple, Optional, Sequence, Tuple
 
@@ -75,6 +76,15 @@ def _message(exc: Exception) -> str:
     return str(exc.args[0]) if isinstance(exc, KeyError) else str(exc)  # str(KeyError) wraps the text in quotes
 
 
+@contextmanager
+def _named(source: str):
+    """Re-raise a KeyError or ValueError of the block as a ValueError that begins with the name of the input."""
+    try:
+        yield
+    except (KeyError, ValueError) as exc:
+        raise ValueError(f"{source}: {_message(exc)}") from exc
+
+
 # --- inputs -----------------------------------------------------------------------------------
 
 
@@ -88,10 +98,8 @@ def load_flow(path, sigma: float, seed: int, phi: float = DEFAULT_PHI) -> FlowSe
         table, ignored = match_columns(table, source, DAILY_FLOW, DAILY_FLOW_OPTIONAL)
         return FlowSeries(table, False, [], ignored)
     table, ignored = match_columns(table, source, DSI_REQUIRED, DSI_OPTIONAL)
-    try:
+    with _named(source):
         daily, notes = prepare_daily_flow(table, sigma, seed, phi)
-    except (KeyError, ValueError) as exc:
-        raise ValueError(f"{source}: {_message(exc)}") from exc
     warnings = list(ignored)
     if sigma > WARN_SIGMA:
         warnings.append(
@@ -129,10 +137,8 @@ def load_fractions(path) -> Loaded:
 
     frame = pd.DataFrame(rows, columns=list(table.columns))
     model = FractionalModel()
-    try:
+    with _named(source):
         model.load_fractional_parameters(frame)
-    except (KeyError, ValueError) as exc:
-        raise ValueError(f"{source}: {_message(exc)}") from exc
     return Loaded(frame, [*ignored, *[f"{source}: {warning}" for warning in model.warnings]])
 
 
@@ -172,10 +178,10 @@ def import_flow(project: Project, dam: Dam, path, sigma: float, seed: int, phi: 
     """Check a flow file and copy it into the project as the dam's flow, with the sigma, seed and phi to split it with.
     A file that cannot be read, converted or summarised raises and nothing is copied."""
     series = load_flow(path, sigma, seed, phi)
-    try:
-        check_daily_flow(series.daily)  # the checks of the calculation, without the model or any fractions
-    except (KeyError, ValueError) as exc:
-        raise ValueError(f"{Path(path).name}: {_message(exc)}") from exc
+    name = Path(path).name
+    with _named(name):
+        _, _, found = check_daily_flow(series.daily)  # the checks of the calculation, without the model
+    series = series._replace(warnings=[*series.warnings, *(f"{name}: {warning}" for warning in found)])
     relative = project.import_file(path, f"inputs/flow/{dam.slug}_flow{Path(path).suffix.lower()}")
     previous = dam.flow
     dam.flow = Flow(relative, sigma, seed, phi)
@@ -219,15 +225,11 @@ def compute_bedload(
     `fractions_warnings` are the warnings `load_fractions` found in the file, which already hold the cross-check of bi
     and tau_ri; without them the cross-check is made here."""
     model = FractionalModel()
-    try:
+    with _named(fractions_source):
         model.load_fractional_parameters(fractions)
-    except (KeyError, ValueError) as exc:
-        raise ValueError(f"{fractions_source}: {_message(exc)}") from exc
     aggregator = TimeSeriesAggregator(model)
-    try:
+    with _named(flow_source):
         summary = aggregator.process_annual_averages(flow.daily)
-    except (KeyError, ValueError) as exc:
-        raise ValueError(f"{flow_source}: {_message(exc)}") from exc
     key = summary.index.name
     table = summary.reset_index().rename(columns=_SUMMARY_COLUMNS)[[key, *VALUE_COLUMNS]]
     if fractions_warnings is None:

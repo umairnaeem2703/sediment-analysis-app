@@ -394,7 +394,7 @@ Every warning is shown on screen, saved in `run.json` and listed in the workbook
 | Integration | *"The accumulation to date is above the volume at the crest …"* | The accumulated sediment exceeds the crest volume. The elevation is capped. |
 | Integration | *"N projected value(s) are above the volume at the crest …"* | Part of the projection passes the crest volume. Elevations are capped. |
 
-**The log.** While a project is open, the program writes `logs/app.log` inside the project folder: the files you chose, each calculation, each error and warning message and, for a calculation that failed, the full traceback (a dialog that begins *"Unexpected …"* names the log). The file rolls over at 1 MB into `app.log.1` to `app.log.3`. If you report a problem, send that file with the project's `project.json`.
+**The log.** While a project is open, the program writes `logs/app.log` inside the project folder: the files you chose, each calculation, each error and warning message and, for a calculation that failed, the full traceback (a dialog that begins *"Unexpected …"* names the log). The file rolls over at 1 MB into `app.log.1` to `app.log.3`. The file holds the full paths of the files you chose, so remove what you do not want to share. If you report a problem, send that file with the project's `project.json`.
 
 ## 10. Glossary
 

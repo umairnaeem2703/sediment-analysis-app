@@ -52,11 +52,16 @@ class ReportStep(Step):
         return self.exported is not None
 
     def on_show(self):
-        dam, run = self.dam_step.chosen, self.wizard.run
-        integration = run.integration if run is not None else None
+        run = self.wizard.run
+        dam = run.dam if run is not None else None
         self.dam_var.set(f"Dam: {dam.name}" if dam else "")
-        if dam is None or integration is None:
+        if run is None:
             return
+        try:
+            results = run.results()
+        except ValueError:  # a result was dropped: there is nothing to report until it is computed again
+            return
+        integration = results[-1]
         lowest, highest = integration.extremes
         self.extremes_var.set(
             "\n".join(
@@ -64,7 +69,7 @@ class ReportStep(Step):
                 for label, extreme in (("Minimum", lowest), ("Maximum", highest))
             )
         )
-        warnings = collect_warnings(self._input_warnings(dam), *run.results())
+        warnings = collect_warnings(self._input_warnings(dam), *results)
         self.warning_var.set("\n".join(f"{phase}: {text}" for phase, text in warnings))
 
     def reset(self):

@@ -99,10 +99,14 @@ class DamStep(Step):
         self._render_list()
         self._show_dam(reload_fields=False)  # keep what the user has typed
 
-    def reset(self):
+    def _unconfirm(self) -> None:
+        """Forget the dam in use, and with it the run that holds its results."""
         self.confirmed = self._confirmed_entries = None
         self.wizard.run = None
         self.status_var.set("")
+
+    def reset(self):
+        self._unconfirm()
         if self.wizard.project is not None:
             self._render_list()
             self._show_dam(reload_fields=True)
@@ -118,10 +122,8 @@ class DamStep(Step):
         different = slug != self._selected_slug
         self._selected_slug = slug
         if self.confirmed is not None and self.confirmed != slug:
-            self.confirmed = self._confirmed_entries = None
-            self.status_var.set("")
-            self.wizard.invalidate_after(self.index, "A different dam was selected.")
-            self.wizard.run = None
+            self.wizard.invalidate_after(self.index, "A different dam was selected.")  # before the run goes
+            self._unconfirm()
         self._render_list()
         self._show_dam(reload_fields=different)  # choosing the same dam again keeps the typed text
         self.wizard.refresh()

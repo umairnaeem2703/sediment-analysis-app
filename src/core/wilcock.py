@@ -116,7 +116,8 @@ class FractionalModel:
 def check_daily_flow(df_flow: pd.DataFrame) -> Tuple[pd.DataFrame, str, List[str]]:
     """Check a daily flow table and prepare it for the annual summary: the table with valid rows only and its year
     column, the name of that column (Water_Year if the series carries it, else Year) and the warnings. Raises
-    KeyError for a missing column and ValueError for an empty series, a negative flow or a date listed twice. No model
+    KeyError for a missing column and ValueError for an empty series, a negative or infinite flow or a date listed twice.
+    No model
     is needed, so a file can be checked as it is chosen."""
     if df_flow is None or df_flow.empty:
         raise ValueError("Flow table is empty.")
@@ -127,25 +128,25 @@ def check_daily_flow(df_flow: pd.DataFrame) -> Tuple[pd.DataFrame, str, List[str
     water_year_col = WATER_YEAR_COLUMN if WATER_YEAR_COLUMN in df_flow.columns else None
     df = df_flow.copy()
 
-    raw_dates = df["Date"]
+    raw_dates = df[DATE_COLUMN]
     dates = pd.to_datetime(raw_dates, format="%d/%m/%Y", errors="coerce")
     retry = dates.isna() & raw_dates.notna()
     if retry.any():
         # Only reached for non-dd/mm/yyyy dates (e.g. ISO); unparseable values stay NaT.
         dates = dates.where(~retry, pd.to_datetime(raw_dates, format="mixed", dayfirst=True, errors="coerce"))
-    df["Date"] = dates
-    df["Flow Q (m3/s)"] = pd.to_numeric(df["Flow Q (m3/s)"], errors="coerce")
+    df[DATE_COLUMN] = dates
+    df[FLOW_COLUMN] = pd.to_numeric(df[FLOW_COLUMN], errors="coerce")
 
-    required = ["Date", "Flow Q (m3/s)"]
+    required = [DATE_COLUMN, FLOW_COLUMN]
     bad_water_years = 0
     if water_year_col is not None:
         water_years = pd.to_numeric(df[WATER_YEAR_COLUMN], errors="coerce")
         df[WATER_YEAR_COLUMN] = water_years.where(water_years % 1 == 0)
-        bad_water_years = int((df[WATER_YEAR_COLUMN].isna() & df["Date"].notna() & df["Flow Q (m3/s)"].notna()).sum())
+        bad_water_years = int((df[WATER_YEAR_COLUMN].isna() & df[DATE_COLUMN].notna() & df[FLOW_COLUMN].notna()).sum())
         required.append(WATER_YEAR_COLUMN)
 
-    bad_dates = int(df["Date"].isna().sum())
-    bad_flows = int((df["Flow Q (m3/s)"].isna() & df["Date"].notna()).sum())
+    bad_dates = int(df[DATE_COLUMN].isna().sum())
+    bad_flows = int((df[FLOW_COLUMN].isna() & df[DATE_COLUMN].notna()).sum())
     if bad_dates or bad_flows or bad_water_years:
         df = df.dropna(subset=required).reset_index(drop=True)
         message = (
@@ -157,16 +158,21 @@ def check_daily_flow(df_flow: pd.DataFrame) -> Tuple[pd.DataFrame, str, List[str
     if df.empty:
         raise ValueError("Flow table has no rows with a valid date and flow value.")
 
-    negative = df["Flow Q (m3/s)"] < 0
+    infinite = ~np.isfinite(df[FLOW_COLUMN])
+    if infinite.any():
+        first = ", ".join(df.loc[infinite, DATE_COLUMN].dt.strftime("%Y-%m-%d").head(5))
+        raise ValueError(f"Flow values must be finite numbers (first offending dates: {first}).")
+
+    negative = df[FLOW_COLUMN] < 0
     if negative.any():
-        first = ", ".join(df.loc[negative, "Date"].dt.strftime("%Y-%m-%d").head(5))
+        first = ", ".join(df.loc[negative, DATE_COLUMN].dt.strftime("%Y-%m-%d").head(5))
         raise ValueError(f"Flow values must not be negative (first offending dates: {first}).")
 
-    repeated = df["Date"].duplicated()
+    repeated = df[DATE_COLUMN].duplicated()
     if repeated.any():
-        first = ", ".join(df.loc[repeated, "Date"].dt.strftime("%Y-%m-%d").head(5))
+        first = ", ".join(df.loc[repeated, DATE_COLUMN].dt.strftime("%Y-%m-%d").head(5))
         raise ValueError(f"Each date may appear only once (first repeated dates: {first}).")
-    missing_days = (df["Date"].max() - df["Date"].min()).days + 1 - len(df)
+    missing_days = (df[DATE_COLUMN].max() - df[DATE_COLUMN].min()).days + 1 - len(df)
     if missing_days > 0:
         warnings.append(
             f"{missing_days} day(s) between the first and last date have no flow; the annual means use the days present."
@@ -178,7 +184,7 @@ def check_daily_flow(df_flow: pd.DataFrame) -> Tuple[pd.DataFrame, str, List[str
         df[year_key] = df[year_key].astype(int)
     else:
         year_key = YEAR_COLUMN
-        df[year_key] = df["Date"].dt.year
+        df[year_key] = df[DATE_COLUMN].dt.year
 
     return df, year_key, warnings
 
@@ -190,6 +196,7 @@ class TimeSeriesAggregator:
 
     def process_annual_averages(self, df_flow: pd.DataFrame) -> pd.DataFrame:
         """Annual summary indexed by Water_Year if the series carries that column, else by calendar Year."""
+        self.warnings = []  # a check that raises leaves none of an earlier run behind
         df, year_key, self.warnings = check_daily_flow(df_flow)
 
         # Calculate intermediate daily m2/s rate
