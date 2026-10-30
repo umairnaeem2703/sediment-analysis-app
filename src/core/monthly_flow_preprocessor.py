@@ -142,6 +142,10 @@ class MonthlyFlowPreprocessor:
                 z[day] = self.phi * z[day - 1] + innovation * eps[day]
             previous = (year, month, z[-1])
             weights = np.exp(mu + self.sigma * z)
+            if not weights.sum() > 0 or not np.isfinite(weights).all():
+                raise ValueError(
+                    f"sigma {self.sigma:g} is too large: the daily weights of {year}-{month:02d} cannot be represented."
+                )
             daily_m3 = float(volume_hm3) * HM3_TO_M3 * weights / weights.sum()
             frames.append(
                 pd.DataFrame(

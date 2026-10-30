@@ -282,3 +282,13 @@ def test_c_m4_02_the_tables_are_written_as_utf8_with_bom(tmp_path):
 
 def test_c_m4_02_the_lifespan_states_are_the_documented_ones():
     assert (YEAR, EXCEEDED, NOT_REACHED) == ("year", "exceeded", "not reached")
+
+
+@pytest.mark.parametrize("text", ["1001", "1000000"])
+def test_c_m4_02_a_projection_longer_than_1000_years_is_refused(text):
+    with pytest.raises(ValueError, match="from 1 to 1000"):
+        parse_horizon(text)
+
+
+def test_c_m4_02_a_projection_of_1000_years_is_accepted():
+    assert parse_horizon("1000") == 1000

@@ -16,6 +16,7 @@ SHAPE_CLASSES = {"gorge": 1.25, "hill": 2.0, "foothill": 3.0, "lake": 4.0}
 EXPONENT_RANGE = (1.0, 4.5)  # a fitted m outside this is implausible (FR-M4-01)
 MIN_DEPTH_M = 10.0  # Hmax - Hbed below this leaves the curve poorly constrained
 STEP_M = 0.5  # the table's default level step (the user may enter another, FR-M4-02)
+MAX_TABLE_ROWS = 100_000  # a finer interval only makes the grid and the CSV unusable (D69)
 
 ELEVATION_M, VOLUME_HM3, AREA_KM2 = "Elevation_m", "Volume_hm3", "Area_km2"
 
@@ -173,6 +174,10 @@ def curve_table(curve: ReservoirCurve, step_m: float = STEP_M) -> pd.DataFrame:
     if problems:
         raise ValueError("\n".join(problems))
     steps = int((curve.crest_elev_m - curve.bed_elev_m) / step_m + 1e-9)
+    if steps + 1 > MAX_TABLE_ROWS:
+        raise ValueError(
+            f"A level interval of {step_m:g} m gives {steps + 1:,} rows; the table holds at most {MAX_TABLE_ROWS:,}."
+        )
     levels = curve.bed_elev_m + step_m * np.arange(steps + 1)
     if curve.crest_elev_m - levels[-1] > 1e-9:
         levels = np.append(levels, curve.crest_elev_m)
