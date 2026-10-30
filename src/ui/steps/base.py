@@ -46,7 +46,10 @@ class Step:
     @result.setter
     def result(self, value) -> None:
         run = self.wizard.run if self.wizard is not None else None
-        if run is not None and self.stage:
+        if self.stage is None:
+            if value is not None:
+                raise RuntimeError(f"{self.title} has no result to keep.")
+        elif run is not None:
             run.set(self.stage, value)
         elif value is not None:
             raise RuntimeError("A result can only be kept once a dam has been chosen.")

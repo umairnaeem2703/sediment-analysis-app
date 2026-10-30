@@ -15,7 +15,7 @@ from src.services.integration import (
     compute_dam_integration,
     parse_horizon,
 )
-from src.services.dam_run import INTEGRATION, STAGES
+from src.services.dam_run import BEDLOAD, CURVE, INTEGRATION, SUSPENDED
 from src.services.reporting import projection_figure
 from src.ui.common import add_table, bold_font, show_error
 from src.ui.steps.base import Step
@@ -110,7 +110,7 @@ class IntegrationStep(Step):
         years_text = self.years_var.get().strip()
         try:
             run = self.wizard.run
-            run.require(*STAGES[:-1])  # the suspended sediment, the bedload and the curve
+            run.require(SUSPENDED, BEDLOAD, CURVE)
             result = compute_dam_integration(
                 run.suspended, run.bedload, run.curve, run.dam, horizon_years=parse_horizon(years_text)
             )

@@ -7,7 +7,7 @@ from src.utils.log import attach_project_log
 def test_x_nfr_04_an_error_in_a_tk_callback_is_logged_and_shown_not_lost_on_the_console(tk_root, tmp_path, monkeypatch):
     path = attach_project_log(tmp_path)
     shown = []
-    monkeypatch.setattr(common, "show_error", lambda title, message: shown.append((title, message)))
+    monkeypatch.setattr(common.messagebox, "showerror", lambda title, message: shown.append((title, message)))
     original = tk_root.report_callback_exception
     common.install_error_handler(tk_root)
 

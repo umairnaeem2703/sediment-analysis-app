@@ -169,8 +169,10 @@ class Wizard:
             self.busy = False
             self.status_var.set("")
             self.refresh()
+            get_logger().info("%s %s", status, "failed." if error is not None else "done.")
             if error is not None and not isinstance(error, EXPECTED_ERRORS):
-                error = RuntimeError(unexpected_message(error))  # already logged with its traceback
+                cause, error = error, RuntimeError(unexpected_message(error))  # already logged with its traceback
+                error.__cause__ = cause
             on_done(result, error)
 
         run_in_background(self.parent, task, finished)

@@ -112,6 +112,6 @@ def install_error_handler(root: tk.Tk) -> None:
 
     def handler(exc_type, exc, traceback):
         get_logger().error("An error in the interface.", exc_info=(exc_type, exc, traceback))
-        show_error("Unexpected error", unexpected_message(exc))
+        messagebox.showerror("Unexpected error", unexpected_message(exc))  # not show_error: it is logged above
 
     root.report_callback_exception = handler

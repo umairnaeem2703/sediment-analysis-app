@@ -28,6 +28,8 @@ class DamRun:
         self._results: Dict[str, Any] = {}
 
     def get(self, stage: str) -> Optional[Any]:
+        if stage not in STAGES:
+            raise KeyError(stage)
         return self._results.get(stage)
 
     def set(self, stage: str, result: Optional[Any]) -> None:

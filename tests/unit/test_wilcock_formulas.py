@@ -254,3 +254,24 @@ def test_u_m3_05_a_flow_series_is_checked_without_any_model_or_fractions():
         check_daily_flow(series.assign(**{"Flow Q (m3/s)": ["-1", "1", "2", "3"]}))
     with pytest.raises(KeyError, match="Flow Q"):
         check_daily_flow(pd.DataFrame({"Date": ["01/01/2010"]}))
+
+
+def test_u_m3_05_an_infinite_flow_is_refused_naming_the_date():
+    series = pd.DataFrame({"Date": ["01/01/2010", "02/01/2010"], "Flow Q (m3/s)": ["1", "inf"]})
+
+    with pytest.raises(ValueError, match=r"finite.*2010-01-02"):
+        check_daily_flow(series)
+
+
+def test_u_m3_05_a_failed_check_leaves_no_warnings_of_an_earlier_run():
+    from src.core.wilcock import TimeSeriesAggregator
+    from tests.samples import sample_fraction_model
+
+    aggregator = TimeSeriesAggregator(sample_fraction_model())
+    aggregator.process_annual_averages(pd.DataFrame({"Date": ["01/01/2010", "bad"], "Flow Q (m3/s)": [1.0, 2.0]}))
+    assert aggregator.warnings
+
+    with pytest.raises(ValueError):
+        aggregator.process_annual_averages(pd.DataFrame({"Date": ["01/01/2010"], "Flow Q (m3/s)": [-1.0]}))
+
+    assert aggregator.warnings == []

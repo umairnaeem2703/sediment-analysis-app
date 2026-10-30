@@ -49,3 +49,8 @@ def test_c_x_07_the_four_results_come_out_in_the_order_of_the_report(run):
         run.set(stage, part)
 
     assert run.results() == tuple(parts) and STAGES[-1] == INTEGRATION
+
+
+def test_c_x_07_reading_an_unknown_stage_is_refused_like_setting_one(run):
+    with pytest.raises(KeyError):
+        run.get("report")

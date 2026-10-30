@@ -2,6 +2,7 @@ import tkinter as tk
 
 import pytest
 
+from src.services.dam_run import BEDLOAD
 from src.ui.steps.bedload_step import BedloadStep
 from src.ui.steps.dam_step import DamStep
 from src.ui.steps.integration_step import IntegrationStep
@@ -188,3 +189,14 @@ def test_w_x_02_computing_the_same_integration_again_keeps_the_export(app):
     wizard.steps[6].compute()
 
     assert report.is_complete()
+
+
+def test_w_m5_01_exporting_with_a_result_missing_names_it_and_writes_nothing(app, errors):
+    wizard, report, top = app
+    _reach_report(wizard, top)
+    wizard.run.set(BEDLOAD, None)
+
+    report.export()
+
+    assert len(errors) == 1 and "Compute the bedload of Çubuk 1 first" in errors[0][1]
+    assert _run_folders(wizard) == []

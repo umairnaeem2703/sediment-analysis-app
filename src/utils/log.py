@@ -22,6 +22,7 @@ def configure() -> None:
     """Send the log to the console at INFO and above. Safe to call more than once."""
     logger = get_logger()
     logger.setLevel(logging.INFO)
+    logger.propagate = False  # a handler of the root logger would print every line twice
     if not any(type(handler) is logging.StreamHandler for handler in logger.handlers):
         console = logging.StreamHandler()
         console.setFormatter(logging.Formatter(_FORMAT))
