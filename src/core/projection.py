@@ -1,7 +1,8 @@
 """Accumulation to date, projection and lifespan of a reservoir (FR-M4-04, FR-M4-05, B3.4).
 
 Volumes are in hm³ and rates in hm³/yr. The years are the labels of the record, used as they are (a DSİ water year
-keeps its label).
+keeps its label). `accumulate` gives S0 for c <= y < a and the mean for years outside the record, `project` runs the
+years entered (100 by default, `check_horizon`), and `lifespan` and `exceeded_year` give the lifespan at each rate.
 """
 
 import math

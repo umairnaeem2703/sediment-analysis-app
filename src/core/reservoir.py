@@ -2,7 +2,8 @@
 
 A power law `V(H) = Vmax * x**m` with `x = (H - Hbed) / (Hmax - Hbed)`, volumes in hm³, levels in m and areas in km²
 (hm³ per m is 10⁶ m²). The exponent *m* is fitted through the dead-storage point (Hmin, Vdead) when Hmin is known and
-is otherwise the exponent of the dam's shape class (D19).
+is otherwise the exponent of the dam's shape class (D19). `check_inputs`, `check_shape`, `check_step` and
+`curve_warnings` are the checks, and `curve_table` is the level table (0.5 m unless the user enters another interval).
 """
 
 import math
