@@ -19,16 +19,6 @@ def browse_open_files(filetypes: Sequence[Tuple[str, str]] = TABLE_FILETYPES, ti
     return list(filedialog.askopenfilenames(title=title, filetypes=list(filetypes)))
 
 
-def browse_save_file(
-    defaultextension: str = ".csv",
-    filetypes: Sequence[Tuple[str, str]] = (("CSV Files", "*.csv"), ("All Files", "*.*")),
-    title: str = "Save File",
-) -> Optional[str]:
-    """Open a file dialog to specify a save file location."""
-    path = filedialog.asksaveasfilename(title=title, defaultextension=defaultextension, filetypes=list(filetypes))
-    return path or None
-
-
 def browse_directory(title: str = "Select Folder") -> Optional[str]:
     """Open a folder dialog; the folder may be created in the dialog."""
     return filedialog.askdirectory(title=title, mustexist=False) or None
@@ -73,11 +63,6 @@ def show_error(title: str, message: str) -> None:
 def show_warning(title: str, message: str) -> None:
     """Display a warning messagebox."""
     messagebox.showwarning(title, message)
-
-
-def show_info(title: str, message: str) -> None:
-    """Display an info messagebox."""
-    messagebox.showinfo(title, message)
 
 
 def run_in_background(
