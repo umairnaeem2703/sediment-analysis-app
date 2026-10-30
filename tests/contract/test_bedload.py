@@ -247,9 +247,10 @@ def test_c_m3_04_rows_with_a_bad_date_or_flow_are_dropped_and_counted_in_the_war
     result = _compute(frame)
 
     assert result.table[VALUE_COLUMNS[0]].iloc[0] == 15.0
-    assert len(result.warnings) == 1
+    assert len(result.warnings) == 2  # the dropped rows, then the two days they leave without flow
     assert result.warnings[0].startswith("flow.csv: ")
     assert "1 row(s) with missing" in result.warnings[0] and "1 row(s) with unparseable" in result.warnings[0]
+    assert "2 day(s) between the first and last date" in result.warnings[1]
 
 
 def test_c_m3_04_a_clean_series_has_no_warnings():

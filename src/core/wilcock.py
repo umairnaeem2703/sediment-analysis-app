@@ -187,6 +187,16 @@ class TimeSeriesAggregator:
             first = ", ".join(df.loc[negative, "Date"].dt.strftime("%Y-%m-%d").head(5))
             raise ValueError(f"Flow values must not be negative (first offending dates: {first}).")
 
+        repeated = df["Date"].duplicated()
+        if repeated.any():
+            first = ", ".join(df.loc[repeated, "Date"].dt.strftime("%Y-%m-%d").head(5))
+            raise ValueError(f"Each date may appear only once (first repeated dates: {first}).")
+        missing_days = (df["Date"].max() - df["Date"].min()).days + 1 - len(df)
+        if missing_days > 0:
+            self.warnings.append(
+                f"{missing_days} day(s) between the first and last date have no flow; the annual means use the days present."
+            )
+
         # A DSI-derived series carries its own Water_Year (Oct (Y-1) to Sep (Y)); anything else is calendar.
         if water_year_col is not None:
             year_key = WATER_YEAR_COLUMN
