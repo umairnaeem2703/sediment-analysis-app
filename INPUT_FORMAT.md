@@ -13,7 +13,7 @@ How to organise your data so the program accepts it. The six files below are the
 | Labels | Use the labels exactly as written here. Capital letters, extra spaces, the characters `.` `:` `%` and `²` versus `2` make no difference (`DRAINAGE AREA (KM²)` is read as `Drainage Area (km2)`). **Any other spelling or language is refused**, for example `Alan`, `Havza`, `Eğim`, `Debi`, `Tarih`, `Area`, `Slope` |
 | Other columns | Columns that are not listed are ignored, and the program tells you which ones it ignored (one warning per file). A trailing empty column is not reported |
 | Blank rows | Allowed and skipped |
-| Names | Dam and sub-basin names are text and may be Turkish. They are compared without regard to capitals, spaces, punctuation and Turkish letters (`Çubuk 1` = `CUBUK-1` = `cubuk1`) |
+| Names | Dam and sub-basin names are text and may be Turkish. They are compared without regard to capitals, spaces, punctuation and Turkish letters (`Çubuk 1` = `CUBUK-1` = `cubuk1`). Two numbers are never joined: `Baraj 1.1` and `Baraj 11` are different names |
 | Your files | Nothing is read until you choose a file in the program. The program copies it into your project folder and never changes the original |
 
 ## 2. Step 2: Regional data

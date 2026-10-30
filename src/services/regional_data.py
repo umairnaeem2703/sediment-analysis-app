@@ -11,6 +11,7 @@ from typing import List, NamedTuple, Optional
 
 import pandas as pd
 
+from src.core.rusle import name_key
 from src.services.project import Dam, Project, slugify
 from src.services.regional import (
     DAM,
@@ -19,7 +20,6 @@ from src.services.regional import (
     TableError,
     load_dam_sheet,
     load_zonal_means,
-    name_key,
     read_basin_grid,
     validate_basin_table,
 )
@@ -125,18 +125,23 @@ class RegionalData:
         self.basin_table = None if self.problems else table
 
     def _identifier_problems(self) -> List[Problem]:
-        """Every dam name must be able to make a project identifier. Spellings of one name (D70) are one dam, and
-        two names that give the same identifier always have the same key, so none can merge by mistake."""
-        problems = []
+        """Every dam name must make a project identifier, and two names the program tells apart (D70) must not make the
+        same one, or two dams would silently share their files. Spellings of one name are one dam."""
+        problems, by_slug = [], {}
         for position, name in enumerate(self.grid[DAM]):
             if not name:  # a blank grid row: validation has already rejected a missing name in any other row
                 continue
+            row = position + 2
             try:
-                slugify(name)
+                by_slug.setdefault(slugify(name), {}).setdefault(name_key(name), []).append(row)
             except ValueError:
-                row = position + 2
                 message = f"row {row}: the dam name '{name}' cannot be turned into a project identifier."
                 problems.append(Problem(message, ((row, DAM),)))
+        for slug, spellings in by_slug.items():
+            if len(spellings) > 1:
+                rows = sorted(row for found in spellings.values() for row in found)
+                message = f"rows {', '.join(map(str, rows))}: different dam names give the same identifier '{slug}'."
+                problems.append(Problem(message, tuple((row, DAM) for row in rows)))
         return problems
 
     def _validate_and_sync(self) -> List[str]:
@@ -148,11 +153,10 @@ class RegionalData:
         wanted = {}
         for name in self.basin_table[DAM]:
             wanted.setdefault(name_key(name), name)  # the table's first spelling names the dam
-        existing = {dam.slug: dam for dam in self.project.dams}
+        existing = {name_key(dam.name): dam for dam in self.project.dams}  # a respelled dam keeps its settings and slug
         dams = []
-        for name in wanted.values():
-            slug = slugify(name)
-            dam = existing.get(slug) or Dam(name=name, slug=slug)
+        for key, name in wanted.items():
+            dam = existing.get(key) or Dam(name=name, slug=slugify(name))
             dam.name = name
             dams.append(dam)
         kept = {dam.slug for dam in dams}
@@ -200,11 +204,11 @@ class RegionalData:
         if self.basin_table is None:
             raise ValueError("Import a valid basin table before the dam sheets.")
         imported, warnings, errors = [], [], []
-        dams = {dam.slug: dam for dam in self.project.dams}
+        dams = {name_key(dam.name): dam for dam in self.project.dams}
         for path in paths:
             try:
                 loaded = load_dam_sheet(path, self.basin_table)
-                dam = dams[slugify(loaded.data.name)]
+                dam = dams[name_key(loaded.data.name)]
                 relative = self.project.import_file(path, f"inputs/dams/{dam.slug}{Path(path).suffix.lower()}")
                 self._drop_previous(dam.sheet, relative)
                 dam.sheet = relative

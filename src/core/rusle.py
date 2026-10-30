@@ -1,4 +1,5 @@
 import math
+import re
 import unicodedata
 from typing import Dict, List, NamedTuple, Optional, Set
 
@@ -80,10 +81,25 @@ def to_ascii_turkish(text: str) -> str:
     return str(text).translate(ascii_map)
 
 
+_PLAIN_NUMBER = re.compile(r"([+-]?)(\d+)(?:\.(\d+))?")
+_ALNUM_RUN = re.compile(r"[^\W_]+")
+
+
 def name_key(text) -> str:
     """The comparison key of a dam or sub-basin name (D70): Turkish letters folded to ASCII, lowercase, and only
-    letters and digits kept, so 'Çubuk 1', 'ÇUBUK-1' and 'cubuk1' give 'cubuk1'."""
-    return "".join(ch for ch in to_ascii_turkish(turkish_lower(text)) if ch.isalnum())
+    letters and digits kept, so 'Çubuk 1', 'ÇUBUK-1' and 'cubuk1' give 'cubuk1'. Two numbers stay apart ('1.1' and
+    '11' are different names), and a name that is only a number is written the shortest way ('1.0' and '01' give '1')."""
+    text = "" if text is None else str(text).strip()
+    plain = _PLAIN_NUMBER.fullmatch(text)
+    if plain:
+        sign, whole, fraction = plain.group(1), plain.group(2).lstrip("0") or "0", (plain.group(3) or "").rstrip("0")
+        return (
+            ("-" if sign == "-" and (whole != "0" or fraction) else "") + whole + ("." + fraction if fraction else "")
+        )
+    key = ""
+    for run in _ALNUM_RUN.findall(to_ascii_turkish(turkish_lower(text))):
+        key += "." + run if key[-1:].isdigit() and run[0].isdigit() else run
+    return key
 
 
 class ZonalMatcher:
@@ -96,18 +112,7 @@ class ZonalMatcher:
         text = str(value).strip()
         if not text:
             return ""
-        lower = turkish_lower(text)
-        try:
-            numeric_value = float(lower)
-        except ValueError:
-            numeric_value = None
-
-        if numeric_value is not None and math.isfinite(numeric_value):
-            if numeric_value.is_integer():
-                return str(int(numeric_value))
-            return format(numeric_value, "g")
-
-        normalized = "".join(ch for ch in lower if ch.isalnum())
+        normalized = name_key(text)
 
         for prefix in _NAME_PREFIXES:
             if normalized.startswith(prefix):
@@ -133,12 +138,10 @@ class ZonalMatcher:
         if not text:
             return set()
 
-        raw_tr = "".join(ch for ch in turkish_lower(text) if ch.isalnum())
-        raw_ascii = to_ascii_turkish(raw_tr)
+        raw = name_key(text)  # the whole name, without the prefix and suffix rules
         key = cls.normalize_subbasin_name(value)
-        key_ascii = to_ascii_turkish(key)
 
-        aliases = {key, key_ascii, raw_tr, raw_ascii}
+        aliases = {key, raw}
         if not key:
             return {a for a in aliases if a}
 
@@ -206,13 +209,14 @@ class ZonalMatcher:
                 return ZonalMatch(zonal_lookup[alias], "exact", [alias])
 
         digits_only = "".join(ch for ch in ascii_direct if ch.isdigit())
+        numbers = re.findall(r"\d+", ascii_direct)  # '1.1' and '11' hold different numbers
         ascii_len = len(ascii_direct)
         candidates: List[str] = []
         for candidate_key in zonal_lookup:
             cand_ascii = to_ascii_turkish(candidate_key)
             if not ascii_direct or not cand_ascii:
                 continue
-            if "".join(ch for ch in cand_ascii if ch.isdigit()) != digits_only:
+            if re.findall(r"\d+", cand_ascii) != numbers:
                 continue
             shorter, longer = sorted((ascii_direct, cand_ascii), key=len)
             if len(shorter) >= _MIN_LOOSE_MATCH_LEN and shorter in longer:

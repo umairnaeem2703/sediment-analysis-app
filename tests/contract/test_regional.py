@@ -1,14 +1,13 @@
 import pandas as pd
 import pytest
 
-from src.core.rusle import ZonalMatcher
+from src.core.rusle import ZonalMatcher, name_key
 from src.services.regional import (
     DamSheet,
     TableError,
     load_basin_table,
     load_dam_sheet,
     load_zonal_means,
-    name_key,
     parse_number,
     validate_basin_table,
     validate_dam_sheet,
@@ -425,6 +424,38 @@ def test_c_x_06_every_spelling_of_a_name_gives_one_key_and_the_zonal_matcher_agr
 @pytest.mark.parametrize("other", ["Çubuk 2", "Çubuk 11", "Çubuk", "Kırmır 1", ""])
 def test_c_x_06_a_different_name_gives_a_different_key(other):
     assert name_key(other) != name_key("Çubuk 1")
+
+
+@pytest.mark.parametrize(
+    ("one", "other"),
+    [
+        ("Baraj 1.1", "Baraj 11"),
+        ("S 1-2", "S 12"),
+        ("S 1,2", "S 12"),
+        ("Dere 1 2", "Dere 12"),
+        ("1.1", "11"),
+        ("1.10", "1.1.0"),
+        ("1.123456", "1.123457"),
+    ],
+)
+def test_c_x_06_two_numbers_in_a_name_stay_apart_for_the_key_and_the_zonal_matcher(one, other):
+    assert name_key(one) != name_key(other)
+    lookup = ZonalMatcher.build_lookup([other], [3.0])
+    assert ZonalMatcher.resolve_zonal_match(lookup, one).value is None
+
+
+@pytest.mark.parametrize(
+    ("one", "other"),
+    [("1.0", "1"), ("01", "1"), ("0.50", "0.5"), ("Dere 1-2", "DERE 1.2"), ("Dere 1/2", "dere  1 2")],
+)
+def test_c_x_06_the_same_number_written_another_way_gives_one_key_and_the_zonal_matcher_agrees(one, other):
+    assert name_key(one) == name_key(other)
+    lookup = ZonalMatcher.build_lookup([other], [3.0])
+    assert ZonalMatcher.resolve_zonal_match(lookup, one).value == 3.0
+
+
+def test_c_x_06_a_name_without_letters_or_digits_has_an_empty_key():
+    assert name_key("---") == name_key("") == name_key(None) == ""
 
 
 def test_c_x_06_a_dam_sheet_finds_its_dam_whatever_the_punctuation(tmp_path, sample_table):
