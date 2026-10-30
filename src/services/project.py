@@ -9,7 +9,7 @@ from pathlib import Path, PurePosixPath
 from typing import Dict, List, Optional
 
 from src.core.monthly_flow_preprocessor import DEFAULT_PHI, DEFAULT_SEED, DEFAULT_SIGMA
-from src.core.rusle import to_ascii_turkish
+from src.core.text import to_ascii_turkish
 from src.utils.log import get_logger
 
 SCHEMA_VERSION = 1

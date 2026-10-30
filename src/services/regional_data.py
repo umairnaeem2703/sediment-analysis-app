@@ -11,7 +11,7 @@ from typing import List, NamedTuple, Optional
 
 import pandas as pd
 
-from src.core.rusle import name_key
+from src.core.text import name_key
 from src.services.project import Dam, Project, slugify
 from src.services.regional import (
     DAM,

@@ -10,7 +10,8 @@ from typing import List, NamedTuple
 
 import pandas as pd
 
-from src.core.rusle import YieldCalculator, ZonalMatcher, name_key
+from src.core.rusle import YieldCalculator, ZonalMatcher
+from src.core.text import name_key
 from src.services.labels import MEAN
 from src.services.regional import AREA, DAM, SLOPE, SUBBASIN
 
