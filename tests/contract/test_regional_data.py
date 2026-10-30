@@ -208,15 +208,14 @@ def test_c_m1_04_dam_settings_survive_a_new_table_and_vanished_dams_are_reported
     assert "removed" in notices[0]
 
 
-def test_c_m1_04_two_dams_with_the_same_identifier_are_a_flagged_problem(tmp_path, project, data):
-    path = _csv(tmp_path, "t.csv", "Çubuk 1,B,S1,10,0.1", "Cubuk-1,B,S1,20,0.2")
+def test_c_m1_04_spellings_of_one_dam_name_are_one_dam_named_by_the_first(tmp_path, project, data):
+    path = _csv(tmp_path, "t.csv", "Çubuk 1,B,S1,10,0.1", "Cubuk-1,B,S2,20,0.2", "CUBUK1,B,S3,30,0.3")
 
     data.import_basin_table(path)
 
-    assert data.basin_table is None
-    assert any("cubuk_1" in problem.message for problem in data.problems)
-    assert {cell for problem in data.problems for cell in problem.cells} == {(2, "Dam Name"), (3, "Dam Name")}
-    assert project.dams == []
+    assert data.problems == []
+    assert [(dam.name, dam.slug) for dam in project.dams] == [("Çubuk 1", "cubuk_1")]
+    assert list(data.sub_basins(project.dams[0])["Sub-basin Name"]) == ["S1", "S2", "S3"]
 
 
 # --- zonal means (FR-M1-06) --------------------------------------------------------------------
@@ -392,12 +391,15 @@ def test_c_m1_08_the_grid_keeps_leading_zeros_in_names(tmp_path, data):
     assert data.grid.loc[0, "Sub-basin Name"] == "01"
 
 
-def test_c_m1_04_identifier_clashes_are_flagged_at_the_grid_row_even_after_a_blank_row(tmp_path, project, data):
-    path = _csv(tmp_path, "t.csv", "Çubuk 1,B,S1,10,0.1", ",,,,", "Cubuk-1,B,S1,20,0.2")
+def test_c_m1_04_a_sub_basin_listed_twice_with_other_spacing_is_flagged_at_both_grid_rows(tmp_path, project, data):
+    path = _csv(tmp_path, "t.csv", "Dam,B,Dere 1,10,0.1", ",,,,", "Dam,B,DERE-1,20,0.2")
 
     data.import_basin_table(path)
 
-    assert {cell for problem in data.problems for cell in problem.cells} == {(2, "Dam Name"), (4, "Dam Name")}
+    assert {cell for problem in data.problems for cell in problem.cells} == {
+        (2, "Sub-basin Name"),
+        (4, "Sub-basin Name"),
+    }
 
 
 @pytest.mark.parametrize("position", [-1, 1, 99])

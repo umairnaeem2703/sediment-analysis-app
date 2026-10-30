@@ -80,6 +80,12 @@ def to_ascii_turkish(text: str) -> str:
     return str(text).translate(ascii_map)
 
 
+def name_key(text) -> str:
+    """The comparison key of a dam or sub-basin name (D70): Turkish letters folded to ASCII, lowercase, and only
+    letters and digits kept, so 'Çubuk 1', 'ÇUBUK-1' and 'cubuk1' give 'cubuk1'."""
+    return "".join(ch for ch in to_ascii_turkish(turkish_lower(text)) if ch.isalnum())
+
+
 class ZonalMatcher:
     """Handles subbasin name normalization, alias generation, and fuzzy lookup against zonal statistics."""
 

@@ -13,7 +13,7 @@ How to organise your data so the program accepts it. The six files below are the
 | Labels | Use the labels exactly as written here. Capital letters, extra spaces, the characters `.` `:` `%` and `²` versus `2` make no difference (`DRAINAGE AREA (KM²)` is read as `Drainage Area (km2)`). **Any other spelling or language is refused**, for example `Alan`, `Havza`, `Eğim`, `Debi`, `Tarih`, `Area`, `Slope` |
 | Other columns | Columns that are not listed are ignored, and the program tells you which ones it ignored (one warning per file). A trailing empty column is not reported |
 | Blank rows | Allowed and skipped |
-| Names | Dam and sub-basin names are text and may be Turkish. They are compared without regard to capitals, spaces and Turkish letters (`Çubuk 1` = `CUBUK 1`) |
+| Names | Dam and sub-basin names are text and may be Turkish. They are compared without regard to capitals, spaces, punctuation and Turkish letters (`Çubuk 1` = `CUBUK-1` = `cubuk1`) |
 | Your files | Nothing is read until you choose a file in the program. The program copies it into your project folder and never changes the original |
 
 ## 2. Step 2: Regional data
@@ -53,7 +53,7 @@ Asagi sakarya Alt Havzası,3.230787302
 Ankara Alt Havzası,3.148701574
 ```
 
-Rows with an empty name or a MEAN that is not a number are skipped, with a warning that lists their row numbers. Use the same names as the basin table; small differences in capitals, spaces, Turkish letters and a trailing `Alt Havzası` are tolerated, and the program warns when it had to match loosely.
+Rows with an empty name or a MEAN that is not a number are skipped, with a warning that lists their row numbers. Use the same names as the basin table; small differences in capitals, spaces, punctuation, Turkish letters and a trailing `Alt Havzası` are tolerated, and the program warns when it had to match loosely.
 
 ### 2.3 Dam sheet
 
@@ -144,7 +144,7 @@ Yıllar,Ekim,Kasım,Aralık,Ocak,Şubat,Mart,Nisan,Mayıs,Haziran,Temmuz,Ağusto
 
 | Name | Appears in | Rule |
 |---|---|---|
-| Dam name | Basin table and the dam sheet | Same name (capitals, spaces and Turkish letters ignored) |
+| Dam name | Basin table and the dam sheet | Same name (capitals, spaces, punctuation and Turkish letters ignored) |
 | Sub-basin name | Basin table and the zonal means | Same name; every sub-basin of the dam you analyse needs one zonal mean |
 
 ## 5. When something is wrong
