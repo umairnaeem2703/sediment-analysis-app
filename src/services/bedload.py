@@ -8,7 +8,7 @@ annual table, and `compute_dam_bedload` does so from the copies held by a projec
 
 import re
 from pathlib import Path
-from typing import List, NamedTuple, Tuple
+from typing import List, NamedTuple, Sequence, Tuple
 
 import pandas as pd
 
@@ -56,6 +56,7 @@ class FlowSeries(NamedTuple):
     daily: pd.DataFrame  # a daily series as read, or the Date, Flow and Water_Year series made from a DSİ monthly table
     synthetic: bool  # True when the daily flow was made from monthly volumes (D10)
     notes: List[str]
+    warnings: Sequence[str] = ()  # findings about the file itself, such as ignored columns
 
 
 class BedloadResult(NamedTuple):
@@ -87,13 +88,13 @@ def load_flow(path, sigma: float, seed: int, phi: float = DEFAULT_PHI) -> FlowSe
     table = read_input(path)
     if not is_monthly_flow_table(table):
         table, ignored = match_columns(table, source, DAILY_FLOW, DAILY_FLOW_OPTIONAL)
-        return FlowSeries(table, False, ignored)
+        return FlowSeries(table, False, [], ignored)
     table, ignored = match_columns(table, source, DSI_REQUIRED, DSI_OPTIONAL)
     try:
         daily, notes = prepare_daily_flow(table, sigma, seed, phi)
     except (KeyError, ValueError) as exc:
         raise ValueError(f"{source}: {_message(exc)}") from exc
-    return FlowSeries(daily, True, [*ignored, *notes])
+    return FlowSeries(daily, True, notes, ignored)
 
 
 def load_fractions(path) -> Loaded:
@@ -220,7 +221,7 @@ def compute_bedload(
     key = summary.index.name
     table = summary.reset_index().rename(columns=_SUMMARY_COLUMNS)[[key, *VALUE_COLUMNS]]
     warnings = [f"{fractions_source}: {warning}" for warning in model.warnings]
-    warnings += [f"{flow_source}: {warning}" for warning in aggregator.warnings]
+    warnings += [*flow.warnings, *(f"{flow_source}: {warning}" for warning in aggregator.warnings)]
     return BedloadResult(table, flow.synthetic, flow.notes, warnings)
 
 
@@ -234,7 +235,10 @@ def compute_dam_bedload(project: Project, dam: Dam) -> BedloadResult:
     flow_file, fractions_file = project.folder / dam.flow.path, project.folder / fractions_path
     flow = load_flow(flow_file, dam.flow.sigma, dam.flow.seed, dam.flow.phi)
     fractions = load_fractions(fractions_file)
-    return compute_bedload(flow, fractions.data, flow_file.name, fractions_file.name)
+    result = compute_bedload(flow, fractions.data, flow_file.name, fractions_file.name)
+    # compute_bedload repeats the cross-check of bi and tau_ri; what it lacks is the file's ignored columns.
+    ignored = [warning for warning in fractions.warnings if warning not in result.warnings]
+    return result._replace(warnings=[*ignored, *result.warnings])
 
 
 def write_bedload_csv(result: BedloadResult, folder) -> Path:

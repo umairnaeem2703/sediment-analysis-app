@@ -194,7 +194,7 @@ class RegionalStep(Step):
             self.problem_list.insert(tk.END, problem.message)
         for message in regional.load_errors:
             self.problem_list.insert(tk.END, f"Not loaded: {message}")
-        for warning in regional.zonal_warnings:
+        for warning in (*regional.basin_warnings, *regional.zonal_warnings):
             self.problem_list.insert(tk.END, f"Warning: {warning}")
         self.status_vars["basin"].set(self._basin_status(regional))
         self.status_vars["zonal"].set(self._zonal_status(regional))

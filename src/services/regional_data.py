@@ -39,6 +39,7 @@ class RegionalData:
         self.grid: Optional[pd.DataFrame] = None  # canonical columns, cell text as the user edits it
         self.problems: List[Problem] = []
         self.basin_table: Optional[pd.DataFrame] = None  # validated and numeric; None while the grid has problems
+        self.basin_warnings: List[str] = []  # what the basin table's file had that is not read; cleared by an edit
         self.zonal: Optional[pd.DataFrame] = None
         self.zonal_warnings: List[str] = []
         self.load_errors: List[str] = []
@@ -55,7 +56,8 @@ class RegionalData:
         basins = self.project.inputs.get("basins")
         if basins:
             try:
-                self.grid = read_basin_grid(self.project.folder / basins).data
+                loaded = read_basin_grid(self.project.folder / basins)
+                self.grid, self.basin_warnings = loaded.data, loaded.warnings
             except (ValueError, OSError) as exc:
                 self.load_errors.append(str(exc))
             else:
@@ -75,7 +77,7 @@ class RegionalData:
         """Copy a basin table into the project and validate it. Returns notices about dams that were removed."""
         loaded = read_basin_grid(path)  # refuses unreadable files and missing columns before anything is copied
         self._replace_basin_copy(self.project.import_file(path, f"inputs/basins{Path(path).suffix.lower()}"))
-        self.grid = loaded.data
+        self.grid, self.basin_warnings = loaded.data, loaded.warnings
         return [*self._validate_and_sync(), *loaded.warnings]
 
     def edit_cell(self, position: int, column: str, value: str) -> List[str]:
@@ -95,7 +97,7 @@ class RegionalData:
             os.replace(temp, self.project.folder / BASIN_COPY)
         finally:
             temp.unlink(missing_ok=True)
-        self.grid = updated
+        self.grid, self.basin_warnings = updated, []  # the rewritten copy holds only the canonical columns
         self._replace_basin_copy(BASIN_COPY)
         return self._validate_and_sync()
 

@@ -471,3 +471,13 @@ def test_c_m1_08_a_failed_replace_leaves_no_temporary_file(tmp_path, project, da
 
     pd.testing.assert_frame_equal(data.grid, before)
     assert sorted(p.name for p in (project.folder / "inputs").iterdir()) == ["basins.csv"]
+
+
+def test_c_x_05_columns_ignored_in_the_basin_table_are_kept_as_warnings_until_it_is_edited(tmp_path, data):
+    path = _csv(tmp_path, "basins.csv", "A,B,S1,100,0.1,north", header=HEADER + ",Region")
+
+    data.import_basin_table(path)
+
+    assert data.basin_warnings == ["basins.csv: ignored column(s) Region."]
+    data.edit_cell(0, "Basin Name", "C")
+    assert data.basin_warnings == []

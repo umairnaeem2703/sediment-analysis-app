@@ -98,10 +98,10 @@ class ReportStep(Step):
         )
 
     def _input_warnings(self, dam) -> List[str]:
-        """The warnings of the zonal means and the dam sheet, which the results do not carry."""
+        """The warnings of the basin table, the zonal means and the dam sheet, which the results do not carry."""
         regional = self.wizard.regional
         try:
-            return [*regional.zonal_warnings, *regional.dam_sheet(dam).warnings]
+            return [*regional.basin_warnings, *regional.zonal_warnings, *regional.dam_sheet(dam).warnings]
         except (ValueError, OSError):  # the export names the missing file
             return []
 

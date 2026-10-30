@@ -541,3 +541,21 @@ def test_c_m3_02_the_import_and_the_dams_computation_use_the_stored_phi(project,
     assert dam.flow.phi == 0.8
     assert list(persistent.table["Volume_m3_yr"]) != list(flat.table["Volume_m3_yr"])
     assert "φ=0.8" in persistent.notes[0]
+
+
+def test_c_x_05_columns_ignored_in_the_flow_and_fractions_files_are_warnings_of_the_result(tmp_path):
+    flow = tmp_path / "daily.csv"
+    flow.write_text("Date,Flow Q (m3/s),Station\n01/01/2010,10,A\n02/01/2010,20,A\n", encoding="utf-8")
+    fractions = tmp_path / "fractions.csv"
+    fractions.write_text("di,Fi,Comment\n0.02,1.0,x\n", encoding="utf-8")
+    project = Project.new(tmp_path / "project", "Region")
+    dam = project.add_dam("Dam")
+    import_flow(project, dam, flow, 0.6, 0)
+    import_fractions(project, fractions)
+
+    result = compute_dam_bedload(project, dam)
+
+    assert result.warnings == [
+        "fractions.csv: ignored column(s) Comment.",
+        "dam_flow.csv: ignored column(s) Station.",
+    ]
