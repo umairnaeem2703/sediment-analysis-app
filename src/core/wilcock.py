@@ -114,7 +114,9 @@ class FractionalModel:
             if name not in df.columns:
                 continue
             supplied = pd.to_numeric(df[name], errors="coerce")
-            for position, (d_i, given, computed) in enumerate(zip(work["di"], supplied, work[name]), start=1):
+            for position, (d_i, given, computed) in enumerate(
+                zip(work["di"], supplied, work[name], strict=True), start=1
+            ):
                 if pd.notna(given) and abs(given - computed) > SUPPLIED_TOLERANCE * computed:
                     self.warnings.append(
                         f"Fraction {position} (di = {d_i * 1000:g} mm): the supplied {name} {given:g} differs from "

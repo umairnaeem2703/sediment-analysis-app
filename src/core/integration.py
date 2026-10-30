@@ -44,6 +44,6 @@ def extremes(years, totals_hm3, elevations_m) -> Tuple[Extreme, Extreme]:
         raise ValueError("There are no years to take the minimum and maximum of.")
     rows = [
         Extreme(int(year), float(total), float(elevation))
-        for year, total, elevation in zip(years, totals_hm3, elevations_m)
+        for year, total, elevation in zip(years, totals_hm3, elevations_m, strict=True)
     ]
     return min(rows, key=lambda row: (row.total_hm3, row.year)), min(rows, key=lambda row: (-row.total_hm3, row.year))

@@ -63,6 +63,7 @@ class ReservoirStep(Step):
             zip(
                 FIELDS,
                 (self.bed_var, self.h_min_var, self.max_elev_var, self.crest_var, self.active_var, self.max_vol_var),
+                strict=True,
             )
         )
         for variable in (*self._input_vars.values(), self.shape_var, self.step_var):
@@ -153,7 +154,7 @@ class ReservoirStep(Step):
         *curve_texts, step_text = self._entries()
         try:
             sheet = self.wizard.regional.dam_sheet(dam).data
-            entered = dict(zip((*FIELDS, "shape_class"), curve_texts))
+            entered = dict(zip((*FIELDS, "shape_class"), curve_texts, strict=True))
             inputs = validate_curve_entries(**entered)
             step_m = parse_table_step(
                 step_text, inputs.crest_elev_m - inputs.bed_elev_m

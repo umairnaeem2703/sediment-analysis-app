@@ -109,12 +109,12 @@ class MonthlyFlowPreprocessor:
         bad = volumes.isna() | (volumes < 0)
         if bad.any().any():
             rows, cols = np.nonzero(bad.to_numpy())
-            cells = [f"{data[year_col].iloc[r]} {month_cols[c]}" for r, c in zip(rows, cols)]
+            cells = [f"{data[year_col].iloc[r]} {month_cols[c]}" for r, c in zip(rows, cols, strict=True)]
             raise ValueError(f"Monthly volumes must be non-negative numbers; invalid cells: {cells}")
 
         records = []
-        for label, row in zip(data[year_col], volumes.to_numpy(dtype=float)):
-            for (_, month), volume in zip(WATER_YEAR_MONTHS, row):
+        for label, row in zip(data[year_col], volumes.to_numpy(dtype=float), strict=True):
+            for (_, month), volume in zip(WATER_YEAR_MONTHS, row, strict=True):
                 records.append((label, self._calendar_year(label, month), month, volume))
         monthly = pd.DataFrame(records, columns=[WATER_YEAR_COLUMN, "Year", "Month", "Volume_hm3"])
         return monthly.sort_values(["Year", "Month"], ignore_index=True)

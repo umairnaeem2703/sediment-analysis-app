@@ -257,7 +257,7 @@ def test_p_m5_02_the_warnings_sheet_has_every_warning_with_its_phase(shared, tmp
         ("Integration", integration.warnings),
     ):
         expected += [(phase, text) for text in warnings]
-    assert list(zip(table["Phase"], table["Warning"])) == expected
+    assert list(zip(table["Phase"], table["Warning"], strict=True)) == expected
     assert any(phase == "Integration" for phase, _ in expected)  # cubuk_2 has years outside its record
 
 
@@ -371,7 +371,9 @@ def test_p_m5_03_run_json_has_every_warning_the_workbook_has(shared, tmp_path):
     warnings = _json(export)["warnings"]
     sheet = _sheet(export, "Warnings")
 
-    assert [(entry["phase"], entry["text"]) for entry in warnings] == list(zip(sheet["Phase"], sheet["Warning"]))
+    assert [(entry["phase"], entry["text"]) for entry in warnings] == list(
+        zip(sheet["Phase"], sheet["Warning"], strict=True)
+    )
     assert {"phase": "Inputs", "text": "Dam sheet: area check."} in warnings
 
 
