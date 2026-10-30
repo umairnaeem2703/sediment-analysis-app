@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Optional, Tuple
 
+from src.services.dam_run import DamRun
 from src.services.dam_settings import apply_dam_settings
 from src.services.project import Dam
 from src.services.regional import AREA, SLOPE, SUBBASIN
@@ -100,6 +101,7 @@ class DamStep(Step):
 
     def reset(self):
         self.confirmed = self._confirmed_entries = None
+        self.wizard.run = None
         self.status_var.set("")
         if self.wizard.project is not None:
             self._render_list()
@@ -119,6 +121,7 @@ class DamStep(Step):
             self.confirmed = self._confirmed_entries = None
             self.status_var.set("")
             self.wizard.invalidate_after(self.index, "A different dam was selected.")
+            self.wizard.run = None
         self._render_list()
         self._show_dam(reload_fields=different)  # choosing the same dam again keeps the typed text
         self.wizard.refresh()
@@ -160,6 +163,8 @@ class DamStep(Step):
         self.confirmed = dam.slug
         if changed:
             self.wizard.invalidate_after(self.index, "The dam settings changed.")
+        if self.wizard.run is None or self.wizard.run.dam.slug != dam.slug:
+            self.wizard.run = DamRun(dam)
         self.status_var.set(f"{dam.name} will be analysed.")
         self._show_dam(reload_fields=True)  # show the values as stored
         self._confirmed_entries = self._entries()

@@ -17,6 +17,7 @@ from src.services.bedload import (
     import_flow,
     import_fractions,
 )
+from src.services.dam_run import BEDLOAD
 from src.services.reporting import bedload_trend_figure
 from src.ui.common import add_table, bold_font, browse_open_file, show_error, show_warning
 from src.ui.steps.base import Step
@@ -41,11 +42,11 @@ class BedloadStep(Step):
     """
 
     title = "Bedload"
+    stage = BEDLOAD
 
     def __init__(self, dam_step: DamStep):
         super().__init__()
         self.dam_step = dam_step
-        self.result: Optional[BedloadResult] = None
         self._result_entries: Optional[Tuple[str, str, str]] = None  # sigma, seed and phi when the result was made
         self._fields_slug: Optional[str] = None  # the dam whose stored sigma, seed and phi the fields were loaded from
         self._canvas: Optional[FigureCanvasTkAgg] = None

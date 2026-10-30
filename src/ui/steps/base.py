@@ -1,4 +1,5 @@
 from tkinter import ttk
+from typing import Optional
 
 
 class Step:
@@ -9,6 +10,7 @@ class Step:
     """
 
     title = ""
+    stage: Optional[str] = None  # the DamRun stage whose result this step shows, for steps 4 to 7
 
     def __init__(self):
         self.wizard = None
@@ -34,3 +36,17 @@ class Step:
     @property
     def index(self) -> int:
         return self.wizard.steps.index(self)
+
+    @property
+    def result(self):
+        """The result of this step's stage for the dam being analysed; None while there is none."""
+        run = self.wizard.run if self.wizard is not None else None
+        return run.get(self.stage) if run is not None and self.stage else None
+
+    @result.setter
+    def result(self, value) -> None:
+        run = self.wizard.run if self.wizard is not None else None
+        if run is not None and self.stage:
+            run.set(self.stage, value)
+        elif value is not None:
+            raise RuntimeError("A result can only be kept once a dam has been chosen.")

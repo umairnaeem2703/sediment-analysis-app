@@ -3,6 +3,7 @@ from pathlib import Path
 from tkinter import ttk
 from typing import Optional
 
+from src.services.dam_run import SUSPENDED
 from src.services.regional import SUBBASIN
 from src.services.suspended import SuspendedResult, compute_suspended
 from src.ui.common import bold_font, show_error
@@ -29,11 +30,11 @@ class SuspendedStep(Step):
     """Step 4: the suspended sediment of the chosen dam (A5, B3.1). Compute runs off the Tk thread."""
 
     title = "Suspended sediment"
+    stage = SUSPENDED
 
     def __init__(self, dam_step: DamStep):
         super().__init__()
         self.dam_step = dam_step
-        self.result: Optional[SuspendedResult] = None
 
     def build(self, frame):
         self.dam_var = tk.StringVar()
