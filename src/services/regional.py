@@ -13,7 +13,7 @@ from typing import Any, List, NamedTuple, Optional, Tuple
 
 import pandas as pd
 
-from src.core.rusle import to_ascii_turkish, turkish_lower
+from src.core.rusle import name_key
 from src.services.labels import (
     ACTIVE_VOL,
     AREA,
@@ -98,11 +98,6 @@ _SHEET_OPTIONAL = {
     "top_elev_m": TOP_ELEV,
     "avg_flow_hm3_yr": AVG_FLOW,
 }
-
-
-def name_key(text) -> str:
-    """Turkish-aware comparison key: ASCII-folded, lowercase, single-spaced ('ÇUBUK  1' -> 'cubuk 1')."""
-    return " ".join(to_ascii_turkish(turkish_lower(text)).split())
 
 
 def read_input(path, dtype=None) -> pd.DataFrame:

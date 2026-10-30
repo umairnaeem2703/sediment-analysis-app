@@ -1,6 +1,7 @@
 import pandas as pd
 import pytest
 
+from src.core.rusle import ZonalMatcher
 from src.services.regional import (
     DamSheet,
     TableError,
@@ -412,6 +413,26 @@ def test_c_x_04_a_validation_error_names_the_file_the_row_and_the_column(tmp_pat
 def test_c_x_03_name_key_folds_turkish_case_and_spacing():
     assert name_key("  ÇUBUK   1 ") == name_key("Çubuk 1") == name_key("cubuk 1")
     assert name_key("İznik Barajı") == name_key("IZNIK BARAJI") == name_key("iznik baraji")
+
+
+@pytest.mark.parametrize("spelling", ["Çubuk 1", "ÇUBUK-1", "cubuk1", "Cubuk  1 ", "CUBUK_1", "Çubuk.1", "Çubuk (1)"])
+def test_c_x_06_every_spelling_of_a_name_gives_one_key_and_the_zonal_matcher_agrees(spelling):
+    assert name_key(spelling) == "cubuk1"
+    lookup = ZonalMatcher.build_lookup(["Çubuk 1"], [3.0])
+    assert ZonalMatcher.resolve_zonal_match(lookup, spelling).value == 3.0
+
+
+@pytest.mark.parametrize("other", ["Çubuk 2", "Çubuk 11", "Çubuk", "Kırmır 1", ""])
+def test_c_x_06_a_different_name_gives_a_different_key(other):
+    assert name_key(other) != name_key("Çubuk 1")
+
+
+def test_c_x_06_a_dam_sheet_finds_its_dam_whatever_the_punctuation(tmp_path, sample_table):
+    row = CUBUK_1_ROW.replace("Çubuk 1", "ÇUBUK-1", 1)
+
+    loaded = load_dam_sheet(_sheet(tmp_path, row), sample_table)
+
+    assert loaded.data.name == "Çubuk 1"
 
 
 # --- review follow-ups ------------------------------------------------------------------------
