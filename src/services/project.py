@@ -10,6 +10,7 @@ from typing import Dict, List, Optional
 
 from src.core.monthly_flow_preprocessor import DEFAULT_PHI, DEFAULT_SEED, DEFAULT_SIGMA
 from src.core.rusle import to_ascii_turkish
+from src.utils.log import get_logger
 
 SCHEMA_VERSION = 1
 PROJECT_FILE = "project.json"
@@ -145,4 +146,5 @@ class Project:
             return relative.as_posix()
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
+        get_logger().info("Imported %s as %s.", source, relative.as_posix())
         return relative.as_posix()

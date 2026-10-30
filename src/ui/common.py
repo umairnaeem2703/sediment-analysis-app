@@ -1,3 +1,4 @@
+import logging
 import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
@@ -66,7 +67,8 @@ def show_error(title: str, message: str) -> None:
 
 
 def show_warning(title: str, message: str) -> None:
-    """Display a warning messagebox."""
+    """Display a warning messagebox, and record it in the log."""
+    get_logger().warning("%s: %s", title, message)
     messagebox.showwarning(title, message)
 
 
@@ -85,10 +87,11 @@ def run_in_background(
         error = None
         try:
             result = task_fn()
-        except EXPECTED_ERRORS as exc:
-            error = exc
-        except Exception as exc:  # a fault in the program: keep the traceback, which the dialog can not show
-            get_logger().error("A background task failed.", exc_info=exc)
+        except Exception as exc:
+            # The traceback goes to the log for every failure: a ValueError or KeyError can come from a fault in the
+            # program as well as from an input, and the dialog can not show it.
+            level = logging.WARNING if isinstance(exc, EXPECTED_ERRORS) else logging.ERROR
+            get_logger().log(level, "A background task failed.", exc_info=exc)
             error = exc
         root.after(0, lambda: on_complete(result, error))
 
@@ -100,7 +103,7 @@ def run_in_background(
 def unexpected_message(error: BaseException) -> str:
     """The text of the dialog for an error the program did not foresee: the cause, and where the traceback is."""
     path = log_file()
-    where = f"Details are in {path}." if path is not None else "Details are in the console."
+    where = f"Details are in {path}." if path is not None else "The traceback was not saved: no project log is open."
     return f"Unexpected {type(error).__name__}: {error}\n{where}"
 
 

@@ -219,3 +219,19 @@ def test_w_x_02_only_the_current_step_is_laid_out(shell):
     assert [s.frame.winfo_manager() for s in steps] == ["grid", "", ""]
     wizard.next()
     assert [s.frame.winfo_manager() for s in steps] == ["", "grid", ""]
+
+
+def test_x_nfr_04_an_input_error_in_a_background_task_keeps_its_traceback_in_the_log(shell, tmp_path):
+    wizard, _, top = shell
+    path = attach_project_log(tmp_path)
+    seen = {}
+
+    def task():
+        raise ValueError("bad input")
+
+    wizard.run_task(task, lambda result, error: seen.update(error=error))
+    wait_until(top, lambda: "error" in seen)
+
+    assert str(seen["error"]) == "bad input"  # the dialog keeps the plain message
+    text = path.read_text(encoding="utf-8")
+    assert "Traceback" in text and "ValueError: bad input" in text
