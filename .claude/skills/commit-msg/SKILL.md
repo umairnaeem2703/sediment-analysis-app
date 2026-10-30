@@ -27,7 +27,7 @@ type(scope): short subject
 Rules:
 
 - **type** is one of: `feat`, `fix`, `refactor`, `chore`, `docs`, `style`, `test`. Pick the one that matches the primary intent of the change.
-- **scope** is the area of the codebase the change touches, in lowercase, such as `rusle`, `wilcock`, `ui`, `data`, or `tests`. Omit the parentheses entirely if no single scope fits.
+- **scope** is the area of the codebase the change touches, in lowercase, such as `rusle`, `wilcock`, `reservoir`, `services`, `ui`, `inputs`, or `tests`. Omit the parentheses entirely if no single scope fits.
 - **subject** is imperative, lowercase after the colon, with no trailing period, and **under 60 characters** total for the whole first line.
 - **body bullets** are optional but encouraged. Use one bullet for what changed and one for why. Keep each bullet to one line where possible. Describe the change from the diff, not from guesses.
 - **Never** add a `Co-Authored-By` trailer or any other attribution line. The message ends with the last body bullet, or the subject if there are no bullets.

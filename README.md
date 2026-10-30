@@ -264,7 +264,7 @@ where $V_s$ is the dam's suspended volume from step 4 (the same every year) and 
 
 - **Accumulation to date**, $S_0$, is the sum of $T$ for the years from the commissioning year $c$ up to but not including the analysis year $a$. Years outside the flow record use the **record mean** of $T$. Record years before commissioning are left out of the sum but still count in the mean.
 - **Rates.** The mean, minimum and maximum of $T$ over the record, $r_{mean}$, $r_{min}$, $r_{max}$ (hm³/yr).
-- **Projection.** $S(a+k) = S_0 + k\,r$ for $k = 1 \ldots$ years to project, at each of the three rates.
+- **Projection.** $S(a+k) = S_0 + k\,r$ for $k = 0 \ldots$ years to project, at each of the three rates.
 - **Lifespan** at a rate: $a + (V_{dead} - S_0)/r$, as a fractional year.
 
 **What you get.**
