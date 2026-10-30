@@ -14,6 +14,17 @@ def resource_path(*parts: str) -> Path:
     return base.joinpath(*parts)
 
 
+def _without_shifted_columns(df: pd.DataFrame, path: Path) -> pd.DataFrame:
+    """pandas makes the first column the row index when every data row has one more field than the header (for example
+    a decimal comma in a comma-separated file), which would shift every column. Refuse such a file."""
+    if not isinstance(df.index, pd.RangeIndex):
+        raise ValueError(
+            f"{path.name}: the rows have more values than the header has columns. "
+            "Check for a comma used as a decimal point or as a thousands separator."
+        )
+    return df
+
+
 def read_table(file_path: str, dtype=None) -> pd.DataFrame:
     """Load CSV or Excel using a case-insensitive suffix. Handles UTF-8 and Turkish encodings (e.g. CP1254, ISO-8859-9).
 
@@ -31,11 +42,11 @@ def read_table(file_path: str, dtype=None) -> pd.DataFrame:
                 if len(df.columns) == 1 and ";" in str(df.columns[0]):
                     try:
                         df_semi = pd.read_csv(path, encoding=enc, sep=";", dtype=dtype)
-                        if len(df_semi.columns) > 1:
-                            return df_semi
                     except Exception:
-                        pass
-                return df
+                        df_semi = None
+                    if df_semi is not None and len(df_semi.columns) > 1:
+                        return _without_shifted_columns(df_semi, path)
+                return _without_shifted_columns(df, path)
             except (UnicodeDecodeError, UnicodeError) as exc:
                 last_exc = exc
                 continue
