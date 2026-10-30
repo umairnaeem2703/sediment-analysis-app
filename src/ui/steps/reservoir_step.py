@@ -14,6 +14,7 @@ from src.services.reservoir import (
     curve_inputs,
     parse_table_step,
     sheet_differences,
+    validate_curve_entries,
 )
 from src.ui.common import bold_font, format_number, show_error
 from src.ui.steps.base import Step
@@ -152,8 +153,12 @@ class ReservoirStep(Step):
         *curve_texts, step_text = self._entries()
         try:
             sheet = self.wizard.regional.dam_sheet(dam).data
-            step_m = parse_table_step(step_text)  # refused before anything is kept on the dam
-            changed = apply_curve_settings(project, dam, sheet, **dict(zip((*FIELDS, "shape_class"), curve_texts)))
+            entered = dict(zip((*FIELDS, "shape_class"), curve_texts))
+            inputs = validate_curve_entries(**entered)
+            step_m = parse_table_step(
+                step_text, inputs.crest_elev_m - inputs.bed_elev_m
+            )  # refused before keeping anything
+            changed = apply_curve_settings(project, dam, sheet, **entered)
             result = compute_curve(curve_inputs(sheet, dam), sheet.drainage_area_km2, step_m)
         except (ValueError, OSError) as exc:
             show_error("Reservoir curve", str(exc))

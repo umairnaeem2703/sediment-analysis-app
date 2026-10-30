@@ -21,6 +21,7 @@ SECONDS_PER_DAY = 86_400.0
 DEFAULT_SIGMA = 0.6
 DEFAULT_SEED = 0
 DEFAULT_PHI = 0.0  # lag-1 autocorrelation of the daily log-flow; 0 gives independent days
+MAX_SIGMA = 30.0  # above this the daily weights of a month can underflow to zero (D69)
 
 # Water-year order (Ekim -> Eylül), as the DSİ labels the columns, mapped to calendar month numbers.
 WATER_YEAR_MONTHS = (
@@ -48,8 +49,8 @@ def _summary_key(label: str) -> str:
 
 class MonthlyFlowPreprocessor:
     def __init__(self, sigma: float = DEFAULT_SIGMA, seed: int = DEFAULT_SEED, phi: float = DEFAULT_PHI):
-        if not math.isfinite(sigma) or sigma < 0:
-            raise ValueError(f"sigma must be a finite number >= 0 (got {sigma}).")
+        if not math.isfinite(sigma) or not 0 <= sigma <= MAX_SIGMA:
+            raise ValueError(f"sigma must be a number from 0 to {MAX_SIGMA:g} (got {sigma:g}).")
         if not math.isfinite(phi) or not 0 <= phi < 1:
             raise ValueError(f"phi must be a number from 0 up to, but not including, 1 (got {phi}).")
         if seed < 0:

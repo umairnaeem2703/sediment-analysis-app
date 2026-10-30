@@ -135,7 +135,7 @@ def quote_cell(value) -> str:
     return repr(text) if text else "an empty cell"
 
 
-def _is_blank(record) -> bool:
+def is_blank(record) -> bool:
     return not any(cell_text(value) for value in record)
 
 
@@ -146,7 +146,7 @@ def basin_grid(df: pd.DataFrame, source: str) -> Loaded:
     """The basin table's five columns under their canonical labels, every cell as text and not yet checked."""
     table, warnings = match_columns(df, source, BASIN_TABLE)
     grid = table.apply(lambda column: column.map(cell_text)).reset_index(drop=True)
-    if all(_is_blank(record) for _, record in grid.iterrows()):
+    if all(is_blank(record) for _, record in grid.iterrows()):
         raise ValueError(f"{source}: no data rows found.")
     return Loaded(grid, warnings)
 
@@ -161,7 +161,7 @@ def validate_basin_table(df: pd.DataFrame, source: str) -> Loaded:
 
     rows, problems, first_seen = [], [], {}
     for position, (_, record) in enumerate(table.iterrows()):
-        if _is_blank(record):
+        if is_blank(record):
             continue
         row = position + 2
         entry = {}
@@ -195,7 +195,9 @@ def validate_basin_table(df: pd.DataFrame, source: str) -> Loaded:
 
 
 def load_basin_table(path) -> Loaded:
-    return validate_basin_table(read_input(path), Path(path).name)
+    """Read and validate a basin table the way the wizard does: through the grid, so both read the file alike."""
+    grid = read_basin_grid(path)
+    return Loaded(validate_basin_table(grid.data, Path(path).name).data, grid.warnings)
 
 
 # --- zonal means ------------------------------------------------------------------------------
@@ -234,7 +236,7 @@ def validate_dam_sheet(df: pd.DataFrame, source: str, basin_table: pd.DataFrame)
     """Check one dam sheet and cross-check it against the dam's rows in a validated basin table."""
     table, warnings = match_columns(df, source, SHEET_REQUIRED, SHEET_OPTIONAL)
 
-    records = [(position + 2, record) for position, (_, record) in enumerate(table.iterrows()) if not _is_blank(record)]
+    records = [(position + 2, record) for position, (_, record) in enumerate(table.iterrows()) if not is_blank(record)]
     if len(records) != 1:
         raise ValueError(f"{source}: a dam sheet must hold exactly one dam row; found {len(records)}.")
     row, record = records[0]

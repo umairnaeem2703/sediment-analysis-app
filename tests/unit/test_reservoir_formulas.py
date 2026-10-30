@@ -320,3 +320,8 @@ def test_u_m4_03_an_interval_must_be_a_finite_number_above_zero(step):
 
 def test_u_m4_03_a_positive_finite_interval_has_no_problems():
     assert check_step(0.25) == [] and check_step(0.5) == []
+
+
+def test_u_m4_02_a_level_interval_that_makes_an_unusable_table_is_refused():
+    with pytest.raises(ValueError, match="at most 100,000"):
+        curve_table(_fit(1), 0.0001)  # 1063 m to 1124 m

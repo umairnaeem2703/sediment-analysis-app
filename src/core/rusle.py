@@ -153,10 +153,6 @@ class ZonalMatcher:
         if not key:
             return {a for a in aliases if a}
 
-        digits_only = "".join(ch for ch in key_ascii if ch.isdigit())
-        if digits_only:
-            aliases.add(digits_only)
-
         for k in list(aliases):
             for pfx in _NAME_PREFIXES:
                 if k.startswith(pfx) and len(k) > len(pfx):
@@ -200,9 +196,10 @@ class ZonalMatcher:
     def resolve_zonal_match(cls, zonal_lookup: Dict[str, float], subbasin_value) -> "ZonalMatch":
         """Resolve a sub-basin to its zonal MEAN.
 
-        Exact and alias matches are returned directly. Looser matches (digits only, prefix/suffix,
-        containment) are accepted only when they point to a single value; ambiguous ones return
-        value=None with the candidate keys so the caller can report them.
+        Exact and alias matches are returned directly. Looser matches (containment, or the same name with its number in
+        another place) need the same number in both names and are accepted only when they point to a single value;
+        ambiguous ones return value=None with the candidate keys so the caller can report them. A number shared by two
+        otherwise different names is no match (D68).
         """
         if subbasin_value is None:
             return ZonalMatch(None, None, [])
@@ -224,10 +221,9 @@ class ZonalMatcher:
         candidates: List[str] = []
         for candidate_key in zonal_lookup:
             cand_ascii = to_ascii_turkish(candidate_key)
-            if digits_only and "".join(ch for ch in cand_ascii if ch.isdigit()) == digits_only:
-                candidates.append(candidate_key)
-                continue
             if not ascii_direct or not cand_ascii:
+                continue
+            if "".join(ch for ch in cand_ascii if ch.isdigit()) != digits_only:
                 continue
             shorter, longer = sorted((ascii_direct, cand_ascii), key=len)
             if len(shorter) >= _MIN_LOOSE_MATCH_LEN and shorter in longer:

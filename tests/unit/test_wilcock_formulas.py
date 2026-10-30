@@ -207,3 +207,26 @@ def test_u_m3_05_the_annual_summary_matches_the_hand_calculation(grouping):
     assert list(summary["Average_Rate_m2_s"]) == close([row["Mean_Qb_m2_s"] for row in expected])
     assert list(summary["Annual_Total_Bedload_m3_yr"]) == close([row["Volume_m3_yr"] for row in expected])
     assert list(summary["Annual_Average_Bed_Load_metric_tons_yr"]) == close([row["Mass_t_yr"] for row in expected])
+
+
+def test_u_m3_05_a_date_listed_twice_is_an_error_naming_it():
+    series = _series(False)
+    series = pd.concat([series, series.iloc[[0]]], ignore_index=True)
+
+    with pytest.raises(ValueError, match="only once"):
+        TimeSeriesAggregator(_model()).process_annual_averages(series)
+
+
+def test_u_m3_05_days_missing_from_the_record_are_counted_in_a_warning():
+    series = pd.DataFrame(
+        {"Date": pd.date_range("2010-01-01", periods=6).strftime("%d/%m/%Y"), "Flow Q (m3/s)": [1.0] * 6}
+    )
+    aggregator = TimeSeriesAggregator(_model())
+
+    aggregator.process_annual_averages(series)
+    assert aggregator.warnings == []
+
+    aggregator.process_annual_averages(series.drop(index=[2, 3]))
+    assert aggregator.warnings == [
+        "2 day(s) between the first and last date have no flow; the annual means use the days present."
+    ]

@@ -252,7 +252,7 @@ def test_p_m5_02_the_warnings_sheet_has_every_warning_with_its_phase(shared, tmp
     expected = [("Inputs", "Dam sheet: area check.")]
     for phase, warnings in (
         ("Suspended", suspended.warnings),
-        ("Bedload", bedload.warnings),
+        ("Bedload", [*bedload.notes, *bedload.warnings]),  # the notes say the daily flow is synthetic
         ("Reservoir curve", curve.warnings),
         ("Integration", integration.warnings),
     ):
@@ -264,6 +264,7 @@ def test_p_m5_02_the_warnings_sheet_has_every_warning_with_its_phase(shared, tmp
 def test_p_m5_02_a_run_without_warnings_still_has_the_headed_warnings_sheet(shared, tmp_path):
     project, dam, *results = _copy(shared, tmp_path, "kavsakkaya")
     quiet = [result._replace(warnings=[]) for result in results]
+    quiet[1] = quiet[1]._replace(notes=[])  # a synthetic flow is also stated in the Warnings sheet
 
     export = export_run(project, dam, *quiet, now=NOW)
 

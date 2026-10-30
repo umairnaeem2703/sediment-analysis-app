@@ -137,6 +137,17 @@ def test_w_m3_01_the_fractions_cross_check_is_shown_when_they_are_chosen_and_wit
     assert step.warning_var.get().count("tau_ri") == 5
 
 
+def test_w_m3_01_the_columns_ignored_in_a_flow_file_are_shown_when_it_is_chosen(app, warnings_shown):
+    wizard, step, _, top, tmp_path = app
+    _reach_step(wizard, top)
+    flow = tmp_path / "daily.csv"
+    flow.write_text("Date,Flow Q (m3/s),Station\n01/01/2010,10,A\n02/01/2010,20,A\n", encoding="utf-8")
+
+    step.use_flow_file(str(flow))
+
+    assert len(warnings_shown) == 1 and "ignored column(s) Station" in warnings_shown[0][1]
+
+
 def test_w_m3_01_the_calculation_runs_off_the_tk_thread(app, monkeypatch):
     wizard, step, _, top, _ = app
     _reach_step(wizard, top)
@@ -242,6 +253,24 @@ def test_w_m3_01_computing_while_busy_neither_stores_the_settings_nor_clears_any
     wizard.busy = False
 
     assert wizard.project.dams[1].flow.sigma == 0.6 and later.done is True
+
+
+def test_w_m3_01_choosing_a_file_while_the_calculation_runs_is_refused_and_changes_nothing(app, errors):
+    wizard, step, _, top, tmp_path = app
+    _reach_step(wizard, top)
+    _inputs(step)
+    other = tmp_path / "other_fractions.csv"
+    other.write_text("di,Fi\n0.004,0.5\n0.05,0.5\n", encoding="utf-8")
+    flow_before, fractions_before = wizard.project.dams[1].flow.path, wizard.project.inputs["fractions"]
+    wizard.busy = True
+
+    step.use_fractions_file(str(other))
+    step.use_flow_file(str(sample_flow("cubuk_1")))
+    wizard.busy = False
+
+    assert len(errors) == 2 and all("calculation" in message for _, message in errors)
+    assert (wizard.project.dams[1].flow.path, wizard.project.inputs["fractions"]) == (flow_before, fractions_before)
+    assert "other_fractions" not in (tmp_path / "project" / "inputs" / "fractions.csv").read_text(encoding="utf-8")
 
 
 def test_w_m3_01_editing_sigma_while_the_calculation_runs_is_not_lost_and_the_result_is_not_current(app):

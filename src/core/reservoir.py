@@ -16,6 +16,7 @@ SHAPE_CLASSES = {"gorge": 1.25, "hill": 2.0, "foothill": 3.0, "lake": 4.0}
 EXPONENT_RANGE = (1.0, 4.5)  # a fitted m outside this is implausible (FR-M4-01)
 MIN_DEPTH_M = 10.0  # Hmax - Hbed below this leaves the curve poorly constrained
 STEP_M = 0.5  # the table's default level step (the user may enter another, FR-M4-02)
+MAX_TABLE_ROWS = 100_000  # a finer interval only makes the grid and the CSV unusable (D69)
 
 ELEVATION_M, VOLUME_HM3, AREA_KM2 = "Elevation_m", "Volume_hm3", "Area_km2"
 
@@ -109,11 +110,15 @@ def check_shape(h_min_m: Optional[float], shape_class: Optional[str]) -> List[st
     return []
 
 
-def check_step(step_m: float) -> List[str]:
-    """The level interval of the table must be a finite number above 0."""
-    if math.isfinite(step_m) and step_m > 0:
-        return []
-    return [f"The level interval ({step_m:g} m) must be a number above 0."]
+def check_step(step_m: float, span_m: Optional[float] = None) -> List[str]:
+    """The level interval of the table must be a finite number above 0 and, when the depth from the bed to the crest is
+    given, short enough to give at most MAX_TABLE_ROWS levels (D69)."""
+    if not (math.isfinite(step_m) and step_m > 0):
+        return [f"The level interval ({step_m:g} m) must be a number above 0."]
+    rows = int(span_m / step_m + 1e-9) + 1 if span_m is not None else 0
+    if rows > MAX_TABLE_ROWS:
+        return [f"A level interval of {step_m:g} m gives {rows:,} rows; the table holds at most {MAX_TABLE_ROWS:,}."]
+    return []
 
 
 def fit_curve(
@@ -169,7 +174,7 @@ def curve_warnings(curve: ReservoirCurve, drainage_area_km2: Optional[float] = N
 def curve_table(curve: ReservoirCurve, step_m: float = STEP_M) -> pd.DataFrame:
     """Level, volume and surface area every `step_m` (0.5 m by default) from the bed to the crest; a crest off that grid
     closes the table."""
-    problems = check_step(step_m)
+    problems = check_step(step_m, curve.crest_elev_m - curve.bed_elev_m)
     if problems:
         raise ValueError("\n".join(problems))
     steps = int((curve.crest_elev_m - curve.bed_elev_m) / step_m + 1e-9)

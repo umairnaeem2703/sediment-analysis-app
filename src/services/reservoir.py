@@ -115,13 +115,14 @@ def validate_curve_entries(
     return CurveInputs(shape_class=shape, **numbers)
 
 
-def parse_table_step(text) -> float:
+def parse_table_step(text, span_m: Optional[float] = None) -> float:
     """The level interval of the table, in m, as entered in step 6 (a decimal comma is refused). Raises
-    ValueError when it is blank, not a number, or not above 0."""
+    ValueError when it is blank, not a number, not above 0, or, given the depth from the bed to the crest, so small
+    that the table would be too long."""
     step = parse_number(text)
     if step is None:
         raise ValueError(f"The level interval of the table (m) must be a number, found {quote_cell(text)}.")
-    problems = check_step(step)
+    problems = check_step(step, span_m)
     if problems:
         raise ValueError("\n".join(problems))
     return step

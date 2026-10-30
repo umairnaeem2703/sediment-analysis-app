@@ -134,16 +134,28 @@ class BedloadStep(Step):
         if path:
             self.use_fractions_file(path)
 
+    def _refuse_while_busy(self, title: str) -> bool:
+        """An input replaced while Compute runs would leave a result that was made from the old file."""
+        if self.wizard.busy:
+            show_error(title, "Wait for the calculation to finish before choosing another file.")
+        return self.wizard.busy
+
     def use_flow_file(self, path: str) -> None:
+        if self._refuse_while_busy("Flow file"):
+            return
         dam, project = self.dam_step.chosen, self.wizard.project
         try:  # the typed sigma, seed and phi are applied when computing; a daily series does not use them
-            import_flow(project, dam, path, dam.flow.sigma, dam.flow.seed, dam.flow.phi)
+            series = import_flow(project, dam, path, dam.flow.sigma, dam.flow.seed, dam.flow.phi)
         except (ValueError, OSError) as exc:
             show_error("Flow file", str(exc))
             return
         self._changed("The flow file was replaced.")
+        if series.warnings:
+            show_warning("Flow file", "\n".join(series.warnings))
 
     def use_fractions_file(self, path: str) -> None:
+        if self._refuse_while_busy("Grain fractions"):
+            return
         try:
             loaded = import_fractions(self.wizard.project, path)
         except (ValueError, OSError) as exc:

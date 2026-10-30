@@ -247,9 +247,10 @@ def test_c_m3_04_rows_with_a_bad_date_or_flow_are_dropped_and_counted_in_the_war
     result = _compute(frame)
 
     assert result.table[VALUE_COLUMNS[0]].iloc[0] == 15.0
-    assert len(result.warnings) == 1
+    assert len(result.warnings) == 2  # the dropped rows, then the two days they leave without flow
     assert result.warnings[0].startswith("flow.csv: ")
     assert "1 row(s) with missing" in result.warnings[0] and "1 row(s) with unparseable" in result.warnings[0]
+    assert "2 day(s) between the first and last date" in result.warnings[1]
 
 
 def test_c_m3_04_a_clean_series_has_no_warnings():
@@ -431,7 +432,13 @@ def test_c_m3_02_the_settings_are_validated_stored_and_reported_as_changed_or_no
 
 @pytest.mark.parametrize(
     ("sigma", "seed", "named"),
-    [("-1", "0", "Sigma"), ("x", "0", "Sigma"), ("0.6", "1.5", "Seed"), ("0.6", "-3", "Seed")],
+    [
+        ("-1", "0", "Sigma"),
+        ("x", "0", "Sigma"),
+        ("31", "0", "Sigma"),
+        ("0.6", "1.5", "Seed"),
+        ("0.6", "-3", "Seed"),
+    ],
 )
 def test_c_m3_02_invalid_settings_are_refused_naming_the_field_and_change_nothing(project, sigma, seed, named):
     dam = project.dams[0]
@@ -541,3 +548,21 @@ def test_c_m3_02_the_import_and_the_dams_computation_use_the_stored_phi(project,
     assert dam.flow.phi == 0.8
     assert list(persistent.table["Volume_m3_yr"]) != list(flat.table["Volume_m3_yr"])
     assert "φ=0.8" in persistent.notes[0]
+
+
+def test_c_x_05_columns_ignored_in_the_flow_and_fractions_files_are_warnings_of_the_result(tmp_path):
+    flow = tmp_path / "daily.csv"
+    flow.write_text("Date,Flow Q (m3/s),Station\n01/01/2010,10,A\n02/01/2010,20,A\n", encoding="utf-8")
+    fractions = tmp_path / "fractions.csv"
+    fractions.write_text("di,Fi,Comment\n0.02,1.0,x\n", encoding="utf-8")
+    project = Project.new(tmp_path / "project", "Region")
+    dam = project.add_dam("Dam")
+    import_flow(project, dam, flow, 0.6, 0)
+    import_fractions(project, fractions)
+
+    result = compute_dam_bedload(project, dam)
+
+    assert result.warnings == [
+        "fractions.csv: ignored column(s) Comment.",
+        "dam_flow.csv: ignored column(s) Station.",
+    ]

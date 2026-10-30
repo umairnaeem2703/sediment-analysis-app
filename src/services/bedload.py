@@ -8,11 +8,11 @@ annual table, and `compute_dam_bedload` does so from the copies held by a projec
 
 import re
 from pathlib import Path
-from typing import List, NamedTuple, Tuple
+from typing import List, NamedTuple, Optional, Sequence, Tuple
 
 import pandas as pd
 
-from src.core.monthly_flow_preprocessor import DEFAULT_PHI, prepare_daily_flow
+from src.core.monthly_flow_preprocessor import DEFAULT_PHI, MAX_SIGMA, prepare_daily_flow
 from src.core.wilcock import FractionalModel, TimeSeriesAggregator
 from src.services.labels import (
     DAILY_FLOW,
@@ -29,7 +29,7 @@ from src.services.regional import (
     Loaded,
     Problem,
     TableError,
-    _is_blank,
+    is_blank,
     cell_text,
     parse_number,
     quote_cell,
@@ -56,6 +56,7 @@ class FlowSeries(NamedTuple):
     daily: pd.DataFrame  # a daily series as read, or the Date, Flow and Water_Year series made from a DSİ monthly table
     synthetic: bool  # True when the daily flow was made from monthly volumes (D10)
     notes: List[str]
+    warnings: Sequence[str] = ()  # findings about the file itself, such as ignored columns
 
 
 class BedloadResult(NamedTuple):
@@ -87,13 +88,13 @@ def load_flow(path, sigma: float, seed: int, phi: float = DEFAULT_PHI) -> FlowSe
     table = read_input(path)
     if not is_monthly_flow_table(table):
         table, ignored = match_columns(table, source, DAILY_FLOW, DAILY_FLOW_OPTIONAL)
-        return FlowSeries(table, False, ignored)
+        return FlowSeries(table, False, [], ignored)
     table, ignored = match_columns(table, source, DSI_REQUIRED, DSI_OPTIONAL)
     try:
         daily, notes = prepare_daily_flow(table, sigma, seed, phi)
     except (KeyError, ValueError) as exc:
         raise ValueError(f"{source}: {_message(exc)}") from exc
-    return FlowSeries(daily, True, [*ignored, *notes])
+    return FlowSeries(daily, True, notes, ignored)
 
 
 def load_fractions(path) -> Loaded:
@@ -104,7 +105,7 @@ def load_fractions(path) -> Loaded:
 
     rows, problems = [], []
     for position, (_, record) in enumerate(table.iterrows()):
-        if _is_blank(record):
+        if is_blank(record):
             continue
         row, entry = position + 2, {}
         for key in table.columns:
@@ -135,8 +136,8 @@ def validate_flow_settings(sigma, seed, phi="0") -> Tuple[float, int, float]:
     """Convert the entered sigma, seed and lag-1 phi of the monthly split. Raises ValueError listing every problem."""
     problems = []
     sigma_value = parse_number(sigma)
-    if sigma_value is None or sigma_value < 0:
-        problems.append(f"Sigma must be a number of at least 0, found {quote_cell(sigma)}.")
+    if sigma_value is None or not 0 <= sigma_value <= MAX_SIGMA:
+        problems.append(f"Sigma must be a number from 0 to {MAX_SIGMA:g}, found {quote_cell(sigma)}.")
     seed_text = cell_text(seed)
     if not re.fullmatch(r"[0-9]+", seed_text):  # ASCII digits only
         problems.append(f"Seed must be a whole number of at least 0, found {quote_cell(seed)}.")
@@ -205,8 +206,11 @@ def compute_bedload(
     fractions: pd.DataFrame,
     flow_source: str = "the flow file",
     fractions_source: str = "the fractions",
+    fractions_warnings: Optional[Sequence[str]] = None,
 ) -> BedloadResult:
-    """The annual bedload of a daily flow series (B3.2). The sources name the inputs in error and warning messages."""
+    """The annual bedload of a daily flow series (B3.2). The sources name the inputs in error and warning messages.
+    `fractions_warnings` are the warnings `load_fractions` found in the file, which already hold the cross-check of bi
+    and tau_ri; without them the cross-check is made here."""
     model = FractionalModel()
     try:
         model.load_fractional_parameters(fractions)
@@ -219,8 +223,10 @@ def compute_bedload(
         raise ValueError(f"{flow_source}: {_message(exc)}") from exc
     key = summary.index.name
     table = summary.reset_index().rename(columns=_SUMMARY_COLUMNS)[[key, *VALUE_COLUMNS]]
-    warnings = [f"{fractions_source}: {warning}" for warning in model.warnings]
-    warnings += [f"{flow_source}: {warning}" for warning in aggregator.warnings]
+    if fractions_warnings is None:
+        fractions_warnings = [f"{fractions_source}: {warning}" for warning in model.warnings]
+    warnings = list(fractions_warnings)
+    warnings += [*flow.warnings, *(f"{flow_source}: {warning}" for warning in aggregator.warnings)]
     return BedloadResult(table, flow.synthetic, flow.notes, warnings)
 
 
@@ -234,7 +240,7 @@ def compute_dam_bedload(project: Project, dam: Dam) -> BedloadResult:
     flow_file, fractions_file = project.folder / dam.flow.path, project.folder / fractions_path
     flow = load_flow(flow_file, dam.flow.sigma, dam.flow.seed, dam.flow.phi)
     fractions = load_fractions(fractions_file)
-    return compute_bedload(flow, fractions.data, flow_file.name, fractions_file.name)
+    return compute_bedload(flow, fractions.data, flow_file.name, fractions_file.name, fractions.warnings)
 
 
 def write_bedload_csv(result: BedloadResult, folder) -> Path:

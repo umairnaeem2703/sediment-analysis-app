@@ -377,3 +377,10 @@ def test_u_m3_01_prepare_daily_flow_with_phi_is_reported_and_deterministic():
     pd.testing.assert_frame_equal(first, again)
     assert "AR(1)" in notes[0] and "φ=0.8" in notes[0] and "AR(1)" not in flat_notes[0]
     assert not np.allclose(first["Flow Q (m3/s)"], flat["Flow Q (m3/s)"])
+
+
+def test_u_m3_01_a_sigma_whose_weights_cannot_be_represented_is_an_error_not_nan_flow():
+    df = dsi_table(sample_values(), summary_rows=False)
+
+    with pytest.raises(ValueError, match="sigma must be a number from 0 to 30"):
+        prepare_daily_flow(df, sigma=40.0)

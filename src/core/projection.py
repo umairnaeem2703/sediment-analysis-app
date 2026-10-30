@@ -13,6 +13,7 @@ import pandas as pd
 RATE_NAMES = ("Mean", "Min", "Max")
 # The default length of the projection, in years past the analysis year (the user may enter another).
 HORIZON_YEARS = 100
+MAX_HORIZON_YEARS = 1000  # a longer table only makes the grid and the chart unusable (D69)
 
 YEAR, EXCEEDED, NOT_REACHED = "year", "exceeded", "not reached"
 
@@ -63,10 +64,10 @@ def exceeded_year(table: pd.DataFrame, dead_vol_hm3: float) -> Optional[int]:
 
 
 def check_horizon(years: float) -> List[str]:
-    """The projection length must be a whole number of years, at least 1."""
-    if math.isfinite(years) and years >= 1 and float(years).is_integer():
+    """The projection length must be a whole number of years, from 1 to MAX_HORIZON_YEARS."""
+    if math.isfinite(years) and 1 <= years <= MAX_HORIZON_YEARS and float(years).is_integer():
         return []
-    return [f"The number of projection years ({years:g}) must be a whole number of at least 1."]
+    return [f"The number of projection years ({years:g}) must be a whole number from 1 to {MAX_HORIZON_YEARS}."]
 
 
 def project(

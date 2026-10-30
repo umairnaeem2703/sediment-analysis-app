@@ -293,6 +293,12 @@ def test_c_m4_01_a_level_interval_that_is_blank_not_a_number_or_not_above_zero_i
         parse_table_step(text)
 
 
+def test_c_m4_01_an_interval_that_gives_too_many_rows_is_refused_before_anything_is_kept():
+    assert parse_table_step("0.5", 60.0) == 0.5
+    with pytest.raises(ValueError, match="at most 100,000"):
+        parse_table_step("0.0001", 100.0)
+
+
 def test_c_m4_01_the_table_is_made_at_the_entered_interval_and_the_curve_does_not_change():
     result = compute_curve(validate_curve_entries(**_entered()), 309.2, 0.25)
 

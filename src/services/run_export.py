@@ -108,7 +108,7 @@ def collect_warnings(
     phases = (
         ("Inputs", input_warnings),
         ("Suspended", suspended.warnings),
-        ("Bedload", bedload.warnings),
+        ("Bedload", [*bedload.notes, *bedload.warnings]),  # the notes say a synthetic daily flow was made
         ("Reservoir curve", curve.warnings),
         ("Integration", integration.warnings),
     )
