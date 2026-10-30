@@ -99,7 +99,7 @@ def write_csv():
         writer.writerow(["Case", "Point", "H_m", "V_hm3", "A_km2"])
         for case in CASES:
             _, m, h_min_used, _ = fitted(case)
-            for name, h in zip(POINTS, point_levels(case, h_min_used)):
+            for name, h in zip(POINTS, point_levels(case, h_min_used), strict=True):
                 writer.writerow([case[0], name, h, volume(case, m, h), area(case, m, h)])
 
 
@@ -150,7 +150,7 @@ def write_workbook():
     for row, (name, exponent) in enumerate(SHAPE_CLASSES.items(), start=2):
         sheet.cell(row=row, column=17, value=name)
         sheet.cell(row=row, column=18, value=exponent)
-    for column, width in zip("ABCDEFGHIJKLMN", (6, 32, 10, 20, 10, 10, 12, 12, 12, 14, 18, 36, 34, 26)):
+    for column, width in zip("ABCDEFGHIJKLMN", (6, 32, 10, 20, 10, 10, 12, 12, 12, 14, 18, 36, 34, 26), strict=True):
         sheet.column_dimensions[column].width = width
     sheet.column_dimensions["Q"].width = 14
 
@@ -194,7 +194,7 @@ def write_workbook():
                 ]
             )
             row += 1
-    for column, width in zip("ABCDEF", (6, 10, 12, 40, 36, 42)):
+    for column, width in zip("ABCDEF", (6, 10, 12, 40, 36, 42), strict=True):
         points.column_dimensions[column].width = width
 
     book.calculation.fullCalcOnLoad = True  # openpyxl stores no results, so Excel works them out on opening

@@ -121,7 +121,7 @@ def write_workbook():
     for row, (label, value) in enumerate(constants, start=2):
         sheet.cell(row=row, column=15, value=label)
         sheet.cell(row=row, column=16, value=value)
-    for column, width in zip("ABCDEFGHIJKLM", (6, 32, 14, 12, 12, 16, 22, 22, 28, 22, 22, 22, 24)):
+    for column, width in zip("ABCDEFGHIJKLM", (6, 32, 14, 12, 12, 16, 22, 22, 28, 22, 22, 22, 24), strict=True):
         sheet.column_dimensions[column].width = width
     sheet.column_dimensions["O"].width = 24
     book.calculation.fullCalcOnLoad = True  # openpyxl stores no results, so Excel works them out on opening

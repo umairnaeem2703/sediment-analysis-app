@@ -172,7 +172,7 @@ def write_workbook():
                 f"=IF(A{row}>0,14*(1-0.894/SQRT(A{row}))^4.5,0)",
             ]
         )
-    for column, width in zip("ABCD", (8, 16, 26, 40)):
+    for column, width in zip("ABCD", (8, 16, 26, 40), strict=True):
         wstar_sheet.column_dimensions[column].width = width
 
     fractions = book.create_sheet("Fractions")
@@ -199,7 +199,7 @@ def write_workbook():
             ]
         )
     fractions["H1"] = "Rows without Fi only check tau_ri."
-    for column, width in zip("ABCDEF", (8, 8, 10, 38, 30, 38)):
+    for column, width in zip("ABCDEF", (8, 8, 10, 38, 30, 38), strict=True):
         fractions.column_dimensions[column].width = width
     first = 2  # the sheet row of the first sample fraction
 
@@ -245,7 +245,7 @@ def write_workbook():
     for offset, q in enumerate(FLOW_CASES, start=2):
         transport_sheet[f"L{offset}"] = q
         transport_sheet[f"M{offset}"] = f"=SUMIF($A$2:$A${rows_end},L{offset},$J$2:$J${rows_end})"
-    for column, width in zip("ABCDEFGHIJLM", (9, 8, 6, 14, 34, 22, 12, 16, 8, 28, 10, 26)):
+    for column, width in zip("ABCDEFGHIJLM", (9, 8, 6, 14, 34, 22, 12, 16, 8, 28, 10, 26), strict=True):
         transport_sheet.column_dimensions[column].width = width
 
     series = book.create_sheet("Annual")

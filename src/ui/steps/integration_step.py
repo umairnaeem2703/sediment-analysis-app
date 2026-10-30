@@ -170,7 +170,7 @@ class IntegrationStep(Step):
     def _fill(tree: ttk.Treeview, table, grid) -> None:
         """One row for each row of the table, whose columns are those of the grid in the same order."""
         for row in table.itertuples(index=False):
-            tree.insert("", "end", values=[format(value, spec) for value, (*_, spec) in zip(row, grid)])
+            tree.insert("", "end", values=[format(value, spec) for value, (*_, spec) in zip(row, grid, strict=True)])
 
     def _clear_result(self) -> None:
         self.result = self._result_years = None

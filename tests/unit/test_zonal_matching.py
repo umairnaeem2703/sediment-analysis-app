@@ -4,7 +4,7 @@ from src.core.rusle import ZonalMatcher
 
 
 def _lookup(*rows):
-    names, means = zip(*rows)
+    names, means = zip(*rows, strict=True)
     return ZonalMatcher.build_lookup(names, means)
 
 

@@ -156,7 +156,7 @@ class ZonalMatcher:
         validated zonal table; a name with no number is skipped."""
         lookup: Dict[str, float] = {}
         conflicting: Set[str] = set()
-        for name, mean in zip(names, means):
+        for name, mean in zip(names, means, strict=True):
             if pd.isna(name) or str(name).strip() == "":
                 continue
             mean_value = pd.to_numeric(mean, errors="coerce")
