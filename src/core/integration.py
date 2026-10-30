@@ -1,7 +1,9 @@
 """Annual sediment totals and the elevations they reach in the reservoir (FR-M4-03, B3.4).
 
 Volumes are in hm³ from here on (m³ / 10⁶). A volume above the one at the crest is limited to the crest elevation and
-counted, so that the caller can warn.
+counted, so that the caller can warn. `annual_totals` gives T = TE · (Vs + Vb) in hm³, `sediment_elevations` the
+elevation each total reaches, and `extremes` picks the minimum and maximum annual total (a tie goes to the earliest
+year).
 """
 
 from typing import NamedTuple, Tuple

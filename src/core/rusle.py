@@ -1,3 +1,8 @@
+"""RUSLE suspended-sediment yield (B3.1). `YieldCalculator` turns basin and sub-basin tables and zonal statistics into
+a yield. `ZonalMatcher` matches a sub-basin to its zonal entry: exactly through the normalised name or an alias, and
+loosely only when both names carry the same number (D68). Names are compared with `name_key` from `text.py`.
+"""
+
 import math
 import re
 from typing import Dict, List, NamedTuple, Optional, Set

@@ -1,3 +1,10 @@
+"""Wilcock & Crowe fractional bedload (B3.2). `FractionalModel` computes the shear stress from daily flow (Manning,
+rectangular channel) and the transport of each grain-size fraction, vectorised in `compute_transport_series`. `tau_ri`
+and `bi` are always computed from the grain size; a supplied column is only cross-checked into
+`FractionalModel.warnings` (D36). `check_daily_flow` holds the structural checks of a daily flow series, and
+`TimeSeriesAggregator` turns it into annual summaries.
+"""
+
 import math
 from typing import List, Tuple
 

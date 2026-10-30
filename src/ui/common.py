@@ -1,3 +1,7 @@
+"""Helpers shared by the steps: file and folder dialogs, the error and warning dialogs (which also log), a scrolled
+result table, and `run_in_background`, which runs a task off the Tk thread and logs how it failed.
+"""
+
 import logging
 import threading
 import tkinter as tk

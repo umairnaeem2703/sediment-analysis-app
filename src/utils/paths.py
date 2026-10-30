@@ -1,3 +1,8 @@
+"""Reading input tables and finding bundled files. `read_table` loads CSV or Excel, trying several encodings (UTF-8
+with or without a BOM, CP1254, ISO-8859-9) and retrying a `;`-delimited CSV; `dtype=str` keeps cells as written.
+`resource_path` finds the sample files in `inputs/`.
+"""
+
 import sys
 from pathlib import Path
 
