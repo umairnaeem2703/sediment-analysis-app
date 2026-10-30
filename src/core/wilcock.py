@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 import math
-from typing import List, Tuple
+from typing import List
 
 import numpy as np
 import pandas as pd
@@ -45,39 +45,32 @@ class FractionalModel:
         self._fi = np.array([], dtype=float)
         self._tau_ri = np.array([], dtype=float)
 
-    def calculate_hydraulics(self, q_flow: float) -> Tuple[float, float]:
-        if q_flow <= 0:
-            return 0.0, 0.0
-        area = self.bed_width * self.depth
-        velocity = q_flow / area
-        tau = (self.rho_w * self.g * (self.manning_n**2) * (velocity**2)) / math.pow(self.depth, 1.0 / 3.0)
-        u_star = math.sqrt(tau / self.rho_w)
-        return tau, u_star
+    def calculate_hydraulics(self, q_flow):
+        """Shear stress (Pa) and shear velocity (m/s) of a discharge, or of each discharge in an array; no flow gives
+        zero. One code path serves a single value and the series."""
+        q = np.asarray(q_flow, dtype=float)
+        velocity = np.where(q > 0, q / (self.bed_width * self.depth), 0.0)
+        tau = (self.rho_w * self.g * (self.manning_n**2) * (velocity**2)) / (self.depth ** (1.0 / 3.0))
+        u_star = np.sqrt(tau / self.rho_w)
+        return (float(tau), float(u_star)) if q.ndim == 0 else (tau, u_star)
 
-    def calculate_dimensionless_transport(self, phi: float) -> float:
-        if phi <= 0:
-            return 0.0
-        if phi < PHI_BREAK:
-            return 0.002 * math.pow(phi, 7.5)
-        return 14.0 * math.pow((1.0 - (0.894 / math.sqrt(phi))), 4.5)
+    def calculate_dimensionless_transport(self, phi):
+        """W* of a stress ratio, or of each ratio in an array (D35); a ratio of 0 or less gives zero."""
+        phi = np.asarray(phi, dtype=float)
+        low = (phi > 0) & (phi < PHI_BREAK)
+        high = phi >= PHI_BREAK
+        w_star = np.zeros_like(phi)
+        w_star = np.where(low, 0.002 * np.power(np.where(low, phi, 1.0), 7.5), w_star)
+        w_star = np.where(high, 14.0 * np.power(1.0 - (0.894 / np.sqrt(np.where(high, phi, 1.0))), 4.5), w_star)
+        return float(w_star) if phi.ndim == 0 else w_star
 
     def compute_transport_series(self, q_flow) -> np.ndarray:
         if self._fi.size == 0:
             raise ValueError("Fractional parameters have not been loaded.")
 
         q = np.asarray(q_flow, dtype=float).reshape(-1)
-        cross_section = self.bed_width * self.depth
-        velocity = np.divide(q, cross_section, out=np.zeros_like(q), where=q > 0)
-        tau = (self.rho_w * self.g * (self.manning_n**2) * (velocity**2)) / (self.depth ** (1.0 / 3.0))
-        tau = np.where(q > 0, tau, 0.0)
-        u_star = np.sqrt(tau / self.rho_w)
-
-        phi = tau[:, None] / self._tau_ri[None, :]
-        w_star = np.zeros_like(phi)
-        low = (phi > 0) & (phi < PHI_BREAK)
-        high = phi >= PHI_BREAK
-        w_star = np.where(low, 0.002 * np.power(phi, 7.5), w_star)
-        w_star = np.where(high, 14.0 * np.power(1.0 - (0.894 / np.sqrt(np.where(high, phi, 1.0))), 4.5), w_star)
+        tau, u_star = self.calculate_hydraulics(q)
+        w_star = self.calculate_dimensionless_transport(tau[:, None] / self._tau_ri[None, :])
 
         # Calculates intermediate volumetric transport rate per unit width (m2/s)
         q_bi = (w_star * self._fi[None, :] * np.power(u_star[:, None], 3)) / ((self.s - 1.0) * self.g)
