@@ -9,6 +9,7 @@ import pytest
 from src.core.monthly_flow_preprocessor import (
     DEFAULT_PHI,
     HM3_TO_M3,
+    MAX_SIGMA,
     SECONDS_PER_DAY,
     WATER_YEAR_COLUMN,
     MonthlyFlowPreprocessor,
@@ -379,8 +380,11 @@ def test_u_m3_01_prepare_daily_flow_with_phi_is_reported_and_deterministic():
     assert not np.allclose(first["Flow Q (m3/s)"], flat["Flow Q (m3/s)"])
 
 
-def test_u_m3_01_a_sigma_whose_weights_cannot_be_represented_is_an_error_not_nan_flow():
+def test_u_m3_01_a_sigma_above_the_limit_is_an_error_and_the_limit_itself_gives_finite_flow():
     df = dsi_table(sample_values(), summary_rows=False)
 
-    with pytest.raises(ValueError, match="sigma must be a number from 0 to 30"):
-        prepare_daily_flow(df, sigma=40.0)
+    daily, _ = prepare_daily_flow(df, sigma=MAX_SIGMA)
+
+    assert np.isfinite(daily["Flow Q (m3/s)"]).all()
+    with pytest.raises(ValueError, match=r"sigma must be a number from 0 to 3 \(got 3\.5\)"):
+        prepare_daily_flow(df, sigma=MAX_SIGMA + 0.5)

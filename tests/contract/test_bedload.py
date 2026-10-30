@@ -6,6 +6,7 @@ import re
 import pandas as pd
 import pytest
 
+from src.core.monthly_flow_preprocessor import MAX_SIGMA, WARN_SIGMA
 from src.core.wilcock import WATER_YEAR_COLUMN
 from src.services.bedload import (
     VALUE_COLUMNS,
@@ -445,7 +446,7 @@ def test_c_m3_02_the_settings_are_validated_stored_and_reported_as_changed_or_no
     [
         ("-1", "0", "Sigma"),
         ("x", "0", "Sigma"),
-        ("31", "0", "Sigma"),
+        ("3.5", "0", "Sigma"),
         ("0.6", "1.5", "Seed"),
         ("0.6", "-3", "Seed"),
     ],
@@ -464,6 +465,30 @@ def test_c_m3_02_every_problem_with_the_settings_is_listed_at_once():
         validate_flow_settings("-1", "x")
 
     assert "Sigma" in str(error.value) and "Seed" in str(error.value)
+
+
+def test_c_m3_02_the_largest_sigma_is_accepted_and_the_next_value_is_refused():
+    assert validate_flow_settings(f"{MAX_SIGMA:g}", "0")[0] == MAX_SIGMA
+
+    with pytest.raises(ValueError, match=r"Sigma must be a number from 0 to 3, found '3\.01'"):
+        validate_flow_settings("3.01", "0")
+
+
+def test_c_m3_02_a_sigma_above_the_warning_value_is_warned_with_the_series_and_the_result(tmp_path):
+    path = _monthly_file(tmp_path)
+
+    quiet, high = load_flow(path, WARN_SIGMA, 0), load_flow(path, 1.6, 0)
+    result = compute_bedload(high, FRACTIONS, path.name)
+
+    assert quiet.warnings == []
+    assert len(high.warnings) == 1 and high.warnings[0].startswith("Sigma 1.6 is above 1.5: ")
+    assert high.warnings[0] in result.warnings
+
+
+def test_c_m3_02_a_daily_series_does_not_use_sigma_so_a_high_one_is_not_warned(tmp_path):
+    path = _write(tmp_path, "flow.csv", "Date,Flow Q (m3/s)\n01/01/2000,10\n02/01/2000,20\n")
+
+    assert load_flow(path, MAX_SIGMA, 0).warnings == []
 
 
 def test_x_01_a_missing_flow_is_an_error_naming_the_dam(project):

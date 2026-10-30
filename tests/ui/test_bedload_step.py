@@ -298,6 +298,17 @@ def test_w_m3_01_invalid_sigma_or_seed_is_refused_and_nothing_is_computed(app, e
     assert len(errors) == 1 and "Sigma" in errors[0][1]
 
 
+def test_w_m3_01_a_high_sigma_is_warned_under_the_result(app):
+    wizard, step, _, top, _ = app
+    _reach_step(wizard, top)
+    _inputs(step)
+    step.sigma_var.set("2")
+
+    _compute(wizard, step, top)
+
+    assert step.is_complete() and "Sigma 2 is above 1.5" in step.warning_var.get()
+
+
 def test_w_x_02_choosing_other_fractions_clears_the_result_and_later_steps(app):
     wizard, step, later, top, _ = app
     _reach_step(wizard, top)
