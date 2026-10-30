@@ -145,11 +145,13 @@ class BedloadStep(Step):
             return
         dam, project = self.dam_step.chosen, self.wizard.project
         try:  # the typed sigma, seed and phi are applied when computing; a daily series does not use them
-            import_flow(project, dam, path, dam.flow.sigma, dam.flow.seed, dam.flow.phi)
+            series = import_flow(project, dam, path, dam.flow.sigma, dam.flow.seed, dam.flow.phi)
         except (ValueError, OSError) as exc:
             show_error("Flow file", str(exc))
             return
         self._changed("The flow file was replaced.")
+        if series.warnings:
+            show_warning("Flow file", "\n".join(series.warnings))
 
     def use_fractions_file(self, path: str) -> None:
         if self._refuse_while_busy("Grain fractions"):

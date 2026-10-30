@@ -110,11 +110,15 @@ def check_shape(h_min_m: Optional[float], shape_class: Optional[str]) -> List[st
     return []
 
 
-def check_step(step_m: float) -> List[str]:
-    """The level interval of the table must be a finite number above 0."""
-    if math.isfinite(step_m) and step_m > 0:
-        return []
-    return [f"The level interval ({step_m:g} m) must be a number above 0."]
+def check_step(step_m: float, span_m: Optional[float] = None) -> List[str]:
+    """The level interval of the table must be a finite number above 0 and, when the depth from the bed to the crest is
+    given, short enough to give at most MAX_TABLE_ROWS levels (D69)."""
+    if not (math.isfinite(step_m) and step_m > 0):
+        return [f"The level interval ({step_m:g} m) must be a number above 0."]
+    rows = int(span_m / step_m + 1e-9) + 1 if span_m is not None else 0
+    if rows > MAX_TABLE_ROWS:
+        return [f"A level interval of {step_m:g} m gives {rows:,} rows; the table holds at most {MAX_TABLE_ROWS:,}."]
+    return []
 
 
 def fit_curve(
@@ -170,14 +174,10 @@ def curve_warnings(curve: ReservoirCurve, drainage_area_km2: Optional[float] = N
 def curve_table(curve: ReservoirCurve, step_m: float = STEP_M) -> pd.DataFrame:
     """Level, volume and surface area every `step_m` (0.5 m by default) from the bed to the crest; a crest off that grid
     closes the table."""
-    problems = check_step(step_m)
+    problems = check_step(step_m, curve.crest_elev_m - curve.bed_elev_m)
     if problems:
         raise ValueError("\n".join(problems))
     steps = int((curve.crest_elev_m - curve.bed_elev_m) / step_m + 1e-9)
-    if steps + 1 > MAX_TABLE_ROWS:
-        raise ValueError(
-            f"A level interval of {step_m:g} m gives {steps + 1:,} rows; the table holds at most {MAX_TABLE_ROWS:,}."
-        )
     levels = curve.bed_elev_m + step_m * np.arange(steps + 1)
     if curve.crest_elev_m - levels[-1] > 1e-9:
         levels = np.append(levels, curve.crest_elev_m)

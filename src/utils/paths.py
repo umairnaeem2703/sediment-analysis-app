@@ -20,7 +20,7 @@ def _without_shifted_columns(df: pd.DataFrame, path: Path) -> pd.DataFrame:
     if not isinstance(df.index, pd.RangeIndex):
         raise ValueError(
             f"{path.name}: the rows have more values than the header has columns. "
-            "Check for a comma used as a decimal point or as a thousands separator."
+            "Check for a comma used as a decimal point or as a thousands separator, or a separator at the end of every row."
         )
     return df
 

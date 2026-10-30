@@ -137,6 +137,17 @@ def test_w_m3_01_the_fractions_cross_check_is_shown_when_they_are_chosen_and_wit
     assert step.warning_var.get().count("tau_ri") == 5
 
 
+def test_w_m3_01_the_columns_ignored_in_a_flow_file_are_shown_when_it_is_chosen(app, warnings_shown):
+    wizard, step, _, top, tmp_path = app
+    _reach_step(wizard, top)
+    flow = tmp_path / "daily.csv"
+    flow.write_text("Date,Flow Q (m3/s),Station\n01/01/2010,10,A\n02/01/2010,20,A\n", encoding="utf-8")
+
+    step.use_flow_file(str(flow))
+
+    assert len(warnings_shown) == 1 and "ignored column(s) Station" in warnings_shown[0][1]
+
+
 def test_w_m3_01_the_calculation_runs_off_the_tk_thread(app, monkeypatch):
     wizard, step, _, top, _ = app
     _reach_step(wizard, top)

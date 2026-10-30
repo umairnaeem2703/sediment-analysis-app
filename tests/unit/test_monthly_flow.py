@@ -382,5 +382,5 @@ def test_u_m3_01_prepare_daily_flow_with_phi_is_reported_and_deterministic():
 def test_u_m3_01_a_sigma_whose_weights_cannot_be_represented_is_an_error_not_nan_flow():
     df = dsi_table(sample_values(), summary_rows=False)
 
-    with pytest.raises(ValueError, match="sigma 40 is too large"):
+    with pytest.raises(ValueError, match="sigma must be a number from 0 to 30"):
         prepare_daily_flow(df, sigma=40.0)

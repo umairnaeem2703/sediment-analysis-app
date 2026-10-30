@@ -432,7 +432,13 @@ def test_c_m3_02_the_settings_are_validated_stored_and_reported_as_changed_or_no
 
 @pytest.mark.parametrize(
     ("sigma", "seed", "named"),
-    [("-1", "0", "Sigma"), ("x", "0", "Sigma"), ("0.6", "1.5", "Seed"), ("0.6", "-3", "Seed")],
+    [
+        ("-1", "0", "Sigma"),
+        ("x", "0", "Sigma"),
+        ("31", "0", "Sigma"),
+        ("0.6", "1.5", "Seed"),
+        ("0.6", "-3", "Seed"),
+    ],
 )
 def test_c_m3_02_invalid_settings_are_refused_naming_the_field_and_change_nothing(project, sigma, seed, named):
     dam = project.dams[0]

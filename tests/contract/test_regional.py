@@ -389,6 +389,13 @@ def test_c_x_02_rows_with_more_fields_than_the_header_are_refused_not_shifted(tm
         load_basin_table(path)
 
 
+def test_c_x_02_a_separator_at_the_end_of_every_row_is_refused_and_named(tmp_path):
+    path = _basins(tmp_path, "Kavşakkaya,Sakarya,Ankara Alt Havzası,309.2,0.23,", "Çubuk 1,Sakarya,Ankara,834.7,0.09,")
+
+    with pytest.raises(ValueError, match="separator at the end of every row"):
+        load_basin_table(path)
+
+
 def test_c_x_03_name_key_folds_turkish_case_and_spacing():
     assert name_key("  ÇUBUK   1 ") == name_key("Çubuk 1") == name_key("cubuk 1")
     assert name_key("İznik Barajı") == name_key("IZNIK BARAJI") == name_key("iznik baraji")
@@ -405,6 +412,13 @@ def test_c_x_02_an_excel_table_loads_like_the_csv(tmp_path):
     loaded = load_basin_table(path).data
 
     pd.testing.assert_frame_equal(loaded, reference)
+
+
+def test_c_x_02_an_old_excel_xls_table_is_read(tmp_path):
+    # tests/data/basins.xls is one Çubuk 1 row in the old binary format, which pandas reads through xlrd.
+    loaded = load_basin_table(resource_path("tests", "data", "basins.xls")).data
+
+    assert loaded.iloc[0].tolist() == ["Çubuk 1", "Sakarya", "Ankara Alt Havzası", 834.7, 0.09]
 
 
 @pytest.mark.parametrize("name", ["corrupt.xlsx", "corrupt.xls"])
