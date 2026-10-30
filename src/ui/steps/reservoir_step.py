@@ -5,6 +5,7 @@ from typing import Optional, Tuple
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from src.core.reservoir import AREA_KM2, ELEVATION_M, SHAPE_CLASSES, STEP_M, VOLUME_HM3
+from src.services.dam_run import CURVE
 from src.services.reporting import reservoir_curve_figure
 from src.services.reservoir import (
     FIELDS,
@@ -37,11 +38,11 @@ class ReservoirStep(Step):
     """
 
     title = "Reservoir curve"
+    stage = CURVE
 
     def __init__(self, dam_step: DamStep):
         super().__init__()
         self.dam_step = dam_step
-        self.result: Optional[CurveResult] = None
         self._result_entries: Optional[Tuple[str, ...]] = None  # the field texts when the result was made
         self._fields_slug: Optional[str] = None  # the dam whose stored inputs the fields were loaded from
         self._canvas: Optional[FigureCanvasTkAgg] = None
@@ -63,6 +64,7 @@ class ReservoirStep(Step):
             zip(
                 FIELDS,
                 (self.bed_var, self.h_min_var, self.max_elev_var, self.crest_var, self.active_var, self.max_vol_var),
+                strict=True,
             )
         )
         for variable in (*self._input_vars.values(), self.shape_var, self.step_var):
@@ -153,7 +155,7 @@ class ReservoirStep(Step):
         *curve_texts, step_text = self._entries()
         try:
             sheet = self.wizard.regional.dam_sheet(dam).data
-            entered = dict(zip((*FIELDS, "shape_class"), curve_texts))
+            entered = dict(zip((*FIELDS, "shape_class"), curve_texts, strict=True))
             inputs = validate_curve_entries(**entered)
             step_m = parse_table_step(
                 step_text, inputs.crest_elev_m - inputs.bed_elev_m

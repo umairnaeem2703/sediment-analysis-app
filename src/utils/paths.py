@@ -34,7 +34,7 @@ def _read_csv(path: Path, encoding: str, dtype) -> pd.DataFrame:
     if len(df.columns) == 1 and ";" in str(df.columns[0]):
         try:
             df_semi = pd.read_csv(path, encoding=encoding, sep=";", dtype=dtype)
-        except Exception:
+        except ValueError:  # a parse, empty-file or decoding error: the comma reading stands
             df_semi = None
         if df_semi is not None and len(df_semi.columns) > 1:
             return _without_shifted_columns(df_semi, path)

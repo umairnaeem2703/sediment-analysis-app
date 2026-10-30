@@ -4,6 +4,10 @@ from tkinter import filedialog, messagebox, ttk
 from tkinter import font as tkfont
 from typing import Any, Callable, List, Optional, Sequence, Tuple
 
+from src.utils.log import get_logger, log_file
+
+# What a service raises for a bad input or file: the message is for the user. Anything else is a fault in the program.
+EXPECTED_ERRORS = (ValueError, OSError, KeyError)
 TABLE_FILETYPES = (("CSV/Excel Files", "*.csv *.xlsx *.xls"), ("All Files", "*.*"))
 
 
@@ -56,7 +60,8 @@ def add_table(notebook: ttk.Notebook, title: str, columns) -> ttk.Treeview:
 
 
 def show_error(title: str, message: str) -> None:
-    """Display an error messagebox."""
+    """Display an error messagebox, and record it in the log."""
+    get_logger().warning("%s: %s", title, message)
     messagebox.showerror(title, message)
 
 
@@ -80,10 +85,30 @@ def run_in_background(
         error = None
         try:
             result = task_fn()
-        except Exception as exc:
+        except EXPECTED_ERRORS as exc:
+            error = exc
+        except Exception as exc:  # a fault in the program: keep the traceback, which the dialog can not show
+            get_logger().error("A background task failed.", exc_info=exc)
             error = exc
         root.after(0, lambda: on_complete(result, error))
 
     thread = threading.Thread(target=worker, daemon=True)
     thread.start()
     return thread
+
+
+def unexpected_message(error: BaseException) -> str:
+    """The text of the dialog for an error the program did not foresee: the cause, and where the traceback is."""
+    path = log_file()
+    where = f"Details are in {path}." if path is not None else "Details are in the console."
+    return f"Unexpected {type(error).__name__}: {error}\n{where}"
+
+
+def install_error_handler(root: tk.Tk) -> None:
+    """Log and show an error raised in a Tk callback, which Tk would otherwise print to a console nobody sees."""
+
+    def handler(exc_type, exc, traceback):
+        get_logger().error("An error in the interface.", exc_info=(exc_type, exc, traceback))
+        show_error("Unexpected error", unexpected_message(exc))
+
+    root.report_callback_exception = handler

@@ -106,7 +106,7 @@ def test_u_m3_01_row_year_is_the_water_year_ending_in_september():
     monthly = MonthlyFlowPreprocessor().parse_table(df)
 
     assert set(monthly[WATER_YEAR_COLUMN]) == {1974}
-    calendar = dict(zip(monthly["Month"], monthly["Year"]))
+    calendar = dict(zip(monthly["Month"], monthly["Year"], strict=True))
     assert calendar[10] == calendar[11] == calendar[12] == 1973  # Ekim-Aralık
     assert calendar[1] == calendar[9] == 1974  # Ocak-Eylül
     # Ekim is the first column of the row, so it carries the first value

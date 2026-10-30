@@ -4,7 +4,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.core.wilcock import PHI_BREAK, WATER_YEAR_COLUMN, FractionalModel, TimeSeriesAggregator
+from src.core.wilcock import (
+    PHI_BREAK,
+    WATER_YEAR_COLUMN,
+    FractionalModel,
+    TimeSeriesAggregator,
+    check_daily_flow,
+)
 from src.utils.paths import read_table, resource_path
 from tests.oracle import bedload_annual, bedload_series, bedload_tau_ri, bedload_transport, bedload_wstar
 
@@ -230,3 +236,21 @@ def test_u_m3_05_days_missing_from_the_record_are_counted_in_a_warning():
     assert aggregator.warnings == [
         "2 day(s) between the first and last date have no flow; the annual means use the days present."
     ]
+
+
+def test_u_m3_05_a_flow_series_is_checked_without_any_model_or_fractions():
+    series = pd.DataFrame(
+        {"Date": ["03/01/2010", "01/01/2010", "02/01/2010", "bad"], "Flow Q (m3/s)": ["3", "1", "x", "9"]}
+    )
+
+    df, year_key, warnings = check_daily_flow(series)
+
+    assert year_key == "Year" and list(df["Year"]) == [2010, 2010]
+    assert warnings == [
+        "Dropped 1 row(s) with missing/non-numeric flow and 1 row(s) with unparseable dates.",
+        "1 day(s) between the first and last date have no flow; the annual means use the days present.",
+    ]
+    with pytest.raises(ValueError, match="negative"):
+        check_daily_flow(series.assign(**{"Flow Q (m3/s)": ["-1", "1", "2", "3"]}))
+    with pytest.raises(KeyError, match="Flow Q"):
+        check_daily_flow(pd.DataFrame({"Date": ["01/01/2010"]}))

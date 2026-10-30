@@ -4,9 +4,10 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Callable, List, Optional, Sequence
 
+from src.services.dam_run import DamRun
 from src.services.project import Project
 from src.services.regional_data import RegionalData
-from src.ui.common import run_in_background
+from src.ui.common import EXPECTED_ERRORS, install_error_handler, run_in_background, unexpected_message
 from src.ui.steps.base import Step
 from src.ui.steps.bedload_step import BedloadStep
 from src.ui.steps.dam_step import DamStep
@@ -16,6 +17,7 @@ from src.ui.steps.regional_step import RegionalStep
 from src.ui.steps.report_step import ReportStep
 from src.ui.steps.reservoir_step import ReservoirStep
 from src.ui.steps.suspended_step import SuspendedStep
+from src.utils.log import attach_project_log, configure, get_logger
 
 
 class Wizard:
@@ -26,6 +28,7 @@ class Wizard:
         self.steps: List[Step] = list(steps)
         self.project: Optional[Project] = None
         self.regional: Optional[RegionalData] = None
+        self.run: Optional[DamRun] = None  # the results of the dam being analysed; made when step 3 uses a dam
         self.current = 0
         self.busy = False
         self.notice_var = tk.StringVar()
@@ -115,6 +118,9 @@ class Wizard:
             return
         self.project = project
         self.regional = RegionalData(project)
+        self.run = None
+        attach_project_log(project.folder)
+        get_logger().info("Project %s opened from %s.", project.name, project.folder)
         self.invalidate_after(0, "The project changed.")
 
     def add_notice(self, text: str) -> None:
@@ -157,11 +163,14 @@ class Wizard:
         self.busy = True
         self.status_var.set(status)
         self.refresh()
+        get_logger().info(status)
 
         def finished(result, error):
             self.busy = False
             self.status_var.set("")
             self.refresh()
+            if error is not None and not isinstance(error, EXPECTED_ERRORS):
+                error = RuntimeError(unexpected_message(error))  # already logged with its traceback
             on_done(result, error)
 
         run_in_background(self.parent, task, finished)
@@ -170,7 +179,6 @@ class Wizard:
 def default_steps() -> List[Step]:
     dam_step = DamStep()
     suspended, bedload, reservoir = SuspendedStep(dam_step), BedloadStep(dam_step), ReservoirStep(dam_step)
-    integration = IntegrationStep(dam_step, suspended, bedload, reservoir)
     return [
         ProjectStep(),
         RegionalStep(),
@@ -178,13 +186,15 @@ def default_steps() -> List[Step]:
         suspended,
         bedload,
         reservoir,
-        integration,
-        ReportStep(dam_step, suspended, bedload, reservoir, integration),
+        IntegrationStep(dam_step),
+        ReportStep(dam_step),
     ]
 
 
 def main() -> None:
+    configure()
     root = tk.Tk()
+    install_error_handler(root)
     root.title("Sediment Analysis")
     root.geometry("1000x650")
     Wizard(root, default_steps()).frame.pack(fill=tk.BOTH, expand=True)

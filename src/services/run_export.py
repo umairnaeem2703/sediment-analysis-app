@@ -24,6 +24,7 @@ from src.services.project import INPUT_KEYS, Dam, Project
 from src.services.reporting import write_annual_volume, write_bedload_trend, write_projection, write_reservoir_curve
 from src.services.reservoir import CurveResult, write_reservoir_csv
 from src.services.suspended import SuspendedResult, table_with_total, write_suspended_csv
+from src.utils.log import get_logger
 
 WORKBOOK = "results.xlsx"
 RUN_JSON = "run.json"
@@ -265,4 +266,5 @@ def export_run(
     except Exception:
         shutil.rmtree(folder, ignore_errors=True)  # a run folder holds a whole run or nothing
         raise
+    get_logger().info("Run written to %s (%d files).", folder, len(written) + 2)
     return RunExport(folder, [*written, workbook, run_json])

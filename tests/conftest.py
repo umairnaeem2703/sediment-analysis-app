@@ -12,3 +12,12 @@ def tk_root():
     root.withdraw()
     yield root
     root.destroy()
+
+
+@pytest.fixture(autouse=True)
+def _no_project_log():
+    """A test that opens a project attaches its log file; close it so the folder can be removed."""
+    yield
+    from src.utils.log import detach_project_log
+
+    detach_project_log()

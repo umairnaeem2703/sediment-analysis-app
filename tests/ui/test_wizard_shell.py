@@ -4,6 +4,7 @@ import tkinter as tk
 import pytest
 
 from src.ui.wizard import Wizard
+from src.utils.log import attach_project_log
 from tests.ui.fakes import FakeStep
 from tests.ui.helpers import wait_until
 
@@ -140,6 +141,23 @@ def test_w_x_03_a_failing_task_reports_its_error_and_unlocks_navigation(shell):
 
     assert seen["result"] is None
     assert str(seen["error"]) == "bad input"
+    assert not wizard.busy
+
+
+def test_w_x_03_an_unexpected_error_is_logged_with_its_traceback_and_the_dialog_points_to_the_log(shell, tmp_path):
+    wizard, _, top = shell
+    path = attach_project_log(tmp_path)
+    seen = {}
+
+    def task():
+        raise ZeroDivisionError("boom")
+
+    wizard.run_task(task, lambda result, error: seen.update(error=error))
+    wait_until(top, lambda: "error" in seen)
+
+    message = str(seen["error"])
+    assert "Unexpected ZeroDivisionError: boom" in message and str(path) in message
+    assert "ZeroDivisionError: boom" in path.read_text(encoding="utf-8")
     assert not wizard.busy
 
 

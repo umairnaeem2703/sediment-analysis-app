@@ -41,7 +41,7 @@ def accumulate(years, totals, commissioning_year: int, analysis_year: int) -> Ac
         raise ValueError(
             f"The analysis year ({analysis_year}) is before the commissioning year ({commissioning_year})."
         )
-    record = dict(zip((int(year) for year in years), np.asarray(totals, dtype=float)))
+    record = dict(zip((int(year) for year in years), np.asarray(totals, dtype=float), strict=True))
     mean = float(np.mean(list(record.values())))
     span = range(commissioning_year, analysis_year)
     used = [record.get(year, mean) for year in span]

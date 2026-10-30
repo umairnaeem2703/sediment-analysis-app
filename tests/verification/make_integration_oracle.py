@@ -67,7 +67,7 @@ def worked(case):
     s0 = sum(used)
     exceeded = None
     if s0 >= VDEAD:
-        exceeded = next(y for y, c in zip(range(commissioning, analysis), cumulative) if c >= VDEAD)
+        exceeded = next(y for y, c in zip(range(commissioning, analysis), cumulative, strict=True) if c >= VDEAD)
 
     def lifespan(rate):
         if s0 >= VDEAD:
@@ -101,7 +101,7 @@ def write_csv():
         writer.writerow(["Case", "Year", "Bedload_m3_yr", "Total_hm3", "Elevation_m"])
         for case in CASES:
             totals = worked(case)[0]
-            for year, bedload, total in zip(RECORD_YEARS, case[3], totals):
+            for year, bedload, total in zip(RECORD_YEARS, case[3], totals, strict=True):
                 writer.writerow([case[0], year, bedload, total, elevation(total)])
 
     with open(HERE / "integration_accumulation.csv", "w", newline="", encoding="utf-8") as handle:
@@ -109,7 +109,7 @@ def write_csv():
         writer.writerow(["Case", "Year", "In_Record", "Total_Used_hm3", "Cumulative_hm3"])
         for case in CASES:
             _, _, used, in_record, cumulative, _, _, _ = worked(case)
-            for year, flag, value, total in zip(range(case[5], case[6]), in_record, used, cumulative):
+            for year, flag, value, total in zip(range(case[5], case[6]), in_record, used, cumulative, strict=True):
                 writer.writerow([case[0], year, flag, value, total])
 
     with open(HERE / "integration_projection.csv", "w", newline="", encoding="utf-8") as handle:
@@ -159,7 +159,7 @@ def case_sheet(book, case):
     ):
         sheet.cell(row=18, column=column, value=text).font = Font(bold=True)
     first, last = 19, 18 + len(RECORD_YEARS)
-    for row, (year, vb) in enumerate(zip(RECORD_YEARS, bedload), start=first):
+    for row, (year, vb) in enumerate(zip(RECORD_YEARS, bedload, strict=True), start=first):
         sheet.cell(row=row, column=1, value=year)
         sheet.cell(row=row, column=2, value=vb)
         sheet.cell(row=row, column=3, value=f"=$B$10/100*($B$9+B{row})/1000000")
@@ -177,7 +177,7 @@ def case_sheet(book, case):
     sheet["B30"] = "=$B$3+($B$4-$B$3)*(MIN(B29,$B$15)/$B$7)^(1/$B$8)"
     sheet["A31"] = "Year the dead volume was passed (if S0 >= Vdead)"
     sheet["B31"] = f'=IF(B29>=B14,MIN(E{acc_first}:E{acc_last}),"no")' if count else "no"
-    for row, (name, source) in enumerate(zip(RATES, (25, 26, 27)), start=32):
+    for row, (name, source) in enumerate(zip(RATES, (25, 26, 27), strict=True), start=32):
         sheet.cell(row=row, column=1, value=f"Lifespan at the {name.lower()} rate: a + (Vdead - S0) / r")
         sheet.cell(
             row=row,
@@ -205,7 +205,7 @@ def case_sheet(book, case):
     ):
         sheet.cell(row=top, column=column, value=text).font = Font(bold=True)
     row = top + 1
-    for name, source in zip(RATES, (25, 26, 27)):
+    for name, source in zip(RATES, (25, 26, 27), strict=True):
         for k in HORIZONS:
             sheet.cell(row=row, column=1, value=name)
             sheet.cell(row=row, column=2, value=k)
@@ -214,7 +214,7 @@ def case_sheet(book, case):
             sheet.cell(row=row, column=5, value=f"=$B$29+B{row}*D{row}")
             sheet.cell(row=row, column=6, value=f"=$B$3+($B$4-$B$3)*(MIN(E{row},$B$15)/$B$7)^(1/$B$8)")
             row += 1
-    for column, width in zip("ABCDEF", (58, 20, 34, 30, 28, 30)):
+    for column, width in zip("ABCDEF", (58, 20, 34, 30, 28, 30), strict=True):
         sheet.column_dimensions[column].width = width
 
 

@@ -68,7 +68,7 @@ def compute_suspended(
         )
     calculator = YieldCalculator()
     rows = []
-    for (_, basin), mean in zip(sub_basins.iterrows(), resolution.means):
+    for (_, basin), mean in zip(sub_basins.iterrows(), resolution.means, strict=True):
         try:
             metrics = calculator.calculate_metrics(mean, basin[AREA], basin[SLOPE])
         except ValueError as exc:
