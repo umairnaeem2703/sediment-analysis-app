@@ -78,9 +78,15 @@ def test_u_m2_01_entries_whose_aliases_collide_do_not_resolve_to_the_last_one():
     assert resolved.means == [None]
 
 
-def test_u_m2_01_a_shared_number_alone_is_a_loose_match_to_report_and_not_an_exact_one():
+def test_u_m2_01_a_number_shared_by_two_different_names_is_no_match():
     lookup = _lookup(("Cubuk 1", 3.0), ("Kirmir 2", 9.0))
 
     resolved = ZonalMatcher.resolve_all(lookup, ["Cubuk 2"])
 
-    assert list(resolved.loose) == ["Cubuk 2"]  # accepted only with the warning that lists it (FR-M2-01)
+    assert resolved.means == [None] and resolved.loose == {} and resolved.unresolved == ["Cubuk 2"]
+
+
+def test_u_m2_01_a_name_inside_another_with_a_different_number_is_no_match():
+    lookup = _lookup(("Cubuk 12", 9.0))
+
+    assert ZonalMatcher.resolve_all(lookup, ["Cubuk 1"]).means == [None]
