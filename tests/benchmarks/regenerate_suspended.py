@@ -1,14 +1,15 @@
 """Regenerate the suspended-sediment goldens (B6): run `python -m tests.benchmarks.regenerate_suspended`.
 
 The files this writes may land on `main` only after the hydrologist has signed them off (B6, B7 step 7). The manifest
-records the code version and the SHA-256 of the sample inputs (line endings normalised, so a checkout with another
-`core.autocrlf` gives the same hash); a version ending in `-dirty` means `src/` had uncommitted changes.
+records the SHA-256 of the sample inputs (line endings normalised, so a checkout with another `core.autocrlf` gives
+the same hash), and `tests/pipeline/test_manifests.py` fails when an input no longer matches it. It records no
+commit: a branch commit does not survive a squash-merge, and the history of the manifest says when the goldens were
+made.
 """
 
 import hashlib
 import json
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
 
@@ -16,19 +17,10 @@ from src.services.suspended import compute_suspended, write_suspended_csv
 from tests.samples import SAMPLE_BASINS, SAMPLE_ZONAL, sample_regional
 
 HERE = Path(__file__).parent
-ROOT = HERE.parents[1]
-
-
-def _git(*args: str) -> str:
-    return subprocess.run(["git", *args], capture_output=True, text=True, check=True, cwd=ROOT).stdout.strip()
 
 
 def fingerprint(path: Path) -> str:
     return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
-
-
-def code_version() -> str:
-    return _git("rev-parse", "--short", "HEAD") + ("-dirty" if _git("status", "--porcelain", "--", "src") else "")
 
 
 def main() -> None:
@@ -39,7 +31,6 @@ def main() -> None:
             written = write_suspended_csv(result, scratch)
             shutil.copyfile(written, HERE / f"suspended_{dam.slug}.csv")
     manifest = {
-        "code_version": code_version(),
         "inputs": {path.name: fingerprint(path) for path in (SAMPLE_BASINS, SAMPLE_ZONAL)},
     }
     (HERE / "suspended_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")

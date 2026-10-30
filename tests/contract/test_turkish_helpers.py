@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.core.rusle import to_ascii_turkish, turkish_lower
+from src.core.text import to_ascii_turkish, turkish_lower
 from src.services.labels import fold
 
 
