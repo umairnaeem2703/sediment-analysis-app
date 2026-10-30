@@ -218,6 +218,42 @@ def test_c_m1_04_spellings_of_one_dam_name_are_one_dam_named_by_the_first(tmp_pa
     assert list(data.sub_basins(project.dams[0])["Sub-basin Name"]) == ["S1", "S2", "S3"]
 
 
+def test_c_m1_04_dams_whose_names_differ_only_in_a_number_with_a_dot_stay_two_dams(tmp_path, project, data):
+    path = _csv(tmp_path, "t.csv", "Baraj 1.1,B,S1,10,0.1", "Baraj 11,B,S1,20,0.2")
+
+    data.import_basin_table(path)
+
+    assert data.problems == []
+    assert [dam.name for dam in project.dams] == ["Baraj 1.1", "Baraj 11"]
+    assert [len(data.sub_basins(dam)) for dam in project.dams] == [1, 1]
+
+
+def test_c_m1_04_two_names_the_key_tells_apart_but_the_identifier_does_not_are_a_flagged_problem(
+    tmp_path, project, data
+):
+    path = _csv(tmp_path, "t.csv", "Café,B,S1,10,0.1", ",,,,", "Caf,B,S1,20,0.2")
+
+    data.import_basin_table(path)
+
+    assert data.basin_table is None and project.dams == []
+    assert any("same identifier 'caf'" in problem.message for problem in data.problems)
+    assert {cell for problem in data.problems for cell in problem.cells} == {(2, "Dam Name"), (4, "Dam Name")}
+
+
+def test_c_m1_04_a_respelled_dam_keeps_its_settings_its_slug_and_takes_its_sheet(tmp_path, project, data):
+    data.import_basin_table(_csv(tmp_path, "t.csv", "Çubuk 1,B,Ankara Alt Havzası,834.7,0.09"))
+    dam = project.dams[0]
+    dam.commissioning_year, dam.trap_efficiency_pct = 1965, 87.0
+    project.save()
+
+    notices = data.import_basin_table(_csv(tmp_path, "u.csv", "Çubuk1,B,Ankara Alt Havzası,834.7,0.09"))
+
+    assert notices == [] and project.dams == [dam]
+    assert (dam.name, dam.slug, dam.commissioning_year, dam.trap_efficiency_pct) == ("Çubuk1", "cubuk_1", 1965, 87.0)
+    assert data.import_dam_sheets([SAMPLE_SHEETS["cubuk_1"]]).errors == []
+    assert dam.sheet == "inputs/dams/cubuk_1.csv"
+
+
 # --- zonal means (FR-M1-06) --------------------------------------------------------------------
 
 
