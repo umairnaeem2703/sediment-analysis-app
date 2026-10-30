@@ -36,6 +36,7 @@ from src.services.labels import (
     ZONAL,
     match_columns,
 )
+from src.utils.log import get_logger
 from src.utils.paths import read_table
 
 CROSS_CHECK_TOLERANCE = 0.01
@@ -111,6 +112,7 @@ def read_input(path, dtype=None) -> pd.DataFrame:
     try:
         return read_table(path, dtype=dtype)
     except Exception as exc:  # empty, corrupt, locked, undecodable or unsupported: always name the file
+        get_logger().warning("%s could not be read.", path.name, exc_info=exc)
         raise ValueError(f"{path.name}: could not be read ({exc})") from exc
 
 
