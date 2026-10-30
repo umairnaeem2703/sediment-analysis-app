@@ -1,5 +1,5 @@
 import math
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -113,6 +113,76 @@ class FractionalModel:
         self._tau_ri = work["tau_ri"].to_numpy(dtype=float)
 
 
+def check_daily_flow(df_flow: pd.DataFrame) -> Tuple[pd.DataFrame, str, List[str]]:
+    """Check a daily flow table and prepare it for the annual summary: the table with valid rows only and its year
+    column, the name of that column (Water_Year if the series carries it, else Year) and the warnings. Raises
+    KeyError for a missing column and ValueError for an empty series, a negative flow or a date listed twice. No model
+    is needed, so a file can be checked as it is chosen."""
+    if df_flow is None or df_flow.empty:
+        raise ValueError("Flow table is empty.")
+
+    warnings: List[str] = []
+    if DATE_COLUMN not in df_flow.columns or FLOW_COLUMN not in df_flow.columns:
+        raise KeyError(f"Flow table must contain the columns '{DATE_COLUMN}' and '{FLOW_COLUMN}'.")
+    water_year_col = WATER_YEAR_COLUMN if WATER_YEAR_COLUMN in df_flow.columns else None
+    df = df_flow.copy()
+
+    raw_dates = df["Date"]
+    dates = pd.to_datetime(raw_dates, format="%d/%m/%Y", errors="coerce")
+    retry = dates.isna() & raw_dates.notna()
+    if retry.any():
+        # Only reached for non-dd/mm/yyyy dates (e.g. ISO); unparseable values stay NaT.
+        dates = dates.where(~retry, pd.to_datetime(raw_dates, format="mixed", dayfirst=True, errors="coerce"))
+    df["Date"] = dates
+    df["Flow Q (m3/s)"] = pd.to_numeric(df["Flow Q (m3/s)"], errors="coerce")
+
+    required = ["Date", "Flow Q (m3/s)"]
+    bad_water_years = 0
+    if water_year_col is not None:
+        water_years = pd.to_numeric(df[WATER_YEAR_COLUMN], errors="coerce")
+        df[WATER_YEAR_COLUMN] = water_years.where(water_years % 1 == 0)
+        bad_water_years = int((df[WATER_YEAR_COLUMN].isna() & df["Date"].notna() & df["Flow Q (m3/s)"].notna()).sum())
+        required.append(WATER_YEAR_COLUMN)
+
+    bad_dates = int(df["Date"].isna().sum())
+    bad_flows = int((df["Flow Q (m3/s)"].isna() & df["Date"].notna()).sum())
+    if bad_dates or bad_flows or bad_water_years:
+        df = df.dropna(subset=required).reset_index(drop=True)
+        message = (
+            f"Dropped {bad_flows} row(s) with missing/non-numeric flow and {bad_dates} row(s) with unparseable dates."
+        )
+        if bad_water_years:
+            message += f" Dropped {bad_water_years} row(s) with a missing/non-integer {WATER_YEAR_COLUMN}."
+        warnings.append(message)
+    if df.empty:
+        raise ValueError("Flow table has no rows with a valid date and flow value.")
+
+    negative = df["Flow Q (m3/s)"] < 0
+    if negative.any():
+        first = ", ".join(df.loc[negative, "Date"].dt.strftime("%Y-%m-%d").head(5))
+        raise ValueError(f"Flow values must not be negative (first offending dates: {first}).")
+
+    repeated = df["Date"].duplicated()
+    if repeated.any():
+        first = ", ".join(df.loc[repeated, "Date"].dt.strftime("%Y-%m-%d").head(5))
+        raise ValueError(f"Each date may appear only once (first repeated dates: {first}).")
+    missing_days = (df["Date"].max() - df["Date"].min()).days + 1 - len(df)
+    if missing_days > 0:
+        warnings.append(
+            f"{missing_days} day(s) between the first and last date have no flow; the annual means use the days present."
+        )
+
+    # A DSI-derived series carries its own Water_Year (Oct (Y-1) to Sep (Y)); anything else is calendar.
+    if water_year_col is not None:
+        year_key = WATER_YEAR_COLUMN
+        df[year_key] = df[year_key].astype(int)
+    else:
+        year_key = YEAR_COLUMN
+        df[year_key] = df["Date"].dt.year
+
+    return df, year_key, warnings
+
+
 class TimeSeriesAggregator:
     def __init__(self, model: FractionalModel):
         self.model = model
@@ -120,70 +190,7 @@ class TimeSeriesAggregator:
 
     def process_annual_averages(self, df_flow: pd.DataFrame) -> pd.DataFrame:
         """Annual summary indexed by Water_Year if the series carries that column, else by calendar Year."""
-        if df_flow is None or df_flow.empty:
-            raise ValueError("Flow table is empty.")
-
-        self.warnings = []
-        if DATE_COLUMN not in df_flow.columns or FLOW_COLUMN not in df_flow.columns:
-            raise KeyError(f"Flow table must contain the columns '{DATE_COLUMN}' and '{FLOW_COLUMN}'.")
-        water_year_col = WATER_YEAR_COLUMN if WATER_YEAR_COLUMN in df_flow.columns else None
-        df = df_flow.copy()
-
-        raw_dates = df["Date"]
-        dates = pd.to_datetime(raw_dates, format="%d/%m/%Y", errors="coerce")
-        retry = dates.isna() & raw_dates.notna()
-        if retry.any():
-            # Only reached for non-dd/mm/yyyy dates (e.g. ISO); unparseable values stay NaT.
-            dates = dates.where(~retry, pd.to_datetime(raw_dates, format="mixed", dayfirst=True, errors="coerce"))
-        df["Date"] = dates
-        df["Flow Q (m3/s)"] = pd.to_numeric(df["Flow Q (m3/s)"], errors="coerce")
-
-        required = ["Date", "Flow Q (m3/s)"]
-        bad_water_years = 0
-        if water_year_col is not None:
-            water_years = pd.to_numeric(df[WATER_YEAR_COLUMN], errors="coerce")
-            df[WATER_YEAR_COLUMN] = water_years.where(water_years % 1 == 0)
-            bad_water_years = int(
-                (df[WATER_YEAR_COLUMN].isna() & df["Date"].notna() & df["Flow Q (m3/s)"].notna()).sum()
-            )
-            required.append(WATER_YEAR_COLUMN)
-
-        bad_dates = int(df["Date"].isna().sum())
-        bad_flows = int((df["Flow Q (m3/s)"].isna() & df["Date"].notna()).sum())
-        if bad_dates or bad_flows or bad_water_years:
-            df = df.dropna(subset=required).reset_index(drop=True)
-            message = (
-                f"Dropped {bad_flows} row(s) with missing/non-numeric flow and "
-                f"{bad_dates} row(s) with unparseable dates."
-            )
-            if bad_water_years:
-                message += f" Dropped {bad_water_years} row(s) with a missing/non-integer {WATER_YEAR_COLUMN}."
-            self.warnings.append(message)
-        if df.empty:
-            raise ValueError("Flow table has no rows with a valid date and flow value.")
-
-        negative = df["Flow Q (m3/s)"] < 0
-        if negative.any():
-            first = ", ".join(df.loc[negative, "Date"].dt.strftime("%Y-%m-%d").head(5))
-            raise ValueError(f"Flow values must not be negative (first offending dates: {first}).")
-
-        repeated = df["Date"].duplicated()
-        if repeated.any():
-            first = ", ".join(df.loc[repeated, "Date"].dt.strftime("%Y-%m-%d").head(5))
-            raise ValueError(f"Each date may appear only once (first repeated dates: {first}).")
-        missing_days = (df["Date"].max() - df["Date"].min()).days + 1 - len(df)
-        if missing_days > 0:
-            self.warnings.append(
-                f"{missing_days} day(s) between the first and last date have no flow; the annual means use the days present."
-            )
-
-        # A DSI-derived series carries its own Water_Year (Oct (Y-1) to Sep (Y)); anything else is calendar.
-        if water_year_col is not None:
-            year_key = WATER_YEAR_COLUMN
-            df[year_key] = df[year_key].astype(int)
-        else:
-            year_key = YEAR_COLUMN
-            df[year_key] = df["Date"].dt.year
+        df, year_key, self.warnings = check_daily_flow(df_flow)
 
         # Calculate intermediate daily m2/s rate
         df["Daily_Bedload_Rate"] = self.model.compute_transport_series(df["Flow Q (m3/s)"].to_numpy(dtype=float))

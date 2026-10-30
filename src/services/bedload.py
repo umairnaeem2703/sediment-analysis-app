@@ -13,7 +13,7 @@ from typing import List, NamedTuple, Optional, Sequence, Tuple
 import pandas as pd
 
 from src.core.monthly_flow_preprocessor import DEFAULT_PHI, MAX_SIGMA, prepare_daily_flow
-from src.core.wilcock import FractionalModel, TimeSeriesAggregator
+from src.core.wilcock import FractionalModel, TimeSeriesAggregator, check_daily_flow
 from src.services.labels import (
     DAILY_FLOW,
     DAILY_FLOW_OPTIONAL,
@@ -47,9 +47,6 @@ _SUMMARY_COLUMNS = {
     "Annual_Average_Bed_Load_metric_tons_yr": MASS_T,
 }
 VALUE_COLUMNS = list(_SUMMARY_COLUMNS.values())
-
-# Any valid fractions will do: summarising with them only checks the flow series.
-_CHECK_FRACTIONS = pd.DataFrame({"di": [0.02], "Fi": [1.0]})
 
 
 class FlowSeries(NamedTuple):
@@ -168,7 +165,10 @@ def import_flow(project: Project, dam: Dam, path, sigma: float, seed: int, phi: 
     """Check a flow file and copy it into the project as the dam's flow, with the sigma, seed and phi to split it with.
     A file that cannot be read, converted or summarised raises and nothing is copied."""
     series = load_flow(path, sigma, seed, phi)
-    compute_bedload(series, _CHECK_FRACTIONS, Path(path).name)
+    try:
+        check_daily_flow(series.daily)  # the checks of the calculation, without the model or any fractions
+    except (KeyError, ValueError) as exc:
+        raise ValueError(f"{Path(path).name}: {_message(exc)}") from exc
     relative = project.import_file(path, f"inputs/flow/{dam.slug}_flow{Path(path).suffix.lower()}")
     previous = dam.flow
     dam.flow = Flow(relative, sigma, seed, phi)
