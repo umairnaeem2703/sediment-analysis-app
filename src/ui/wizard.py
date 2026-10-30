@@ -4,6 +4,7 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Callable, List, Optional, Sequence
 
+from src.services.dam_run import DamRun
 from src.services.project import Project
 from src.services.regional_data import RegionalData
 from src.ui.common import run_in_background
@@ -26,6 +27,7 @@ class Wizard:
         self.steps: List[Step] = list(steps)
         self.project: Optional[Project] = None
         self.regional: Optional[RegionalData] = None
+        self.run: Optional[DamRun] = None  # the results of the dam being analysed; made when step 3 uses a dam
         self.current = 0
         self.busy = False
         self.notice_var = tk.StringVar()
@@ -115,6 +117,7 @@ class Wizard:
             return
         self.project = project
         self.regional = RegionalData(project)
+        self.run = None
         self.invalidate_after(0, "The project changed.")
 
     def add_notice(self, text: str) -> None:
@@ -170,7 +173,6 @@ class Wizard:
 def default_steps() -> List[Step]:
     dam_step = DamStep()
     suspended, bedload, reservoir = SuspendedStep(dam_step), BedloadStep(dam_step), ReservoirStep(dam_step)
-    integration = IntegrationStep(dam_step, suspended, bedload, reservoir)
     return [
         ProjectStep(),
         RegionalStep(),
@@ -178,8 +180,8 @@ def default_steps() -> List[Step]:
         suspended,
         bedload,
         reservoir,
-        integration,
-        ReportStep(dam_step, suspended, bedload, reservoir, integration),
+        IntegrationStep(dam_step),
+        ReportStep(dam_step),
     ]
 
 

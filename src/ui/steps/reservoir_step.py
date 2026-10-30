@@ -5,6 +5,7 @@ from typing import Optional, Tuple
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from src.core.reservoir import AREA_KM2, ELEVATION_M, SHAPE_CLASSES, STEP_M, VOLUME_HM3
+from src.services.dam_run import CURVE
 from src.services.reporting import reservoir_curve_figure
 from src.services.reservoir import (
     FIELDS,
@@ -37,11 +38,11 @@ class ReservoirStep(Step):
     """
 
     title = "Reservoir curve"
+    stage = CURVE
 
     def __init__(self, dam_step: DamStep):
         super().__init__()
         self.dam_step = dam_step
-        self.result: Optional[CurveResult] = None
         self._result_entries: Optional[Tuple[str, ...]] = None  # the field texts when the result was made
         self._fields_slug: Optional[str] = None  # the dam whose stored inputs the fields were loaded from
         self._canvas: Optional[FigureCanvasTkAgg] = None

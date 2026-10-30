@@ -2,6 +2,7 @@ import tkinter as tk
 
 import pytest
 
+from src.services.dam_run import BEDLOAD
 from src.ui.steps import integration_step
 from src.ui.steps.bedload_step import BedloadStep
 from src.ui.steps.dam_step import DamStep
@@ -32,7 +33,7 @@ def app(tk_root, tmp_path, errors):
     top = tk.Toplevel(tk_root)
     project_step, regional_step, dam_step = ProjectStep(), RegionalStep(), DamStep()
     suspended, bedload, reservoir = SuspendedStep(dam_step), BedloadStep(dam_step), ReservoirStep(dam_step)
-    step, later = IntegrationStep(dam_step, suspended, bedload, reservoir), FakeStep("Later")
+    step, later = IntegrationStep(dam_step), FakeStep("Later")
     wizard = Wizard(top, [project_step, regional_step, dam_step, suspended, bedload, reservoir, step, later])
     wizard.frame.pack(fill="both", expand=True)
     project_step.create_project(str(tmp_path / "project"), "Region")
@@ -242,3 +243,14 @@ def test_w_m4_02_the_grids_show_the_columns_the_service_returns():
         "Elevation_Min_m",
         "Elevation_Max_m",
     ]
+
+
+def test_w_m4_02_computing_when_an_earlier_result_is_missing_names_it_and_changes_nothing(app, errors):
+    wizard, step, _, top = app
+    _reach_step(wizard, top)
+    wizard.run.set(BEDLOAD, None)
+
+    step.compute()
+
+    assert not step.is_complete() and not _rows(step.annual_tree)
+    assert len(errors) == 1 and "Compute the bedload of Çubuk 1 first" in errors[0][1]
