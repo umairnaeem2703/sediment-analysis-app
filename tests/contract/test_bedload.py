@@ -219,6 +219,16 @@ def test_c_m3_03_a_file_without_data_rows_is_an_error(tmp_path):
 # --- C-M3-04: the annual summary --------------------------------------------------------------
 
 
+def test_c_m3_02_a_flow_file_with_a_date_listed_twice_is_refused_when_chosen_and_nothing_is_copied(tmp_path, project):
+    dam = project.dams[0]
+    path = _write(tmp_path, "twice.csv", "Date,Flow Q (m3/s)\n01/01/2000,10\n01/01/2000,12\n")
+
+    with pytest.raises(ValueError, match="twice.csv: Each date may appear only once"):
+        import_flow(project, dam, path, 0.6, 0)
+
+    assert dam.flow.path is None and not (project.folder / "inputs" / "flow").exists()
+
+
 def test_c_m3_04_the_table_has_the_year_key_then_the_value_columns():
     result = _compute(_daily(10.0, 20.0))
 
