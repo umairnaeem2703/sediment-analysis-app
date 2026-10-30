@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| **Version** | 0.1 (draft for hydrologist review) |
+| **Version** | 1.0 (as built; decisions D1 to D69) |
 | **Date** | 2026-10-23 |
 | **Source brief** | `brief/goals_milestones.md` |
-| **Status of code** | Working 3-tab Tkinter prototype. This spec defines the target and the pipeline to get there. |
+| **Status of code** | The eight-step Tkinter wizard is built (M1 to M5). This spec records the requirements, the decisions and the pipeline. |
 | **Roles** | *Developer* builds. *Hydrologist* is the domain reviewer who signs off every numerical change. *GIS analyst* supplies zonal RUSLE means and produces the 5-class RGB maps outside the app. |
 
 **How to change this spec.** Edit it on a branch with the same pull request flow as code (B7). A change to a calculation, a data contract or a decision gets a new entry in the decision log (Appendix) and a hydrologist sign-off.
@@ -80,7 +80,7 @@ Hydrologists and engineers (DSİ-style studies) using one Windows machine, offli
 
 ## A5. Workflow
 
-The main window is a wizard (D17, D18) with a step list on the left and Back/Next at the bottom. Next is enabled only when the step is valid and computed. The step list allows jumping back to completed steps. Editing an earlier step invalidates every later result and says so. "Analyse another dam" returns to step 3.
+The main window is a wizard (D17, D18) with a step list on the left and Back/Next at the bottom. Next is enabled only when the step is valid and computed. The step list allows jumping back to completed steps. Editing an earlier step invalidates every later result and says so. To analyse another dam, jump back to step 3.
 
 | # | Step | The user... | The app shows |
 |---|---|---|---|
@@ -103,10 +103,10 @@ Test IDs follow `<layer>-<milestone>-<nn>`; the layers are `U` unit, `C` input c
 |---|---|---|---|
 | FR-M1-01 | New, open and save a project folder holding `project.json` | A saved project reopens with identical dams, parameters and file paths. A missing or newer `schema_version` gives a clear error. | C-M1-01, W-M1-01 |
 | FR-M1-02 | Importing a file copies it into `<project>/inputs/`; originals are never modified (D33) | Source file bytes are unchanged after an import. Edits in the grid are saved to the copy. | C-M1-02 |
-| FR-M1-03 | Load the basin table and validate it | Required columns found by EN/TR alias, including `Drainage Area (km2)`. Area > 0. Slope present and numeric. Blank rows skipped. Duplicate sub-basin names within a dam are an error. | C-M1-03, C-M1-04 |
+| FR-M1-03 | Load the basin table and validate it | Required columns matched by their canonical labels (D67), including `Drainage Area (km2)`. Area > 0. Slope present and numeric. Blank rows skipped. Duplicate sub-basin names within a dam are an error. | C-M1-03, C-M1-04 |
 | FR-M1-04 | Edit the basin table in a grid | Edited cells persist to the project copy (D41). Invalid cells are flagged before M2 runs, and a table with invalid cells is still imported (D38). | C-M1-08, W-M1-02 |
 | FR-M1-05 | Load a dam sheet and cross-check it | Dam name matches a basin-table dam (Turkish-aware). Sheet drainage area and slope differ from the table by more than 1%: warning. Missing required fields: error naming them. | C-M1-05, C-M1-06 |
-| FR-M1-06 | Load zonal means | `MEAN` column and a sub-basin name column found by alias; empty or non-numeric means are skipped with a count in the warnings. | C-M1-07 |
+| FR-M1-06 | Load zonal means | `MEAN` and `Sub-basin Name` columns matched by their canonical labels (D67); empty or non-numeric means are skipped with a count in the warnings. | C-M1-07 |
 | FR-M1-07 | Select the dam to analyse and enter its settings (D40, D42) | The dam needs a sheet. Commissioning year is optional; the analysis year is blank for the current year and not before the commissioning year; trap efficiency is above 0 and at most 100 (default 100); Hmin is optional. Choosing another dam or changing a setting resets the later steps. | C-M1-09, W-M1-03 |
 
 ### M2: Suspended sediment
@@ -122,7 +122,7 @@ Test IDs follow `<layer>-<milestone>-<nn>`; the layers are `U` unit, `C` input c
 
 | ID | Requirement | Acceptance criteria | Tests |
 |---|---|---|---|
-| FR-M3-01 | Ingest flow as a daily series or as a DSİ monthly table (D10) | Daily: `Date` or `Tarih` and `Flow`, `Flow Q (m3/s)` or `Debi`. Monthly: detected automatically and converted by the log-normal split with sigma, lag-1 phi and seed from the wizard (D62). Monthly volumes are conserved exactly, and the result is flagged synthetic. | U-M3-01, C-M3-01, C-M3-02 |
+| FR-M3-01 | Ingest flow as a daily series or as a DSİ monthly table (D10) | Daily: `Date` and `Flow Q (m3/s)` (the Turkish headers `Tarih` and `Debi` are no longer read, D67). Monthly: detected automatically and converted by the log-normal split with sigma, lag-1 phi and seed from the wizard (D62). Monthly volumes are conserved exactly, and the result is flagged synthetic. | U-M3-01, C-M3-01, C-M3-02, W-M3-03 |
 | FR-M3-02 | Load grain fractions (D36) | `di` (m) and `Fi` required; `Fi` sums to 1 within 0.02. tau_ri is always computed from the formula (D50). A supplied `tau_ri` or `bi` is cross-checked; a difference above 1% adds a warning. The sample file agrees with the formula, so it gives no warning. | U-M3-02, C-M3-03 |
 | FR-M3-03 | Compute daily transport with the published Wilcock & Crowe function (D35) | W* is continuous at phi = 1.35 (relative jump below 1e-3; the published coefficients are rounded, so the branches differ by 4.2e-4, D47). Values match hand calculations at phi = 0.5, 1.0, 1.35, 2, 4 and 10. | U-M3-03, U-M3-04 |
 | FR-M3-04 | Summarise by water year when the series carries `Water_Year`, otherwise by calendar year | Group keys, annual mean flow, mean transport, annual volume (m³/yr) and mass (t/yr). Rows with bad dates or flows are dropped with a count in the warnings. Negative flow and a date listed twice are errors; days missing between the first and last date are counted in a warning (D69). | U-M3-05, C-M3-04 |
@@ -261,8 +261,8 @@ All inputs are copied into the project (FR-M1-02). Every column has **one canoni
 
 **Open issues** (need an owner before the milestone that depends on them)
 
-| ID | Issue | Needed by |
-|---|---|---|
+| ID | Issue | Needed by | Status |
+|---|---|---|---|
 | OI-01 | Çubuk 2: Hmax - Hbed = 5.3 m for 22.4 hm³ implies a surface of about 8 to 17 km². Confirm that `Bottom Elevation of River` is the bed at the dam axis. | M4 | Closed 2026-10-26: the hydrologist said to take it as the bed at the dam axis |
 | OI-02 | Commissioning years and (optionally) Hmin for the three sample dams are missing. The integration goldens use placeholder years (commissioned 1990, analysed 2020) until they are supplied. | M4 | Closed 2026-10-26: the user enters the commissioning year (and Hmin) in the application, step 3 and step 6; the placeholder years stay in the goldens only |
 | OI-03 | Convention check: "analysis year" is treated as the first year *not yet* accumulated (so the default, the current year, excludes the incomplete current year). | M4 | Closed 2026-10-26: the hydrologist approved the convention (D56) |
@@ -270,6 +270,7 @@ All inputs are copied into the project (FR-M1-02). Every column has **one canoni
 | OI-05 | Hydrologist confirmation of the shape classes (gorge 1.25, hill 2, foothill 3, lake 4) and of the plausibility thresholds in FR-M4-01. | M4 | Closed 2026-10-26: the shape classes stay as the default; an Hmin the user enters takes precedence |
 | OI-06 | Independent hand calculations for `tests/verification/` (the spreadsheet is written by the developer, reviewed by the hydrologist). Closed for M2: the hydrologist signed off `suspended_verification.xlsx`. | M2 |
 | OI-07 | The dam sheet is cross-checked against the sum of the dam's sub-basin areas and their area-weighted mean slope (D43). A downstream dam holds the *incremental* catchment in the table (D21) but the total drainage area in its sheet, so its area check will warn. Decide whether to compare against the cumulative upstream area. | M4 |
+| OI-08 | The golden manifests record a `code_version` that is a branch commit not on `main` (suspended 582e3d6, reservoir 6e41806, bedload 4d7a0a3, integration 3cbc7d3), and the bedload and integration manifests do not record the lag-1 phi (0 for every golden). Fix both at the next regeneration, which needs hydrologist sign-off anyway; the goldens themselves are unaffected. | Next regeneration | Open |
 
 ---
 
@@ -313,7 +314,7 @@ Three layers; imports point downward only (D16).
 
 | Module | Status | Notes |
 |---|---|---|
-| `src/core/rusle.py` | kept | Formulas unchanged (D37). Dead helpers removed (`raster_mean_t_ha_yr`, `to_phase2_handoff`). Gains the `Drainage Area (km2)` alias. |
+| `src/core/rusle.py` | kept | Formulas unchanged (D37). Dead helpers removed (`raster_mean_t_ha_yr`, `to_phase2_handoff`). Reads the canonical `Drainage Area (km2)` label (D67). |
 | `src/core/wilcock.py` | kept, changed | D35 and D36 fixes. `BedloadVisualizer` and the matplotlib import move to `services/reporting.py` (done in M3.1). |
 | `src/core/monthly_flow_preprocessor.py` | kept, trimmed | `load`, `export_csv` and `main` moved to `services/flow_files.py` in M3.1 (`run`, which only called `load`, is gone). |
 | `src/core/reservoir.py` | new | Curve fit, table, inverse, area, plausibility checks |
@@ -411,7 +412,7 @@ All volumes in hm³ from here (m³ / 10⁶).
 - sediment elevation for a cumulative volume *S*: `H(S)`, clamped to Hcrest with a warning
 - rates: mean `T̄`, `T_min = min T(y)`, `T_max = max T(y)`
 - accumulation to date, with commissioning year *c* and analysis year *a*: `S0 = Σ T'(y)` for `c <= y < a`, where `T'(y) = T(y)` for years in the record and `T̄` otherwise
-- projection at rate *r*: `S(a + k) = S0 + k · r`, for k = 0 to 100
+- projection at rate *r*: `S(a + k) = S0 + k · r`, for k = 0 to the years entered (100 by default, at most 1000; D61, D69)
 - lifespan at rate *r*: `a + (Vdead - S0) / r`; if `S0 >= Vdead`, "already exceeded"; if `r = 0`, "not reached"
 
 In the DSİ case the record years are water-year labels, and they are used as-is.
@@ -437,7 +438,7 @@ Run-folder slugs use `to_ascii_turkish`, lowercased, with spaces replaced by und
 
 ## B6. Test strategy
 
-The current suite is not trusted (D24). It is rebuilt in four layers (D28), planned together with the requirements in A6.
+The suite was rebuilt in four layers (D28, after D24), planned together with the requirements in A6.
 
 | Layer | ID prefix | Folder | Oracle |
 |---|---|---|---|
@@ -472,7 +473,7 @@ The traceability matrix is the Tests column in A6.
 
 **CI** (`.github/workflows/ci.yml`, D25): on push and pull request, on `windows-latest`: checkout, `setup-python` 3.14, `pip install -r requirements.txt`, `ruff check .`, `ruff format --check .`, `pytest`. A failing run blocks the merge to `main` through branch protection. There is no mypy or coverage gate.
 
-**Local tooling.** Shared Claude config (`.claude/` and `.agents/`, except `.claude/settings.local.json`) is tracked (D27), so the team works with the same skills, hooks and agents. CI never depends on them. `/validate-calc-engine` is updated locally in M0.
+**Local tooling.** Shared Claude config (`.claude/`, except `.claude/settings.local.json`) is tracked (D27), so the team works with the same skills, hooks and agents. CI never depends on them. `/validate-calc-engine` is updated locally in M0.
 
 **Packaging and release** are out of scope (D30).
 
@@ -483,7 +484,7 @@ Each milestone is a vertical slice: services, wizard step, tests and sign-off. E
 | Milestone | Tasks | Exit criteria | Status |
 |---|---|---|---|
 | **M0 Pipeline setup** | Fast-forward local `main` to `origin/main` (it already contains `branch1`), then retire `branch1` and `branch2` (confirm before deleting remote branches). Add ruff and one formatting-only commit with no logic changes. Add the `.gitignore` exceptions. Add the CI workflow and branch protection. Move current tests to `tests/legacy/` and create the new layout with one import smoke test. Create `src/services/`. | CI is green on a pull request; `pytest` runs the new layout only | Done |
-| **M1 Regional data** | Project model, `project.json`, import-copy. Basin and dam-sheet validators, including the `Drainage Area (km2)` alias and cross-checks. Wizard shell with steps 1 to 3. Remove the old tabs, back-compat shims, `src/data/database.py` and dead code. Update the architecture section of `CLAUDE.md`. | FR-M1-* tests pass; the three sample dams load; the app opens to the wizard | Done (steps 1 to 3 and the cut-over; the old UI is tagged `legacy-ui`) |
+| **M1 Regional data** | Project model, `project.json`, import-copy. Basin and dam-sheet validators, including the `Drainage Area (km2)` label and cross-checks. Wizard shell with steps 1 to 3. Remove the old tabs, back-compat shims, `src/data/database.py` and dead code. Update the architecture section of `CLAUDE.md`. | FR-M1-* tests pass; the three sample dams load; the app opens to the wizard | Done (steps 1 to 3 and the cut-over; the old UI is tagged `legacy-ui`) |
 | **M2 Suspended** | Suspended service and step 4. Verification workbook for B3.1. Golden outputs for the three dams. | FR-M2-* tests pass; hydrologist signs off the goldens | Done (the hydrologist signed off the workbook; the goldens in `tests/benchmarks/` equal its three sample cases) |
 | **M3 Bedload** | D35 and D36 fixes. Move plotting and file I/O out of core. Bedload service and step 5. Before and after table for the hydrologist. | FR-M3-* tests pass; OI-04 closed | Built and signed off by the hydrologist (OI-04, 2026-10-26): M3.1 (formulas, oracle, core clean-up, before and after table) and M3.2 (bedload service, step 5, goldens) |
 | **M4 Reservoir and projection** | `reservoir.py`, `projection.py`, `integration.py`. Steps 6 and 7. Commissioning years and Hmin collected (OI-02). | FR-M4-* tests pass; OI-01, OI-03, OI-05 closed | Done: M4.1 (curve, service and step 6) and M4.2 (integration, projection, step 7, `src/data/` removed); OI-01, OI-02, OI-03 and OI-05 closed 2026-10-26; goldens signed off by the hydrologist 2026-10-26 (the integration and projection goldens use placeholder years, so their dam values are provisional until the real years are entered) |
@@ -546,14 +547,14 @@ The evidence column describes the code before M1. Files removed in M1.5 can be r
 | D24 | Rebuild the test suite | The current tests were not planned |
 | D25 | CI on `windows-latest` with ruff and pytest; blocking | Free for a public repo; Tk tests need Windows |
 | D26 | Branch, test-first, review, squash; hydrologist sign-off for numeric changes | Small reviewable steps |
-| D27 | Shared `.claude/` and `.agents/` config is tracked; `.claude/settings.local.json` stays untracked | Team uses the same skills and hooks; the local file holds per-machine permissions |
+| D27 | Shared `.claude/` config is tracked; `.claude/settings.local.json` stays untracked | Team uses the same skills and hooks; the local file holds per-machine permissions |
 | D28 | Four test layers with traceability | See B6 |
 | D29 | Old tests go to `tests/legacy/`, local only | Safety net without blocking merges |
 | D30 | Packaging and release out of scope | Deferred by the owner |
 | D31 | Loose `>=` dependency ranges; add ruff | Owner's choice |
 | D32 | Roadmap M0, then vertical slices M1 to M5; old UI removed in M1 | Avoids maintaining two UIs |
 | D33 | Imports are copied into the project; originals untouched | Portable, auditable project folder |
-| D34 | Spec at the repo root, pointer in `CLAUDE.md` | Found by future sessions |
+| D34 | Spec in `docs/project_spec.md`, pointer in `CLAUDE.md` | Found by future sessions |
 | D35 | Fix the missing square root in the W&C high-transport branch | Transcription error: discontinuity at phi = 1.35 and a 3x to 6x overstatement |
 | D36 | tau_ri is always computed; a supplied value is cross-checked | A computed value does not depend on a rounded or hand-edited column, which stays as a check. (Recorded when the sample column looked off by di / D50; D50 shows that was the formula, and the column now agrees) |
 | D37 | Keep `0.51 · A^(-0.11)` with area in km² | Accepted (AL-04) |
@@ -579,8 +580,8 @@ The evidence column describes the code before M1. Files removed in M1.5 can be r
 | D57 | Step 7 has nothing to enter: it uses steps 3 to 6 and needs the commissioning year, and without it says so and names step 3. The service writes `integration.csv` (per year: suspended and bedload as they stay after TE, total, elevation) and `projection.csv` (cumulative volume and elevation at each rate) into a folder it is given; the year-by-year accumulation stays in the result. The chart is drawn by `reporting.py`; saving it is M5 | Same boundary as D45, D49 and D53; D42 lets steps 4 to 6 run without a commissioning year, so this is the first step that cannot |
 | D58 | `src/data/` and `tests/legacy/test_reporter.py` are removed | Nothing used them after M4.2 and the new modules replace them |
 | D59 | The M4.2 oracle is a workbook with one sheet of live formulas for each of seven cases, plus four CSVs worked out with `math` in `tests/verification/make_integration_oracle.py`. The goldens use placeholder commissioning and analysis years (1990 and 2020, OI-02) | Same method as D46. The real years of the three dams are not known |
-| D60 | The level interval of the table is an input of step 6: a number above 0 m, 0.5 m by default, read with a point or a comma. It sets only the table, its chart and its CSV, and it supersedes the 0.5 m step of D51 (the grid still starts at Hbed and a crest off it closes the table). It is not kept on the dam, and changing it un-completes step 6 without resetting later steps | The user asked to choose the interval. The curve, the integration and the projection do not depend on it, so it is not a model input and does not belong in `project.json` (D52). Step 7 reads the curve, not the table |
-| D61 | The length of the projection is an input of step 7: a whole number of years of at least 1, 100 by default, read with a point or a comma. It sets only the projection table and chart; the accumulation, rates and lifespans do not depend on it and the lifespan is not cut at it (D56). It is not kept on the dam, and changing it un-completes step 7 until Compute | The user asked to choose the horizon instead of the fixed 100 years. It changes no calculated number, so like D60 it is not a model input. The length is limited to 1000 years (D69) |
+| D60 | The level interval of the table is an input of step 6: a number above 0 m, 0.5 m by default, read with a point as the decimal separator (D66). It sets only the table, its chart and its CSV, and it supersedes the 0.5 m step of D51 (the grid still starts at Hbed and a crest off it closes the table). It is not kept on the dam, and changing it un-completes step 6 without resetting later steps | The user asked to choose the interval. The curve, the integration and the projection do not depend on it, so it is not a model input and does not belong in `project.json` (D52). Step 7 reads the curve, not the table |
+| D61 | The length of the projection is an input of step 7: a whole number of years of at least 1, 100 by default, read with a point as the decimal separator (D66). It sets only the projection table and chart; the accumulation, rates and lifespans do not depend on it and the lifespan is not cut at it (D56). It is not kept on the dam, and changing it un-completes step 7 until Compute | The user asked to choose the horizon instead of the fixed 100 years. It changes no calculated number, so like D60 it is not a model input. The length is limited to 1000 years (D69) |
 | D62 | The monthly-to-daily split can carry a lag-1 autocorrelation φ in the log-flow (AR(1)): `0 ≤ φ < 1`, default 0, a setting of step 5 next to sigma and seed and kept on the dam (`flow.phi` in `project.json`; a project saved without it opens with 0). The chain runs on across month boundaries; each month's innovations still come from a generator seeded by `(seed, year, month)`, and every month is rescaled to its observed volume | The user asked for flood waves and dry-spell decay instead of independent daily noise. At φ = 0 the output is identical to the split of D10, so the bedload goldens are unchanged and need no new sign-off; a non-zero default would need them regenerated and signed off |
 | D63 | The run folder is written by `src/services/run_export.py` (`export_run`), not by `reporting.py`, which keeps the charts (and gains `annual_volume.png` and `projection.png`). The folder is `outputs/<dam-slug>_<YYYYMMDD_HHMM>/`, and a run that finds it taken gets `_2`, `_3`, ... so none is overwritten. Every input is hashed before the folder is created, so a missing input is an error naming it and leaves no folder; `run.json` is written last, and a folder whose writing fails is removed. `run.json` also holds the project name and the parameters as name, value and unit; the level interval is the one entered in step 6 (`CurveResult.step_m`), `Hmin` is the one entered (blank when a shape class fixed the curve) and `Hmin of the curve` the level the curve gives | B2 listed workbook, charts, CSV and `run.json` in one file, which already held the charts and would have mixed drawing with file layout. Minute-resolution names can collide when a run is exported twice, and B4 says a run never overwrites another. Nothing here changes a calculated number |
 | D64 | `results.xlsx` has the eight sheets of FR-M5-02. Suspended, Bedload, Annual, Curve and Projection are the tables of the CSV goldens (Suspended with its `Total` row). Inputs has the columns Group, Item, Value, Unit and SHA-256 (groups Run, Parameter and File). Extremes holds the Minimum and Maximum rows (Year, Total_hm3, Elevation_m), then a blank row and a table of the accumulation to date, the dead volume, the annual rates and the lifespan at each rate (a year, or the text "Already exceeded in X" or "Not reached"). Warnings has Phase and Warning, one row for each warning of the zonal means and dam sheet (Inputs), suspended, bedload, curve and integration, headed even when empty (NFR-04). The CSVs are the five of the phases; the extremes are in the workbook only | FR-M5-02 names the sheets but not their columns. The accumulation and lifespans appear in no other sheet, and Extremes is where the reader looks for the years that bound the record. `tests/pipeline/test_run_export.py` compares the tables with the existing goldens, so no new golden or sign-off is needed |

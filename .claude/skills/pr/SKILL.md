@@ -57,7 +57,7 @@ Write the body to a file in `$CLAUDE_JOB_DIR/tmp` (or the scratchpad) and create
 
 Run `gh pr checks --watch` and wait for the `ci` check. Report the result.
 
-- **Green:** tell the user the PR URL. Merge only if they have asked to, or if the standing rule applies: squash-merge with `gh pr merge --squash --delete-branch`. That command asks for approval, so it will not run silently.
+- **Green:** tell the user the PR URL. Merge only if the user has asked to: squash-merge with `gh pr merge --squash --delete-branch`. That command asks for approval, so it will not run silently.
 - **Red:** run `gh run view --log-failed`, summarise the failing step and the first error, and stop. Do not retry the push or skip checks.
 
 ## 6. Report

@@ -396,6 +396,19 @@ def test_c_x_02_a_separator_at_the_end_of_every_row_is_refused_and_named(tmp_pat
         load_basin_table(path)
 
 
+def test_c_x_04_a_validation_error_names_the_file_the_row_and_the_column(tmp_path):
+    path = _basins(
+        tmp_path, "Kavşakkaya,Sakarya,Ankara Alt Havzası,309.2,0.23", "Çubuk 1,Sakarya,Ankara Alt Havzası,x,0.09"
+    )
+
+    with pytest.raises(TableError) as raised:
+        load_basin_table(path)
+
+    message = str(raised.value)
+    assert "basins.csv" in message and "row 3" in message and "'Drainage Area (km2)'" in message
+    assert raised.value.problems[0].cells == ((3, "Drainage Area (km2)"),)
+
+
 def test_c_x_03_name_key_folds_turkish_case_and_spacing():
     assert name_key("  ÇUBUK   1 ") == name_key("Çubuk 1") == name_key("cubuk 1")
     assert name_key("İznik Barajı") == name_key("IZNIK BARAJI") == name_key("iznik baraji")
