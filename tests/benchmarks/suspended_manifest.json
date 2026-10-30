@@ -1,7 +1,6 @@
 {
-  "code_version": "582e3d6",
   "inputs": {
     "master_yield.csv": "7b8599a2896eaf5dd88f9f2edd725e90531e24245e7eeadf5cfe0cb1da434a0f",
-    "raw_zonal_means.csv": "c9fa8154e53c2b3d3f44d3e84040c485307c115c8f75371513ac3446e80e06f5"
+    "raw_zonal_means.csv": "f26833e1b9c1b00f5bd9bc7fc91222737754db4f6f854e224f362be186681ae4"
   }
 }
