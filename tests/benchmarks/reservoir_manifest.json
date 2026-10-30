@@ -1,5 +1,4 @@
 {
-  "code_version": "6e41806",
   "shape_classes": {
     "kavsakkaya": "foothill",
     "cubuk_1": "hill",
@@ -7,9 +6,9 @@
   },
   "inputs": {
     "master_yield.csv": "7b8599a2896eaf5dd88f9f2edd725e90531e24245e7eeadf5cfe0cb1da434a0f",
-    "raw_zonal_means.csv": "c9fa8154e53c2b3d3f44d3e84040c485307c115c8f75371513ac3446e80e06f5",
-    "kavsakkaya_bathymetry.csv": "5d4ccfbed3648371d159a65f7b7a80b97c8f85974d83852085d6a940437c6483",
-    "cubuk_1_bathymetry.csv": "c53318ef3d1edc62027a0e844f4e36d5f126cefebf4eb11105b2c3b1f21febd8",
-    "cubuk_2_bathymetry.csv": "e81e4f86d02d20f94e24be19c3af77fe008ec4acc07ef0105d3a49a4a29b3394"
+    "raw_zonal_means.csv": "f26833e1b9c1b00f5bd9bc7fc91222737754db4f6f854e224f362be186681ae4",
+    "kavsakkaya_bathymetry.csv": "a1e997f4e67b6c2a45ac31dc9c1de6287834b7d70c777d700be95ee3bb3d5621",
+    "cubuk_1_bathymetry.csv": "bd4b5a3e46e84ebb9dcc3608b3e2a203e4fb4e376fcfdf415d53551d69d0ba17",
+    "cubuk_2_bathymetry.csv": "e65fcf33ef6d75903069663e8e6f3575d93e29720e1838e072b84b11cabbd491"
   }
 }
