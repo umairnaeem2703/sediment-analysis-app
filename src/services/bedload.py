@@ -29,7 +29,7 @@ from src.services.regional import (
     Loaded,
     Problem,
     TableError,
-    _is_blank,
+    is_blank,
     cell_text,
     parse_number,
     quote_cell,
@@ -105,7 +105,7 @@ def load_fractions(path) -> Loaded:
 
     rows, problems = [], []
     for position, (_, record) in enumerate(table.iterrows()):
-        if _is_blank(record):
+        if is_blank(record):
             continue
         row, entry = position + 2, {}
         for key in table.columns:
