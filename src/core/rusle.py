@@ -153,10 +153,6 @@ class ZonalMatcher:
         if not key:
             return {a for a in aliases if a}
 
-        digits_only = "".join(ch for ch in key_ascii if ch.isdigit())
-        if digits_only:
-            aliases.add(digits_only)
-
         for k in list(aliases):
             for pfx in _NAME_PREFIXES:
                 if k.startswith(pfx) and len(k) > len(pfx):

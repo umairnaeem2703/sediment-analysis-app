@@ -76,3 +76,11 @@ def test_u_m2_01_entries_whose_aliases_collide_do_not_resolve_to_the_last_one():
     resolved = ZonalMatcher.resolve_all(lookup, ["Havza 1"])
 
     assert resolved.means == [None]
+
+
+def test_u_m2_01_a_shared_number_alone_is_a_loose_match_to_report_and_not_an_exact_one():
+    lookup = _lookup(("Cubuk 1", 3.0), ("Kirmir 2", 9.0))
+
+    resolved = ZonalMatcher.resolve_all(lookup, ["Cubuk 2"])
+
+    assert list(resolved.loose) == ["Cubuk 2"]  # accepted only with the warning that lists it (FR-M2-01)
