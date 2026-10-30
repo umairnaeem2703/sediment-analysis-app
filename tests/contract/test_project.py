@@ -177,3 +177,17 @@ def test_c_m1_01_phi_round_trips_and_a_project_saved_without_it_opens_with_zero(
     file.write_text(json.dumps(data), encoding="utf-8")
 
     assert Project.open(tmp_path / "p").dams[0].flow.phi == 0.0
+
+
+def test_c_x_07_an_imported_file_is_recorded_in_the_project_log(tmp_path):
+    from src.utils.log import attach_project_log, detach_project_log
+
+    source = tmp_path / "basins.csv"
+    source.write_text("a,b\n1,2\n", encoding="utf-8")
+    project = Project.new(tmp_path / "project", "Region")
+    path = attach_project_log(project.folder)
+
+    project.import_file(source, "inputs/basins.csv")
+    detach_project_log()
+
+    assert f"Imported {source} as inputs/basins.csv." in path.read_text(encoding="utf-8")

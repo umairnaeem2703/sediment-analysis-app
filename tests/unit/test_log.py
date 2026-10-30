@@ -4,6 +4,7 @@ import logging
 
 import pytest
 
+from src.utils import log
 from src.utils.log import LOG_DIR, LOG_NAME, attach_project_log, detach_project_log, get_logger, log_file
 
 
@@ -55,3 +56,14 @@ def test_x_nfr_04_a_folder_that_cannot_hold_a_log_gives_no_file_and_no_error(tmp
     (tmp_path / LOG_DIR).write_text("in the way", encoding="utf-8")  # a file where the folder should be
 
     assert attach_project_log(tmp_path) is None and log_file() is None
+
+
+def test_x_nfr_04_the_file_rolls_over_instead_of_growing_without_a_limit(tmp_path, logger, monkeypatch):
+    monkeypatch.setattr(log, "MAX_BYTES", 300)
+    path = attach_project_log(tmp_path)
+
+    for number in range(30):
+        logger.info("a line that is long enough to fill the file after a few of them, number %d", number)
+    detach_project_log()
+
+    assert path.with_name("app.log.1").is_file() and path.stat().st_size <= 300 + 200

@@ -1,6 +1,7 @@
 """Logging: one logger, a console handler, and a log file in the project folder while a project is open (B5)."""
 
 import logging
+import logging.handlers
 from pathlib import Path
 from typing import Optional
 
@@ -8,7 +9,9 @@ LOGGER_NAME = "sediment"
 LOG_DIR, LOG_NAME = "logs", "app.log"
 _FORMAT = "%(asctime)s %(levelname)s %(message)s"
 
-_file_handler: Optional[logging.FileHandler] = None
+MAX_BYTES, BACKUPS = 1_000_000, 3  # the file rolls over to app.log.1 .. app.log.3, so the log stays small to send
+
+_file_handler: Optional[logging.handlers.RotatingFileHandler] = None
 
 
 def get_logger() -> logging.Logger:
@@ -32,7 +35,7 @@ def attach_project_log(folder) -> Optional[Path]:
     path = Path(folder) / LOG_DIR / LOG_NAME
     try:
         path.parent.mkdir(exist_ok=True)
-        handler = logging.FileHandler(path, encoding="utf-8")
+        handler = logging.handlers.RotatingFileHandler(path, maxBytes=MAX_BYTES, backupCount=BACKUPS, encoding="utf-8")
     except OSError:
         get_logger().warning("The log file %s can not be written.", path)
         return None
