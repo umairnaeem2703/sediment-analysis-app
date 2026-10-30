@@ -13,7 +13,7 @@ import math
 import numpy as np
 import pandas as pd
 
-from src.core.rusle import to_ascii_turkish, turkish_lower
+from src.core.text import to_ascii_turkish, turkish_lower
 from src.core.wilcock import FLOW_COLUMN, WATER_YEAR_COLUMN
 
 HM3_TO_M3 = 1_000_000.0

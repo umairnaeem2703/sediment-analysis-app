@@ -11,7 +11,7 @@ from typing import List, Sequence, Tuple
 import pandas as pd
 
 from src.core.monthly_flow_preprocessor import WATER_YEAR_MONTHS, YEAR_HEADER
-from src.core.rusle import to_ascii_turkish, turkish_lower
+from src.core.text import to_ascii_turkish, turkish_lower
 from src.core.wilcock import DATE_COLUMN, FLOW_COLUMN, WATER_YEAR_COLUMN
 
 # Basin table (master_yield.csv); the sub-basin label is also the join key of the zonal means.

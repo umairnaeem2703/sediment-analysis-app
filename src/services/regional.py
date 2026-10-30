@@ -13,7 +13,7 @@ from typing import Any, List, NamedTuple, Optional, Tuple
 
 import pandas as pd
 
-from src.core.rusle import name_key
+from src.core.text import name_key
 from src.services.labels import (
     ACTIVE_VOL,
     AREA,

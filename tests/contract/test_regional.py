@@ -1,7 +1,8 @@
 import pandas as pd
 import pytest
 
-from src.core.rusle import ZonalMatcher, name_key
+from src.core.rusle import ZonalMatcher
+from src.core.text import name_key
 from src.services.regional import (
     DamSheet,
     TableError,
