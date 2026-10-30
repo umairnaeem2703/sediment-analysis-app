@@ -15,13 +15,11 @@ from src.services.integration import (
     compute_dam_integration,
     parse_horizon,
 )
+from src.services.dam_run import INTEGRATION, STAGES
 from src.services.reporting import projection_figure
 from src.ui.common import add_table, bold_font, show_error
 from src.ui.steps.base import Step
-from src.ui.steps.bedload_step import BedloadStep
 from src.ui.steps.dam_step import DamStep
-from src.ui.steps.reservoir_step import ReservoirStep
-from src.ui.steps.suspended_step import SuspendedStep
 
 YEAR_KEY = "year"  # the first column of the annual grid; its heading is Water year or Year, as the result says
 # (result column, heading with its unit, width, number format)
@@ -49,16 +47,11 @@ class IntegrationStep(Step):
     which is entered here."""
 
     title = "Integration and projection"
+    stage = INTEGRATION
 
-    def __init__(
-        self, dam_step: DamStep, suspended_step: SuspendedStep, bedload_step: BedloadStep, reservoir_step: ReservoirStep
-    ):
+    def __init__(self, dam_step: DamStep):
         super().__init__()
         self.dam_step = dam_step
-        self.suspended_step = suspended_step
-        self.bedload_step = bedload_step
-        self.reservoir_step = reservoir_step
-        self.result: Optional[IntegrationResult] = None
         self._result_years: Optional[str] = None  # the years text when the result was made
         self._canvas: Optional[FigureCanvasTkAgg] = None
 
@@ -116,12 +109,10 @@ class IntegrationStep(Step):
     def compute(self) -> None:
         years_text = self.years_var.get().strip()
         try:
+            run = self.wizard.run
+            run.require(*STAGES[:-1])  # the suspended sediment, the bedload and the curve
             result = compute_dam_integration(
-                self.suspended_step.result,
-                self.bedload_step.result,
-                self.reservoir_step.result,
-                self.dam_step.chosen,
-                horizon_years=parse_horizon(years_text),
+                run.suspended, run.bedload, run.curve, run.dam, horizon_years=parse_horizon(years_text)
             )
         except ValueError as exc:
             show_error("Integration and projection", str(exc))

@@ -272,3 +272,22 @@ def test_w_m1_03_stored_values_are_shown_with_full_precision(app):
 
     assert step.efficiency_var.get() == "93.456789"
     assert step.h_min_var.get() == "1234.5678"
+
+
+def test_w_x_02_the_run_belongs_to_the_dam_in_use_and_goes_with_it(app):
+    wizard, step, _, _ = app
+    assert wizard.run is None
+
+    step.select_dam("cubuk_1")
+    step.use_dam()
+    first = wizard.run
+    assert first.dam.slug == "cubuk_1"
+
+    step.use_dam()  # nothing changed: the run, and with it the results, stays
+    assert wizard.run is first
+
+    step.select_dam("cubuk_2")
+    assert wizard.run is None
+
+    wizard.steps[1].commit_edit(1, "Main Waterway Slope", "0.1")
+    assert wizard.run is None

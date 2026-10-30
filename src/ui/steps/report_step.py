@@ -5,11 +5,7 @@ from typing import List, Optional
 from src.services.run_export import RunExport, collect_warnings, export_run
 from src.ui.common import bold_font, show_error
 from src.ui.steps.base import Step
-from src.ui.steps.bedload_step import BedloadStep
 from src.ui.steps.dam_step import DamStep
-from src.ui.steps.integration_step import IntegrationStep
-from src.ui.steps.reservoir_step import ReservoirStep
-from src.ui.steps.suspended_step import SuspendedStep
 
 
 class ReportStep(Step):
@@ -18,20 +14,9 @@ class ReportStep(Step):
 
     title = "Report"
 
-    def __init__(
-        self,
-        dam_step: DamStep,
-        suspended_step: SuspendedStep,
-        bedload_step: BedloadStep,
-        reservoir_step: ReservoirStep,
-        integration_step: IntegrationStep,
-    ):
+    def __init__(self, dam_step: DamStep):
         super().__init__()
         self.dam_step = dam_step
-        self.suspended_step = suspended_step
-        self.bedload_step = bedload_step
-        self.reservoir_step = reservoir_step
-        self.integration_step = integration_step
         self.exported: Optional[RunExport] = None
 
     def build(self, frame):
@@ -67,7 +52,8 @@ class ReportStep(Step):
         return self.exported is not None
 
     def on_show(self):
-        dam, integration = self.dam_step.chosen, self.integration_step.result
+        dam, run = self.dam_step.chosen, self.wizard.run
+        integration = run.integration if run is not None else None
         self.dam_var.set(f"Dam: {dam.name}" if dam else "")
         if dam is None or integration is None:
             return
@@ -78,7 +64,7 @@ class ReportStep(Step):
                 for label, extreme in (("Minimum", lowest), ("Maximum", highest))
             )
         )
-        warnings = collect_warnings(self._input_warnings(dam), *self._results())
+        warnings = collect_warnings(self._input_warnings(dam), *run.results())
         self.warning_var.set("\n".join(f"{phase}: {text}" for phase, text in warnings))
 
     def reset(self):
@@ -87,15 +73,6 @@ class ReportStep(Step):
             variable.set("")
 
     # --- actions ------------------------------------------------------------------------------
-
-    def _results(self):
-        """The suspended, bedload, curve and integration results of steps 4 to 7."""
-        return (
-            self.suspended_step.result,
-            self.bedload_step.result,
-            self.reservoir_step.result,
-            self.integration_step.result,
-        )
 
     def _input_warnings(self, dam) -> List[str]:
         """The warnings of the basin table, the zonal means and the dam sheet, which the results do not carry."""
@@ -106,7 +83,13 @@ class ReportStep(Step):
             return []
 
     def export(self) -> None:
-        project, dam, results = self.wizard.project, self.dam_step.chosen, self._results()
+        project, run = self.wizard.project, self.wizard.run
+        try:
+            results = run.results()
+        except ValueError as exc:
+            show_error("Report", str(exc))
+            return
+        dam = run.dam
 
         def task():
             return export_run(project, dam, *results, input_warnings=self._input_warnings(dam))
