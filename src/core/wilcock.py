@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 import math
 from typing import List
 
@@ -12,20 +11,6 @@ FLOW_COLUMN = "Flow Q (m3/s)"
 WATER_YEAR_COLUMN = "Water_Year"  # Oct (Y-1) to Sep (Y), carried by DSI-derived daily series
 PHI_BREAK = 1.35
 SUPPLIED_TOLERANCE = 0.01  # a supplied tau_ri or bi this far (relative) from the computed value is warned about
-
-
-@dataclass
-class HydraulicParameters:
-    tau: float
-    u_star: float
-
-
-@dataclass
-class FractionRecord:
-    di: float
-    Fi: float
-    bi: float
-    tau_ri: float
 
 
 class FractionalModel:
@@ -206,8 +191,6 @@ class TimeSeriesAggregator:
             Annual_Average_Flow=("Flow Q (m3/s)", "mean"),
             Average_Rate_m2_s=("Daily_Bedload_Rate", "mean"),
         )
-
-        annual_summary["Annual_Average_Bedload"] = annual_summary["Average_Rate_m2_s"]
 
         # The annual volume in m3 (mean rate times the channel width times the seconds in a year).
         annual_summary["Annual_Total_Bedload_m3_yr"] = (

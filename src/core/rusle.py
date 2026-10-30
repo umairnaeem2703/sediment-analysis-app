@@ -1,6 +1,5 @@
 import math
 import unicodedata
-from dataclasses import asdict, dataclass
 from typing import Dict, List, NamedTuple, Optional, Set
 
 import pandas as pd
@@ -79,22 +78,6 @@ def to_ascii_turkish(text: str) -> str:
         ord("Û"): "U",
     }
     return str(text).translate(ascii_map)
-
-
-@dataclass
-class RusleMetrics:
-    raster_mean_t_ha_yr: float
-    area_ha: float
-    gross_mass_t: float
-    usda_scs_sio: float
-    cem_sio: float
-    avg_sio: float
-    yield_mass_t: float
-    volume_m3: float
-    specific_yield_m3_km2: float
-
-    def to_dict(self) -> dict:
-        return asdict(self)
 
 
 class ZonalMatcher:
@@ -299,14 +282,14 @@ class YieldCalculator:
         volume_m3 = yield_mass_t / self.bulk_density
         specific_yield = volume_m3 / area_km2
 
-        return RusleMetrics(
-            raster_mean_t_ha_yr=raster_mean_t_ha_yr,
-            area_ha=area_ha,
-            gross_mass_t=gross_mass_t,
-            usda_scs_sio=usda_scs_sio,
-            cem_sio=cem_sio,
-            avg_sio=avg_sio,
-            yield_mass_t=yield_mass_t,
-            volume_m3=volume_m3,
-            specific_yield_m3_km2=specific_yield,
-        ).to_dict()
+        return {
+            "raster_mean_t_ha_yr": raster_mean_t_ha_yr,
+            "area_ha": area_ha,
+            "gross_mass_t": gross_mass_t,
+            "usda_scs_sio": usda_scs_sio,
+            "cem_sio": cem_sio,
+            "avg_sio": avg_sio,
+            "yield_mass_t": yield_mass_t,
+            "volume_m3": volume_m3,
+            "specific_yield_m3_km2": specific_yield,
+        }

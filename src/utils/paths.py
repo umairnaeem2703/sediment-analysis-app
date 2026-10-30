@@ -25,6 +25,22 @@ def _without_shifted_columns(df: pd.DataFrame, path: Path) -> pd.DataFrame:
     return df
 
 
+_ENCODINGS = ("utf-8-sig", "cp1254", "iso-8859-9", "windows-1252")  # utf-8-sig also reads utf-8 without a BOM
+
+
+def _read_csv(path: Path, encoding: str, dtype) -> pd.DataFrame:
+    df = pd.read_csv(path, encoding=encoding, dtype=dtype)
+    # Handle semicolon-delimited CSVs commonly exported by Turkish Excel
+    if len(df.columns) == 1 and ";" in str(df.columns[0]):
+        try:
+            df_semi = pd.read_csv(path, encoding=encoding, sep=";", dtype=dtype)
+        except Exception:
+            df_semi = None
+        if df_semi is not None and len(df_semi.columns) > 1:
+            return _without_shifted_columns(df_semi, path)
+    return _without_shifted_columns(df, path)
+
+
 def read_table(file_path: str, dtype=None) -> pd.DataFrame:
     """Load CSV or Excel using a case-insensitive suffix. Handles UTF-8 and Turkish encodings (e.g. CP1254, ISO-8859-9).
 
@@ -33,26 +49,12 @@ def read_table(file_path: str, dtype=None) -> pd.DataFrame:
     path = Path(file_path)
     suffix = path.suffix.lower()
     if suffix == ".csv":
-        encodings = ["utf-8-sig", "utf-8", "cp1254", "iso-8859-9", "windows-1252", "latin1"]
-        last_exc = None
-        for enc in encodings:
+        for encoding in _ENCODINGS:
             try:
-                df = pd.read_csv(path, encoding=enc, dtype=dtype)
-                # Handle semicolon-delimited CSVs commonly exported by Turkish Excel
-                if len(df.columns) == 1 and ";" in str(df.columns[0]):
-                    try:
-                        df_semi = pd.read_csv(path, encoding=enc, sep=";", dtype=dtype)
-                    except Exception:
-                        df_semi = None
-                    if df_semi is not None and len(df_semi.columns) > 1:
-                        return _without_shifted_columns(df_semi, path)
-                return _without_shifted_columns(df, path)
-            except (UnicodeDecodeError, UnicodeError) as exc:
-                last_exc = exc
+                return _read_csv(path, encoding, dtype)
+            except UnicodeError:
                 continue
-        if last_exc:
-            raise last_exc
-        return pd.read_csv(path, dtype=dtype)
+        return _read_csv(path, "latin1", dtype)  # latin1 decodes every byte, so the last try cannot fail on encoding
     if suffix in {".xlsx", ".xls"}:
         return pd.read_excel(path, dtype=dtype)
     raise ValueError(f"Unsupported table format: {path.suffix}")
