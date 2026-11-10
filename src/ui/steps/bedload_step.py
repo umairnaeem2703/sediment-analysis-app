@@ -3,7 +3,7 @@ from pathlib import Path
 from tkinter import ttk
 from typing import Optional, Tuple
 
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
 from src.core.wilcock import WATER_YEAR_COLUMN
 from src.services.bedload import (
@@ -19,7 +19,7 @@ from src.services.bedload import (
 )
 from src.services.dam_run import BEDLOAD
 from src.services.reporting import bedload_trend_figure
-from src.ui.common import add_table, bold_font, browse_open_file, show_error, show_warning
+from src.ui.common import add_point_readout, add_table, bold_font, browse_open_file, show_error, show_warning
 from src.ui.steps.base import Step
 from src.ui.steps.dam_step import DamStep
 
@@ -60,6 +60,7 @@ class BedloadStep(Step):
         self.phi_var = tk.StringVar()
         self.flag_var = tk.StringVar()
         self.summary_var = tk.StringVar()
+        self.record_var = tk.StringVar()
         self.warning_var = tk.StringVar()
         for variable in (self.sigma_var, self.seed_var, self.phi_var):
             variable.trace_add("write", lambda *_: self.wizard.refresh())  # editing the fields un-completes the step
@@ -93,6 +94,7 @@ class BedloadStep(Step):
             anchor="w"
         )
         ttk.Label(info, textvariable=self.summary_var, font=self.bold_font).pack(anchor="w")
+        ttk.Label(info, textvariable=self.record_var, wraplength=640, justify=tk.LEFT).pack(anchor="w")
 
         results = ttk.Notebook(frame)
         results.grid(row=2, column=0, sticky="nsew", padx=10, pady=4)
@@ -207,12 +209,17 @@ class BedloadStep(Step):
         self.summary_var.set(
             f"Mean bedload: {result.mean_volume_m3_yr:,.0f} m³/yr over {count} {year_heading.lower()}(s)."
         )
+        self.record_var.set("\n".join(result.record_lines))
         if result.synthetic:
             self.flag_var.set("⚠ Synthetic daily flow. " + " ".join(result.notes))
         self.warning_var.set("\n".join(result.warnings))
-        self._canvas = FigureCanvasTkAgg(bedload_trend_figure(result.table), master=self.chart_frame)
+        self._chart = ttk.Frame(self.chart_frame)  # the canvas and its zoom and pan toolbar
+        self._chart.pack(fill=tk.BOTH, expand=True)
+        self._canvas = FigureCanvasTkAgg(bedload_trend_figure(result.table), master=self._chart)
+        NavigationToolbar2Tk(self._canvas, self._chart, pack_toolbar=False).pack(side=tk.BOTTOM, fill=tk.X)
         self._canvas.draw()
         self._canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        add_point_readout(self._canvas)
         self.wizard.refresh()
 
     def _changed(self, reason: str) -> None:
@@ -227,10 +234,10 @@ class BedloadStep(Step):
     def _clear_result(self) -> None:
         self.result = self._result_entries = None
         self.tree.delete(*self.tree.get_children())
-        for variable in (self.flag_var, self.summary_var, self.warning_var):
+        for variable in (self.flag_var, self.summary_var, self.record_var, self.warning_var):
             variable.set("")
         if self._canvas is not None:
-            self._canvas.get_tk_widget().destroy()
+            self._chart.destroy()
             self._canvas = None
 
     def _render_inputs(self, reload_fields: bool) -> None:

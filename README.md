@@ -199,8 +199,9 @@ $q_b = \sum_i q_{b,i}$ is the transport per unit width (m²/s). The annual volum
 **What you get.**
 
 - Summary line: *"Mean bedload: … m³/yr over N years."*
+- Under it, how the load is spread over the record: the share of the 3 largest years, the median year against the mean and the mean without the largest year, the years that carry under 1 % of the mean, and the rank correlation of the bedload with the annual mean flow. A line starts with ⚠ when the 3 largest years carry more than half the bedload, or when the rank correlation is below 0.5, which suggests checking the flow file or, for a synthetic flow, another seed. These lines change no number. (D74)
 - **Annual table** tab: *Year* (or *Water year*), *Mean flow (m³/s), Mean transport (m²/s), Volume (m³/yr), Mass (t/yr)*.
-- **Trend chart** tab: annual flow and bedload on twin axes.
+- **Trend chart** tab: annual flow and bedload on twin axes. Hover over a point to read its year, flow and bedload; the toolbar under the chart zooms, pans and saves the chart.
 
 **How to read it.**
 
@@ -208,6 +209,25 @@ $q_b = \sum_i q_{b,i}$ is the transport per unit width (m²/s). The annual volum
 - When the flow was made from a monthly table, the result is flagged *"⚠ Synthetic daily flow."* and a note names sigma, phi, seed and the number of water years. Bedload depends strongly on how the month is split, so treat the number as an estimate that depends on sigma and phi. The monthly volumes themselves are exact.
 - The last year of a daily record may be partial; its annual volume is still the mean daily rate over a full year.
 - Fixed channel geometry means the numbers describe a standard channel, not the surveyed cross-section at the dam.
+
+**Trend insights.** Beside the annual table and the trend chart, the step describes how the bedload is spread over the record. These insights summarise the result and change no number.
+
+| Insight | What it says | How it is computed | Flag (⚠) |
+|---|---|---|---|
+| Share of the largest years | The 3 largest years and the share of the total bedload they carry | Load of the 3 largest years ÷ total load | When the share is above 50 % |
+| Median and mean without the largest year | The typical year against the mean, and how much the mean falls without the single largest year | Median of the annual loads; the mean of all years but the largest, as a change from the mean | Not flagged |
+| Negligible years | How many years carry under 1 % of the mean annual load, and which | Years whose load is below 1 % of the mean | Not flagged |
+| Rank correlation | Whether the bedload follows the order of the annual mean flow | Spearman's ρ: the correlation of the ranks of flow and load | When ρ is below 0.5 |
+
+The lines appear only for a record of more than three years with some bedload. The rank correlation is left out when the flow or the load is the same in every year.
+
+**Reading the trend insights.**
+
+- **A high share of the largest years** means the mean rests on a few wet years. Check the flow for those years before you rely on the mean, and report the median with it.
+- **A low rank correlation** means the years that carry the most flow do not carry the most bedload. Check the flow file for wrong units, shifted dates or a wrong column. For a synthetic flow, try another seed, since the split of the months decides the daily peaks.
+- **Many negligible years** are normal in a record with dry years. They show that the load comes in bursts; they are not an error by themselves.
+
+**Reading the trend chart.** Hover over a point to read it. The nearest point within about 10 pixels is ringed, and the note shows the year and the value of each series at that year: the mean flow (m³/s) and the bedload (t/yr). Values of 100 or more are shown as whole numbers with a thousands separator, smaller ones with three significant figures. The note moves to the other side near the chart edges, and it hides when the pointer leaves the chart. Use the toolbar's zoom and pan to separate points that lie close together.
 
 **Warnings.** Rows dropped for a missing or unreadable flow or date (with counts); a supplied `bi` or `tau_ri` that disagrees with the computed value.
 

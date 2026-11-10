@@ -110,6 +110,7 @@ def test_w_m3_01_compute_fills_the_table_the_chart_and_the_synthetic_flag(app):
     assert step.tree.heading("year")["text"] == "Water year"
     assert "Mean bedload" in step.summary_var.get() and "39 water year(s)" in step.summary_var.get()
     assert "Synthetic daily flow" in step.flag_var.get() and "seed 0" in step.flag_var.get()
+    assert step.record_var.get().startswith("⚠ The 3 largest years (1981, 1979, 1980) carry 90% of the bedload.")
     assert step._canvas is not None and step._canvas.get_tk_widget().winfo_exists()
     wizard.refresh()
     assert not wizard.next_button.instate(["disabled"])

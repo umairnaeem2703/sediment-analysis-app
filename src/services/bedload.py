@@ -2,7 +2,8 @@
 
 `load_flow` and `load_fractions` read and check the two inputs; `import_flow` and `import_fractions` copy them into the
 project (the file the user picked is only read). `compute_bedload` turns a flow series and the grain fractions into the
-annual table, and `compute_dam_bedload` does so from the copies held by a project. `write_bedload_csv` writes
+annual table, and `compute_dam_bedload` does so from the copies held by a project; `BedloadResult.record_lines` says
+how the load is spread over the years (D74). `write_bedload_csv` writes
 `bedload.csv` into a folder it is given; the run folder itself belongs to the reporting service (M5).
 """
 
@@ -13,6 +14,7 @@ from typing import List, NamedTuple, Optional, Sequence, Tuple
 
 import pandas as pd
 
+from src.core.record import CONCENTRATED_SHARE, NEGLIGIBLE_SHARE, TOP_YEARS, WEAK_RANK_CORRELATION, record_stats
 from src.core.monthly_flow_preprocessor import DEFAULT_PHI, MAX_SIGMA, WARN_SIGMA, prepare_daily_flow
 from src.core.wilcock import FractionalModel, TimeSeriesAggregator, check_daily_flow
 from src.services.labels import (
@@ -70,6 +72,36 @@ class BedloadResult(NamedTuple):
     @property
     def mean_volume_m3_yr(self) -> float:
         return float(self.table[VOLUME_M3].mean())
+
+    @property
+    def record_lines(self) -> List[str]:
+        """How the annual mass is spread over the years (D74); a line that crosses its threshold begins with ⚠."""
+        stats = record_stats(self.table[self.year_column], self.table[FLOW_M3_S], self.table[MASS_T])
+        if stats is None:
+            return []
+        flag = "⚠ " if stats.top_share > CONCENTRATED_SHARE else ""
+        years = ", ".join(str(year) for year in stats.top_years)
+        change = stats.mean_without_largest / stats.mean - 1
+        lines = [
+            f"{flag}The {TOP_YEARS} largest years ({years}) carry {stats.top_share:.0%} of the bedload.",
+            f"Median year {stats.median:,.0f} t/yr against a mean of {stats.mean:,.0f} t/yr; without "
+            f"{stats.largest_year} the mean is {stats.mean_without_largest:,.0f} t/yr ({change:+.0%}).",
+        ]
+        if stats.negligible_years:
+            negligible = ", ".join(str(year) for year in stats.negligible_years)
+            lines.append(
+                f"{len(stats.negligible_years)} of {len(self.table)} years carry under {NEGLIGIBLE_SHARE:.0%} of the "
+                f"mean: {negligible}."
+            )
+        rho = stats.rank_correlation
+        if rho is not None and rho < WEAK_RANK_CORRELATION:
+            lines.append(
+                f"⚠ The bedload follows the order of the annual mean flow poorly (rank correlation {rho:.2f}). Check "
+                "the flow file and, for a synthetic daily flow, try another seed."
+            )
+        elif rho is not None:
+            lines.append(f"Rank correlation of the bedload with the annual mean flow: {rho:.2f}.")
+        return lines
 
 
 def _message(exc: Exception) -> str:

@@ -61,3 +61,37 @@ def test_x_nfr_04_without_a_project_log_the_dialog_says_the_traceback_was_not_sa
     message = common.unexpected_message(ZeroDivisionError("boom"))
 
     assert "Unexpected ZeroDivisionError: boom" in message and "not saved" in message and "console" not in message
+
+
+def test_w_m3_01_hovering_a_point_of_the_trend_chart_shows_the_year_and_both_values():
+    import pandas as pd
+    from matplotlib.backend_bases import LocationEvent, MouseEvent
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+
+    from src.core.wilcock import WATER_YEAR_COLUMN
+    from src.services.bedload import FLOW_M3_S, MASS_T
+    from src.services.reporting import bedload_trend_figure
+
+    table = pd.DataFrame(
+        {WATER_YEAR_COLUMN: [1991, 1992, 1993], FLOW_M3_S: [1.04, 2.64, 2.35], MASS_T: [0, 628345.4, 47000]}
+    )
+    canvas = FigureCanvasAgg(bedload_trend_figure(table))
+    canvas.draw()
+    common.add_point_readout(canvas)
+    note = canvas.figure.axes[-1].texts[-1]
+    mass_line = canvas.figure.axes[1].get_lines()[0]
+    x, y = mass_line.get_transform().transform((1992, 628345.4))
+
+    MouseEvent("motion_notify_event", canvas, x + 3, y - 3)._process()
+    assert note.get_visible()
+    assert note.get_text().splitlines() == [
+        "Water Year (Oct–Sep): 1992",
+        "Annual Mean Flow (m³/s): 2.64",
+        "Annual Bed Load (t/yr): 628,345",
+    ]
+
+    MouseEvent("motion_notify_event", canvas, x + 40, y - 40)._process()
+    assert not note.get_visible()
+    MouseEvent("motion_notify_event", canvas, x, y)._process()
+    LocationEvent("figure_leave_event", canvas, x, y)._process()
+    assert not note.get_visible()
