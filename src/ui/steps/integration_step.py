@@ -16,7 +16,7 @@ from src.services.integration import (
     parse_horizon,
 )
 from src.services.dam_run import BEDLOAD, CURVE, INTEGRATION, SUSPENDED
-from src.services.reporting import projection_figure
+from src.services.reporting import annual_volume_figure, projection_figure
 from src.ui.common import add_table, bold_font, show_error
 from src.ui.steps.base import Step
 from src.ui.steps.dam_step import DamStep
@@ -54,6 +54,7 @@ class IntegrationStep(Step):
         self.dam_step = dam_step
         self._result_years: Optional[str] = None  # the years text when the result was made
         self._canvas: Optional[FigureCanvasTkAgg] = None
+        self._annual_canvas: Optional[FigureCanvasTkAgg] = None
 
     def build(self, frame):
         self.dam_var = tk.StringVar()
@@ -84,6 +85,8 @@ class IntegrationStep(Step):
         results.grid(row=2, column=0, sticky="nsew", padx=10, pady=4)
         self.annual_tree = add_table(results, "Annual totals", ANNUAL_COLUMNS)
         self.projection_tree = add_table(results, "Projection", PROJECTION_COLUMNS)
+        self.annual_chart_frame = ttk.Frame(results)
+        results.add(self.annual_chart_frame, text="Annual volume chart")
         self.chart_frame = ttk.Frame(results)
         results.add(self.chart_frame, text="Projection chart")
 
@@ -132,10 +135,8 @@ class IntegrationStep(Step):
         )
         self.lifespan_var.set("\n".join(self._lifespan_line(name, result) for name in RATE_NAMES))
         self.warning_var.set("\n".join(result.warnings))
-        self._canvas = FigureCanvasTkAgg(projection_figure(result), master=self.chart_frame)
-        self._canvas.get_tk_widget().configure(width=400, height=200)  # the canvas then follows the size of the pane
-        self._canvas.draw()
-        self._canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        self._canvas = self._draw(projection_figure(result), self.chart_frame)
+        self._annual_canvas = self._draw(annual_volume_figure(result), self.annual_chart_frame)
         if previous is not None and not (
             previous.annual.equals(result.annual) and previous.projection.equals(result.projection)
         ):
@@ -158,6 +159,14 @@ class IntegrationStep(Step):
     # --- drawing ------------------------------------------------------------------------------
 
     @staticmethod
+    def _draw(figure, parent) -> FigureCanvasTkAgg:
+        canvas = FigureCanvasTkAgg(figure, master=parent)
+        canvas.get_tk_widget().configure(width=400, height=200)  # the canvas then follows the size of the pane
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        return canvas
+
+    @staticmethod
     def _fill(tree: ttk.Treeview, table, grid) -> None:
         """One row for each row of the table, whose columns are those of the grid in the same order."""
         for row in table.itertuples(index=False):
@@ -172,3 +181,6 @@ class IntegrationStep(Step):
         if self._canvas is not None:
             self._canvas.get_tk_widget().destroy()
             self._canvas = None
+        if self._annual_canvas is not None:
+            self._annual_canvas.get_tk_widget().destroy()
+            self._annual_canvas = None

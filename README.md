@@ -273,7 +273,7 @@ where $V_s$ is the dam's suspended volume from step 4 (the same every year) and 
 - One line for each rate: *"Lifespan at the mean rate (… hm³/yr): `<year>`, `<n>` years after `<analysis year>`."*, or *"the dead volume was already exceeded in …"*, or *"not reached, because no sediment arrives at this rate."*
 - **Annual totals** tab: *Year, Suspended (hm³), Bedload (hm³), Total (hm³), Elevation (m)*.
 - **Projection** tab: *Year* and, for the mean, minimum and maximum rates, the cumulative volume (hm³) and the elevation (m).
-- **Projection chart** tab.
+- **Annual volume chart** and **Projection chart** tabs.
 
 **How to read it.**
 
