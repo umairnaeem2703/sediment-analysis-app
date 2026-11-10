@@ -1,5 +1,6 @@
 """Helpers shared by the steps: file and folder dialogs, the error and warning dialogs (which also log), a scrolled
-result table, and `run_in_background`, which runs a task off the Tk thread and logs how it failed.
+result table, `add_point_readout`, which shows the values of a chart point under the pointer, and `run_in_background`,
+which runs a task off the Tk thread and logs how it failed.
 """
 
 import logging
@@ -8,6 +9,10 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkinter import font as tkfont
 from typing import Any, Callable, List, Optional, Sequence, Tuple
+
+import numpy as np
+from matplotlib.lines import Line2D
+from matplotlib.transforms import IdentityTransform
 
 from src.utils.log import get_logger, log_file
 
@@ -119,3 +124,70 @@ def install_error_handler(root: tk.Tk) -> None:
         messagebox.showerror("Unexpected error", unexpected_message(exc))  # not show_error: it is logged above
 
     root.report_callback_exception = handler
+
+
+def add_point_readout(canvas, radius_px: float = 10) -> None:
+    """Show the values of the marked points of a chart while the pointer is over one of them.
+
+    The point nearest the pointer, within `radius_px`, is ringed together with the points of the other marked lines at
+    the same x, and a note gives that x and each y with its axis label, so the values of a twin-axis chart can be read.
+    """
+    figure = canvas.figure
+    lines = [line for axis in figure.axes for line in axis.get_lines() if line.get_marker() not in (None, "None", "")]
+    x_label = lines[0].axes.get_xlabel() if lines else ""
+    rings = Line2D([], [], linestyle="none", marker="o", markersize=13, markerfacecolor="none", markeredgecolor="black")
+    rings.set_transform(IdentityTransform())  # display pixels, so the twin axes need no conversion
+    figure.add_artist(rings)
+    note = figure.axes[-1].annotate(
+        "",
+        xy=(0, 0),
+        xycoords="figure pixels",
+        xytext=(14, 14),
+        textcoords="offset points",
+        fontsize=9,
+        bbox={"boxstyle": "round", "facecolor": "lightyellow", "edgecolor": "gray"},
+        zorder=10,
+    )
+    rings.set_visible(False)
+    note.set_visible(False)
+    shown: List[Any] = [None]  # the x being shown, so the chart is redrawn only when it changes
+
+    def show(x) -> None:
+        if x == shown[0]:
+            return
+        shown[0] = x
+        rings.set_visible(x is not None)
+        note.set_visible(x is not None)
+        if x is not None:
+            points, text = [], [f"{x_label}: {x:g}"]
+            for line in lines:
+                for xy in line.get_xydata():
+                    if xy[0] == x:
+                        points.append(line.get_transform().transform(xy))
+                        value = format(xy[1], ",.0f" if abs(xy[1]) >= 100 else ".3g")
+                        text.append(f"{line.axes.get_ylabel()}: {value}")
+            rings.set_data([p[0] for p in points], [p[1] for p in points])
+            anchor = points[0]
+            left, low = anchor[0] > figure.bbox.width * 0.65, anchor[1] > figure.bbox.height * 0.6
+            note.xy = anchor
+            note.set_text("\n".join(text))
+            note.set_position((-14 if left else 14, -14 if low else 14))
+            note.set_horizontalalignment("right" if left else "left")
+            note.set_verticalalignment("top" if low else "bottom")
+        canvas.draw_idle()
+
+    def on_move(event) -> None:
+        nearest, nearest_x = radius_px, None
+        for line in lines:
+            xy = line.get_xydata()
+            if not len(xy):
+                continue
+            pixels = line.get_transform().transform(xy)
+            distances = np.hypot(pixels[:, 0] - event.x, pixels[:, 1] - event.y)
+            index = int(np.nanargmin(distances))
+            if distances[index] <= nearest:
+                nearest, nearest_x = distances[index], xy[index][0]
+        show(nearest_x)
+
+    canvas.mpl_connect("motion_notify_event", on_move)
+    canvas.mpl_connect("figure_leave_event", lambda _event: show(None))
