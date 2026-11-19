@@ -18,8 +18,14 @@ from src.core.projection import (
     lifespan,
     project,
 )
-from src.core.reservoir import ReservoirCurve, fit_curve
-from tests.oracle import integration_accumulation, integration_cases, integration_projection, integration_record
+from src.core.reservoir import ReservoirCurve, build_curve
+from tests.oracle import (
+    integration_accumulation,
+    integration_cases,
+    integration_curve,
+    integration_projection,
+    integration_record,
+)
 
 CASES = integration_cases()
 RECORD = integration_record()
@@ -34,17 +40,17 @@ def _case(number):
 
 
 def _curve(number) -> ReservoirCurve:
-    case = _case(number)
-    curve = fit_curve(
+    case, rows = _case(number), integration_curve()
+    return build_curve(
+        [row["Elevation_m"] for row in rows],
+        [row["Volume_hm3"] for row in rows],
+        [row["Area_km2"] for row in rows],
         bed_elev_m=case["Hbed_m"],
         max_elev_m=case["Hmax_m"],
         crest_elev_m=case["Hcrest_m"],
         active_vol_hm3=case["Vactive_hm3"],
         max_vol_hm3=case["Vmax_hm3"],
-        shape_class="hill",
     )
-    assert curve.exponent == case["m"]
-    return curve
 
 
 def _record(number):

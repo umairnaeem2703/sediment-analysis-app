@@ -18,8 +18,7 @@ def test_c_m1_01_saved_project_reopens_identically(tmp_path):
     cubuk.sheet = "inputs/dams/cubuk_1.csv"
     cubuk.flow = Flow(path="inputs/flow/cubuk_1_flow.csv", sigma=0.4, seed=7)
     cubuk.commissioning_year = 1965
-    cubuk.h_min_m = 892.5
-    cubuk.shape_class = "hill"
+    cubuk.curve_sheet = "inputs/curves/cubuk_1_curve.csv"
     project.add_dam("Kavşakkaya")
     project.save()
 
@@ -49,7 +48,7 @@ def test_c_m1_01_newer_schema_version_is_a_clear_error(tmp_path):
     data["schema_version"] = SCHEMA_VERSION + 1
     path.write_text(json.dumps(data), encoding="utf-8")
 
-    with pytest.raises(ValueError, match=r"newer.*schema_version 2.*supports 1"):
+    with pytest.raises(ValueError, match=rf"newer.*schema_version {SCHEMA_VERSION + 1}.*supports {SCHEMA_VERSION}"):
         Project.open(project.folder)
 
 

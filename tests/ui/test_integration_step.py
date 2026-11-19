@@ -12,7 +12,15 @@ from src.ui.steps.regional_step import RegionalStep
 from src.ui.steps.reservoir_step import ReservoirStep
 from src.ui.steps.suspended_step import SuspendedStep
 from src.ui.wizard import Wizard
-from tests.samples import SAMPLE_BASINS, SAMPLE_FRACTIONS, SAMPLE_ZONAL, sample_flow, sample_sheet
+from tests.samples import (
+    PROVISIONAL_SHEETS,
+    SAMPLE_BASINS,
+    SAMPLE_FRACTIONS,
+    SAMPLE_ZONAL,
+    sample_curve,
+    sample_flow,
+    sample_sheet,
+)
 from tests.ui.fakes import FakeStep
 from tests.ui.helpers import wait_until
 
@@ -40,13 +48,13 @@ def app(tk_root, tmp_path, errors):
     wizard.go_to(1)
     regional_step.import_basin_table(str(SAMPLE_BASINS))
     regional_step.import_zonal_means(str(SAMPLE_ZONAL))
-    regional_step.import_dam_sheets([str(sample_sheet(slug)) for slug in SLUGS])
+    regional_step.import_dam_sheets([str(PROVISIONAL_SHEETS.get(slug, sample_sheet(slug))) for slug in SLUGS])
     wizard.go_to(2)
     yield wizard, step, later, top
     top.destroy()
 
 
-def _reach_step(wizard, top, slug="cubuk_1", commissioning="1990", analysis="2020"):
+def _reach_step(wizard, top, slug="kavsakkaya", commissioning="1990", analysis="2020"):
     """Choose a dam, compute steps 4 to 6 for it and open the integration step."""
     dam_step, suspended, bedload, reservoir = wizard.steps[2:6]
     dam_step.select_dam(slug)
@@ -62,7 +70,7 @@ def _reach_step(wizard, top, slug="cubuk_1", commissioning="1990", analysis="202
     bedload.compute()
     wait_until(top, lambda: not wizard.busy)
     assert wizard.go_to(5)
-    reservoir.shape_var.set("hill")
+    reservoir.use_curve_file(str(sample_curve(slug)))
     reservoir.generate()
     assert wizard.go_to(6)
 
@@ -105,7 +113,7 @@ def test_w_m4_02_the_lifespan_of_each_rate_is_stated(app):
 
     text = step.lifespan_var.get()
     assert [name for name in ("mean", "min", "max") if f"{name} rate" in text.lower()] == ["mean", "min", "max"]
-    assert "already exceeded in" in text  # Çubuk 1 holds 0.32 hm³ of dead volume, filled long before 2020
+    assert text.count("years after 2020") == 3
 
 
 def test_w_m4_02_years_outside_the_record_are_warned_about(app):
@@ -127,16 +135,15 @@ def test_x_01_without_a_commissioning_year_computing_is_an_error_that_says_where
     assert len(errors) == 1 and "commissioning year" in errors[0][1] and "step 3" in errors[0][1]
 
 
-def test_w_x_02_changing_the_curve_clears_the_result_and_the_later_steps(app):
+def test_w_x_02_replacing_the_curve_sheet_clears_the_result_and_the_later_steps(app):
     wizard, step, later, top = app
     _reach_step(wizard, top)
     step.compute()
     later.done = True
     reservoir = wizard.steps[5]
     wizard.go_to(5)
-    reservoir.shape_var.set("lake")
 
-    reservoir.generate()
+    reservoir.use_curve_file(str(sample_curve("kavsakkaya")))
 
     assert not step.is_complete() and not _rows(step.annual_tree) and step._canvas is None
     assert step.summary_var.get() == "" and later.done is False
@@ -253,4 +260,4 @@ def test_w_m4_02_computing_when_an_earlier_result_is_missing_names_it_and_change
     step.compute()
 
     assert not step.is_complete() and not _rows(step.annual_tree)
-    assert len(errors) == 1 and "Compute the bedload of Çubuk 1 first" in errors[0][1]
+    assert len(errors) == 1 and "Compute the bedload of Kavşakkaya first" in errors[0][1]

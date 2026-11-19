@@ -13,8 +13,9 @@ PHASES = ["suspended", "reservoir", "bedload", "integration"]
 
 
 def _sample(name):
-    found = list(resource_path("inputs").rglob(name))
-    assert len(found) == 1, f"{name} is in {len(found)} places under inputs/"
+    """The sample file `name` in inputs/, or the provisional test input in tests/data/ (OI-11)."""
+    found = [*resource_path("inputs").rglob(name), *resource_path("tests", "data").glob(name)]
+    assert len(found) == 1, f"{name} is in {len(found)} places under inputs/ and tests/data/"
     return found[0]
 
 

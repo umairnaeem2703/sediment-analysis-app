@@ -25,8 +25,7 @@ class DamStep(Step):
         self.commissioning_var = tk.StringVar()
         self.analysis_var = tk.StringVar()
         self.efficiency_var = tk.StringVar(value="100")
-        self.h_min_var = tk.StringVar()
-        for variable in (self.commissioning_var, self.analysis_var, self.efficiency_var, self.h_min_var):
+        for variable in (self.commissioning_var, self.analysis_var, self.efficiency_var):
             variable.trace_add("write", lambda *_: self.wizard.refresh())  # editing the fields un-confirms the dam
         frame.columnconfigure(1, weight=1)
         frame.rowconfigure(0, weight=1)
@@ -63,7 +62,6 @@ class DamStep(Step):
             ("Commissioning year (optional):", self.commissioning_var),
             ("Analysis year (blank = current year):", self.analysis_var),
             ("Trap efficiency (%):", self.efficiency_var),
-            ("Minimum operating level Hmin (m, optional):", self.h_min_var),
         )
         for row, (label, variable) in enumerate(fields):
             ttk.Label(settings, text=label).grid(row=row, column=0, sticky="w", padx=6, pady=3)
@@ -87,7 +85,7 @@ class DamStep(Step):
         return next((dam for dam in self.wizard.project.dams if dam.slug == slug), None) if slug else None
 
     def _entries(self) -> Tuple[str, ...]:
-        variables = (self.commissioning_var, self.analysis_var, self.efficiency_var, self.h_min_var)
+        variables = (self.commissioning_var, self.analysis_var, self.efficiency_var)
         return tuple(variable.get().strip() for variable in variables)
 
     def is_complete(self) -> bool:
@@ -128,12 +126,6 @@ class DamStep(Step):
         self._show_dam(reload_fields=different)  # choosing the same dam again keeps the typed text
         self.wizard.refresh()
 
-    def set_h_min(self, h_min: Optional[float]) -> None:
-        """Hmin was changed in step 6: show it here too, so this step does not undo it, and keep the dam confirmed."""
-        self.h_min_var.set("" if h_min is None else format_number(h_min))
-        self._confirmed_entries = self._entries()
-        self.wizard.refresh()
-
     def use_dam(self) -> None:
         dam = self.selected
         if dam is None:
@@ -147,7 +139,7 @@ class DamStep(Step):
         except (ValueError, OSError) as exc:
             show_error("Dam sheet", f"The sheet of {dam.name} cannot be used: {exc}")
             return
-        before = (dam.commissioning_year, dam.analysis_year, dam.trap_efficiency_pct, dam.h_min_m)
+        before = (dam.commissioning_year, dam.analysis_year, dam.trap_efficiency_pct)
         try:
             apply_dam_settings(
                 self.wizard.project,
@@ -155,12 +147,11 @@ class DamStep(Step):
                 commissioning_year=self.commissioning_var.get(),
                 analysis_year=self.analysis_var.get(),
                 trap_efficiency_pct=self.efficiency_var.get(),
-                h_min_m=self.h_min_var.get(),
             )
         except (ValueError, OSError) as exc:
             show_error("Dam settings", str(exc))
             return
-        after = (dam.commissioning_year, dam.analysis_year, dam.trap_efficiency_pct, dam.h_min_m)
+        after = (dam.commissioning_year, dam.analysis_year, dam.trap_efficiency_pct)
         changed = self.confirmed != dam.slug or before != after
         self.confirmed = dam.slug
         if changed:
@@ -192,7 +183,7 @@ class DamStep(Step):
                 "Select a dam in the list." if dam is None else "Complete step 2 (Regional data) to see this dam."
             )
             if reload_fields:
-                self._set_fields("", "", "100", "")
+                self._set_fields("", "", "100")
             return
         for _, row in regional.sub_basins(dam).iterrows():
             self.sub_basin_tree.insert("", "end", values=(row[SUBBASIN], row[AREA], row[SLOPE]))
@@ -208,14 +199,12 @@ class DamStep(Step):
                 "" if dam.commissioning_year is None else str(dam.commissioning_year),
                 "" if dam.analysis_year is None else str(dam.analysis_year),
                 format_number(dam.trap_efficiency_pct),
-                "" if dam.h_min_m is None else format_number(dam.h_min_m),
             )
 
-    def _set_fields(self, commissioning: str, analysis: str, efficiency: str, h_min: str) -> None:
+    def _set_fields(self, commissioning: str, analysis: str, efficiency: str) -> None:
         self.commissioning_var.set(commissioning)
         self.analysis_var.set(analysis)
         self.efficiency_var.set(efficiency)
-        self.h_min_var.set(h_min)
 
     @staticmethod
     def _sheet_text(sheet) -> str:

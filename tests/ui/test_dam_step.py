@@ -43,11 +43,10 @@ def app(tk_root, tmp_path, errors):
     top.destroy()
 
 
-def _fill(step, commissioning="", analysis="", efficiency="100", h_min=""):
+def _fill(step, commissioning="", analysis="", efficiency="100"):
     step.commissioning_var.set(commissioning)
     step.analysis_var.set(analysis)
     step.efficiency_var.set(efficiency)
-    step.h_min_var.set(h_min)
 
 
 def test_w_m1_03_the_dams_of_the_table_are_listed_and_nothing_is_selected(app):
@@ -86,18 +85,13 @@ def test_w_m1_03_the_list_selection_drives_the_view(app):
 def test_w_m1_03_using_a_dam_saves_its_settings_and_completes_the_step(app):
     wizard, step, _, _ = app
     step.select_dam("cubuk_1")
-    _fill(step, commissioning="1965", analysis="2025", efficiency="85.5", h_min="892.5")
+    _fill(step, commissioning="1965", analysis="2025", efficiency="85.5")
 
     step.use_dam()
 
     assert step.is_complete()
     dam = wizard.project.dams[1]
-    assert (dam.commissioning_year, dam.analysis_year, dam.trap_efficiency_pct, dam.h_min_m) == (
-        1965,
-        2025,
-        85.5,
-        892.5,
-    )
+    assert (dam.commissioning_year, dam.analysis_year, dam.trap_efficiency_pct) == (1965, 2025, 85.5)
     saved = json.loads((wizard.project.folder / "project.json").read_text(encoding="utf-8"))
     assert saved["dams"][1]["trap_efficiency_pct"] == 85.5
     wizard.refresh()
@@ -264,14 +258,13 @@ def test_w_m1_03_typed_values_survive_leaving_and_returning_to_the_step(app):
 def test_w_m1_03_stored_values_are_shown_with_full_precision(app):
     wizard, step, _, _ = app
     step.select_dam("cubuk_1")
-    _fill(step, efficiency="93.456789", h_min="1234.5678")
+    _fill(step, efficiency="93.456789")
     step.use_dam()
 
     step.select_dam("cubuk_2")
     step.select_dam("cubuk_1")
 
     assert step.efficiency_var.get() == "93.456789"
-    assert step.h_min_var.get() == "1234.5678"
 
 
 def test_w_x_02_the_run_belongs_to_the_dam_in_use_and_goes_with_it(app):

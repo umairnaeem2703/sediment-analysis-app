@@ -46,18 +46,29 @@ def bedload_annual() -> List[dict]:
 
 
 def reservoir_cases() -> List[dict]:
-    """The B3.3 fits (Hbed_m, Hmin_given_m, Hmax_m, Hcrest_m, Vactive_hm3, Vmax_hm3, Shape_Class, then Vdead_hm3, m,
-    Hmin_m and Area_Hmax_km2). A blank Hmin_given_m or Shape_Class is the empty string."""
+    """The B3.3 cases: the dam sheet (Hbed_m, Hmax_m, Hcrest_m, Vactive_hm3, Vmax_hm3), then Vdead_hm3, Hmin_m, and the
+    curve's V_Hmax_hm3 and Area_Hmax_km2."""
     return _rows("reservoir_cases.csv")
 
 
+def reservoir_tables() -> List[dict]:
+    """The rows of each case's curve (Case, Elevation_m, Volume_hm3, Area_km2)."""
+    return _rows("reservoir_tables.csv")
+
+
 def reservoir_points() -> List[dict]:
-    """The curve of each reservoir case at its bed, Hmin, mid-level, Hmax and crest (Case, Point, H_m, V_hm3, A_km2)."""
+    """The curve of each case at its first level, Hmin, a level between rows, Hmax and the crest (Case, Point, H_m,
+    V_hm3, A_km2)."""
     return _rows("reservoir_points.csv")
 
 
+def integration_curve() -> List[dict]:
+    """The rows of the measured curve every integration case shares (Elevation_m, Volume_hm3, Area_km2)."""
+    return _rows("integration_curve.csv")
+
+
 def integration_cases() -> List[dict]:
-    """The B3.4 cases: the reservoir (Hbed_m ... Vmax_hm3, m, Vdead_hm3, Vcrest_hm3, Hmin_m), the inputs (Suspended_m3_yr,
+    """The B3.4 cases: the reservoir (Hbed_m ... Vmax_hm3, Vdead_hm3, Vcrest_hm3, Hmin_m), the inputs (Suspended_m3_yr,
     TE_pct, Commissioning_year, Analysis_year) and the results (the three rates, S0_hm3, S0_Elevation_m, Exceeded_Year,
     and Lifespan_Mean, Lifespan_Min and Lifespan_Max, which are a year, 'exceeded' or 'not reached')."""
     return _rows("integration_cases.csv")

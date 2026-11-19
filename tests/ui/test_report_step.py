@@ -12,7 +12,15 @@ from src.ui.steps.report_step import ReportStep
 from src.ui.steps.reservoir_step import ReservoirStep
 from src.ui.steps.suspended_step import SuspendedStep
 from src.ui.wizard import Wizard
-from tests.samples import SAMPLE_BASINS, SAMPLE_FRACTIONS, SAMPLE_ZONAL, sample_flow, sample_sheet
+from tests.samples import (
+    PROVISIONAL_SHEETS,
+    SAMPLE_BASINS,
+    SAMPLE_FRACTIONS,
+    SAMPLE_ZONAL,
+    sample_curve,
+    sample_flow,
+    sample_sheet,
+)
 from tests.ui.helpers import wait_until
 
 SLUGS = ("kavsakkaya", "cubuk_1", "cubuk_2")
@@ -48,13 +56,13 @@ def app(tk_root, tmp_path, errors):
     wizard.go_to(1)
     regional_step.import_basin_table(str(SAMPLE_BASINS))
     regional_step.import_zonal_means(str(SAMPLE_ZONAL))
-    regional_step.import_dam_sheets([str(sample_sheet(slug)) for slug in SLUGS])
+    regional_step.import_dam_sheets([str(PROVISIONAL_SHEETS.get(slug, sample_sheet(slug))) for slug in SLUGS])
     wizard.go_to(2)
     yield wizard, report, top
     top.destroy()
 
 
-def _reach_integration(wizard, top, slug="cubuk_1"):
+def _reach_integration(wizard, top, slug="kavsakkaya"):
     """Choose a dam and compute steps 4 to 6; step 7 is left for the test to compute."""
     dam_step, suspended, bedload, reservoir = wizard.steps[2:6]
     dam_step.select_dam(slug)
@@ -70,12 +78,12 @@ def _reach_integration(wizard, top, slug="cubuk_1"):
     bedload.compute()
     wait_until(top, lambda: not wizard.busy)
     assert wizard.go_to(5)
-    reservoir.shape_var.set("hill")
+    reservoir.use_curve_file(str(sample_curve(slug)))
     reservoir.generate()
     assert wizard.go_to(6)
 
 
-def _reach_report(wizard, top, slug="cubuk_1"):
+def _reach_report(wizard, top, slug="kavsakkaya"):
     _reach_integration(wizard, top, slug)
     wizard.steps[6].compute()
     assert wizard.go_to(7)
@@ -122,7 +130,7 @@ def test_w_m5_01_export_writes_the_run_folder_and_lists_its_files(app):
 
     assert report.is_complete()
     (folder,) = _run_folders(wizard)
-    assert folder.startswith("cubuk_1_")
+    assert folder.startswith("kavsakkaya_")
     listed = report.files_var.get().splitlines()
     assert len(listed) == 11 and all(folder in line for line in listed)
     assert any(line.endswith("results.xlsx") for line in listed) and any(line.endswith("run.json") for line in listed)
@@ -151,7 +159,7 @@ def test_w_m5_01_a_failed_export_is_reported_and_leaves_the_step_open(app, error
     wait_until(top, lambda: not wizard.busy)
 
     assert not report.is_complete() and report.files_var.get() == ""
-    assert len(errors) == 1 and "cubuk_1_flow" in errors[0][1]
+    assert len(errors) == 1 and "kavsakkaya_flow" in errors[0][1]
 
 
 def test_w_x_02_choosing_a_different_dam_clears_the_export(app):
@@ -198,5 +206,5 @@ def test_w_m5_01_exporting_with_a_result_missing_names_it_and_writes_nothing(app
 
     report.export()
 
-    assert len(errors) == 1 and "Compute the bedload of Çubuk 1 first" in errors[0][1]
+    assert len(errors) == 1 and "Compute the bedload of Kavşakkaya first" in errors[0][1]
     assert _run_folders(wizard) == []

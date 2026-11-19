@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 from src.core.projection import EXCEEDED, NOT_REACHED, YEAR
-from src.core.reservoir import curve_table, fit_curve
+from src.core.reservoir import build_curve
 from src.services.bedload import VALUE_COLUMNS, VOLUME_M3, BedloadResult
 from src.services.integration import (
     INTEGRATION_CSV,
@@ -20,7 +20,7 @@ from src.services.integration import (
 from src.services.project import Dam
 from src.services.reservoir import CurveResult
 from src.services.suspended import TOTAL_COLUMNS, SuspendedResult
-from tests.oracle import integration_cases, integration_projection, integration_record
+from tests.oracle import integration_cases, integration_curve, integration_projection, integration_record
 
 CASES = integration_cases()
 NUMBERS = [int(case["Case"]) for case in CASES]
@@ -32,14 +32,16 @@ def _case(number):
 
 
 def _curve(number=1):
-    case = _case(number)
-    return fit_curve(
+    case, rows = _case(number), integration_curve()
+    return build_curve(
+        [row["Elevation_m"] for row in rows],
+        [row["Volume_hm3"] for row in rows],
+        [row["Area_km2"] for row in rows],
         bed_elev_m=case["Hbed_m"],
         max_elev_m=case["Hmax_m"],
         crest_elev_m=case["Hcrest_m"],
         active_vol_hm3=case["Vactive_hm3"],
         max_vol_hm3=case["Vmax_hm3"],
-        shape_class="hill",
     )
 
 
@@ -201,7 +203,7 @@ def _suspended(volume_m3) -> SuspendedResult:
 
 def _curve_result(number=1) -> CurveResult:
     curve = _curve(number)
-    return CurveResult(curve, curve_table(curve), False, "hill", [])
+    return CurveResult(curve, curve.table(), [])
 
 
 def test_c_m4_02_a_dam_takes_its_own_settings_and_the_suspended_total():

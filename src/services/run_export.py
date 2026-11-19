@@ -62,7 +62,7 @@ def _sha256(path: Path) -> str:
 def _input_files(project: Project, dam: Dam) -> List[InputFile]:
     """Every file the run read, with its SHA-256. A missing input is an error naming it (FR-X-01)."""
     entries = [(role, project.inputs.get(role)) for role in INPUT_KEYS]
-    entries += [("dam_sheet", dam.sheet), ("flow", dam.flow.path)]
+    entries += [("dam_sheet", dam.sheet), ("flow", dam.flow.path), ("curve_sheet", dam.curve_sheet)]
     files = []
     for role, relative in entries:
         label = role.replace("_", " ")
@@ -85,16 +85,13 @@ def _parameters(dam: Dam, curve: CurveResult, integration: IntegrationResult) ->
         Parameter("Commissioning year", integration.commissioning_year, ""),
         Parameter("Analysis year", integration.analysis_year, ""),
         Parameter("Projection length", len(integration.projection) - 1, "years"),
-        Parameter("Level interval", curve.step_m, "m"),
-        Parameter("Hbed", shape.bed_elev_m, "m"),
-        Parameter("Hmin", dam.h_min_m, "m"),  # as entered; blank when the shape class fixed the curve
-        Parameter("Hmin of the curve", shape.h_min_m, "m"),
+        Parameter("Hbed", shape.bed_elev_m, "m"),  # the first level of the curve
+        Parameter("Hmin", shape.h_min_m, "m"),  # the level of the curve at Vdead
         Parameter("Hmax", shape.max_elev_m, "m"),
         Parameter("Hcrest", shape.crest_elev_m, "m"),
         Parameter("Vactive", shape.active_vol_hm3, "hm³"),
         Parameter("Vmax", shape.max_vol_hm3, "hm³"),
         Parameter("Vdead", shape.dead_vol_hm3, "hm³"),
-        Parameter("Exponent m", shape.exponent, ""),
     ]
 
 
@@ -188,7 +185,6 @@ def _write_run_json(
     files: List[InputFile],
     parameters: List[Parameter],
     bedload: BedloadResult,
-    curve: CurveResult,
     warnings: List[Tuple[str, str]],
 ) -> None:
     run = {
@@ -198,11 +194,7 @@ def _write_run_json(
         "dam": {"name": dam.name, "slug": dam.slug},
         "inputs": [f._asdict() for f in files],
         "parameters": [p._asdict() for p in parameters],
-        "flags": {
-            "synthetic_flow": bedload.synthetic,
-            "h_min_given": curve.h_min_given,
-            "shape_class": curve.shape_class,
-        },
+        "flags": {"synthetic_flow": bedload.synthetic},
         "warnings": [{"phase": phase, "text": text} for phase, text in warnings],
     }
     path.write_text(json.dumps(run, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
@@ -262,7 +254,7 @@ def export_run(
             warnings,
         )
         run_json = folder / RUN_JSON
-        _write_run_json(run_json, project, dam, stamp, files, parameters, bedload, curve, warnings)
+        _write_run_json(run_json, project, dam, stamp, files, parameters, bedload, warnings)
     except Exception:
         shutil.rmtree(folder, ignore_errors=True)  # a run folder holds a whole run or nothing
         raise

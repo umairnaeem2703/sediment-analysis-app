@@ -1,4 +1,4 @@
-"""P-M4-01: the reservoir curve of the sample dams (FR-M4-02), with the chart."""
+"""P-M4-01: the measured reservoir curve of the sample dams (FR-M4-02, D75), with the chart."""
 
 from pathlib import Path
 
@@ -6,62 +6,49 @@ import pandas as pd
 import pytest
 
 from src.services.reporting import CURVE_PNG, reservoir_curve_figure, write_reservoir_curve
-from src.services.reservoir import compute_dam_curve, write_reservoir_csv
-from tests.samples import sample_curve_inputs
+from src.services.reservoir import compute_dam_curve, import_curve_sheet, write_reservoir_csv
+from tests.samples import CURVE_DAMS, sample_curve, sample_curve_inputs, sample_regional, sample_sheet
 
 BENCHMARKS = Path(__file__).parents[1] / "benchmarks"
-SAMPLE_DAMS = ["kavsakkaya", "cubuk_1", "cubuk_2"]
 
 
-def _result(data, slug):
-    dam = next(dam for dam in data.project.dams if dam.slug == slug)
-    return compute_dam_curve(data.dam_sheet(dam).data, dam)
+def _dam(data, slug):
+    return next(dam for dam in data.project.dams if dam.slug == slug)
 
 
-def test_p_m4_01_each_sample_dam_has_its_own_curve(tmp_path):
-    data = sample_curve_inputs(tmp_path / "project")
-
-    results = {slug: _result(data, slug) for slug in SAMPLE_DAMS}
-
-    assert len({tuple(result.table["Volume_hm3"]) for result in results.values()}) == 3
-    assert [len(results[slug].table) for slug in SAMPLE_DAMS] == [123, 43, 15]
+def _result(data, slug="kavsakkaya"):
+    dam = _dam(data, slug)
+    return compute_dam_curve(data.project, data.dam_sheet(dam).data, dam)
 
 
-def test_p_m4_01_the_curves_of_the_sheets_reproduce_the_worked_examples_of_b3_3(tmp_path):
-    data = sample_curve_inputs(tmp_path / "project")
+def test_p_m4_01_the_kavsakkaya_curve_is_its_curve_sheet_with_hmin_read_from_it(tmp_path):
+    result = _result(sample_curve_inputs(tmp_path / "project"))
 
-    kavsakkaya, cubuk_1, cubuk_2 = (_result(data, slug).curve for slug in SAMPLE_DAMS)
-
-    assert kavsakkaya.h_min_m == pytest.approx(1088.86, abs=0.005)
-    assert kavsakkaya.area(kavsakkaya.max_elev_m) == pytest.approx(4.09, abs=0.005)
-    assert cubuk_1.h_min_m == pytest.approx(892.69, abs=0.005)
-    assert cubuk_1.area(cubuk_1.max_elev_m) == pytest.approx(0.57, abs=0.005)
-    assert cubuk_2.area(cubuk_2.max_elev_m) == pytest.approx(8.45, abs=0.005)
+    assert len(result.table) == 69 and result.warnings == []
+    assert result.curve.h_min_m == pytest.approx(1086.27, abs=0.005)  # Vdead = 90.57 - 74.1 hm3 (provisional, OI-11)
+    assert result.curve.volume(1099.0) == pytest.approx(33.861)  # the sheet has no row at 1099 m
 
 
-@pytest.mark.parametrize("slug", SAMPLE_DAMS)
-def test_p_m4_01_each_curve_runs_from_the_bed_to_the_crest_through_hmax(tmp_path, slug):
-    data = sample_curve_inputs(tmp_path / "project")
-    dam = next(dam for dam in data.project.dams if dam.slug == slug)
-    sheet = data.dam_sheet(dam).data
+def test_p_m4_01_the_sample_dam_sheet_of_kavsakkaya_is_refused_against_its_curve(tmp_path):
+    """OI-11: until the hydrologist corrects one of the two files, the real sample sheet does not agree."""
+    data = sample_regional(tmp_path / "project")
+    data.import_dam_sheets([str(sample_sheet("kavsakkaya"))])
+    dam = _dam(data, "kavsakkaya")
+    import_curve_sheet(data.project, dam, sample_curve("kavsakkaya"))
 
-    table = _result(data, slug).table.set_index("Elevation_m")
+    with pytest.raises(ValueError, match="cannot be used") as raised:
+        _result(data)
 
-    assert table.index[0] == sheet.bed_elev_m and table.index[-1] == sheet.crest_elev_m
-    assert table["Volume_hm3"].iloc[0] == 0.0
-    assert table["Volume_hm3"].iloc[-1] > sheet.max_vol_hm3
-
-
-def test_p_m4_01_only_cubuk_2_is_flagged_as_too_shallow(tmp_path):
-    data = sample_curve_inputs(tmp_path / "project")
-
-    warnings = {slug: _result(data, slug).warnings for slug in SAMPLE_DAMS}
-
-    assert warnings["kavsakkaya"] == [] and warnings["cubuk_1"] == []
-    assert len(warnings["cubuk_2"]) == 1 and "5.3 m" in warnings["cubuk_2"][0]  # OI-01
+    assert "Hbed on the dam sheet (1063 m)" in str(raised.value)
+    assert "Vmax on the dam sheet (80.8 hm³)" in str(raised.value)
 
 
-@pytest.mark.parametrize("slug", SAMPLE_DAMS)
+def test_p_m4_01_a_dam_without_a_curve_sheet_has_no_curve(tmp_path):
+    with pytest.raises(ValueError, match="Çubuk 1 has no reservoir curve sheet"):
+        _result(sample_curve_inputs(tmp_path / "project"), "cubuk_1")
+
+
+@pytest.mark.parametrize("slug", CURVE_DAMS)
 def test_p_m4_01_reservoir_curve_csv_matches_the_golden(tmp_path, slug):
     data = sample_curve_inputs(tmp_path / "project")
 
@@ -73,7 +60,7 @@ def test_p_m4_01_reservoir_curve_csv_matches_the_golden(tmp_path, slug):
 
 
 def test_p_m4_01_the_chart_shows_volume_and_area_against_the_level_and_marks_hmin_and_hmax(tmp_path):
-    result = _result(sample_curve_inputs(tmp_path / "project"), "kavsakkaya")
+    result = _result(sample_curve_inputs(tmp_path / "project"))
 
     figure = reservoir_curve_figure(result)
 
@@ -87,7 +74,7 @@ def test_p_m4_01_the_chart_shows_volume_and_area_against_the_level_and_marks_hmi
 
 
 def test_p_m4_01_the_chart_is_written_as_a_png(tmp_path):
-    result = _result(sample_curve_inputs(tmp_path / "project"), "cubuk_1")
+    result = _result(sample_curve_inputs(tmp_path / "project"))
 
     path = write_reservoir_curve(result, tmp_path)
 

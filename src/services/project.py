@@ -12,9 +12,10 @@ from src.core.monthly_flow_preprocessor import DEFAULT_PHI, DEFAULT_SEED, DEFAUL
 from src.core.text import to_ascii_turkish
 from src.utils.log import get_logger
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 PROJECT_FILE = "project.json"
 INPUT_KEYS = ("basins", "zonal_means", "fractions")
+_GENERATED_CURVE_KEYS = ("curve", "h_min_m", "shape_class")  # what version 1 kept for the generated curve (D75)
 
 
 def slugify(name: str) -> str:
@@ -34,27 +35,14 @@ class Flow:
 
 
 @dataclass
-class CurveOverrides:
-    """The curve inputs the user changed from the dam sheet in step 6; None keeps the sheet's value."""
-
-    bed_elev_m: Optional[float] = None
-    crest_elev_m: Optional[float] = None
-    max_elev_m: Optional[float] = None
-    active_vol_hm3: Optional[float] = None
-    max_vol_hm3: Optional[float] = None
-
-
-@dataclass
 class Dam:
     name: str
     slug: str
     sheet: Optional[str] = None
     flow: Flow = field(default_factory=Flow)
-    curve: CurveOverrides = field(default_factory=CurveOverrides)
+    curve_sheet: Optional[str] = None
     commissioning_year: Optional[int] = None
     analysis_year: Optional[int] = None
-    h_min_m: Optional[float] = None
-    shape_class: Optional[str] = None
     trap_efficiency_pct: float = 100.0
 
 
@@ -96,12 +84,14 @@ class Project:
                 f"(schema_version {version}; this app supports {SCHEMA_VERSION})."
             )
         try:
-            dams = [
-                Dam(**{**d, "flow": Flow(**d.get("flow", {})), "curve": CurveOverrides(**d.get("curve", {}))})
-                for d in data.get("dams", [])
-            ]
+            if version == 1:  # the measured curve replaces the generated one: its inputs are dropped
+                data["dams"] = [
+                    {key: value for key, value in d.items() if key not in _GENERATED_CURVE_KEYS}
+                    for d in data.get("dams", [])
+                ]
+            dams = [Dam(**{**d, "flow": Flow(**d.get("flow", {}))}) for d in data.get("dams", [])]
             inputs = {**dict.fromkeys(INPUT_KEYS), **data.get("inputs", {})}
-        except TypeError as exc:
+        except (TypeError, AttributeError) as exc:
             raise ValueError(f"{path} is malformed ({exc}).") from exc
         return cls(folder, data.get("name", folder.name), inputs, dams)
 

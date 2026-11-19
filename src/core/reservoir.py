@@ -1,35 +1,39 @@
-"""The reservoir elevation-volume curve of one dam (FR-M4-01, FR-M4-02, B3.3).
+"""The measured elevation-volume curve of one dam (FR-M4-01, FR-M4-02, B3.3, D75).
 
-A power law `V(H) = Vmax * x**m` with `x = (H - Hbed) / (Hmax - Hbed)`, volumes in hm³, levels in m and areas in km²
-(hm³ per m is 10⁶ m²). The exponent *m* is fitted through the dead-storage point (Hmin, Vdead) when Hmin is known and
-is otherwise the exponent of the dam's shape class (D19). `check_inputs`, `check_shape`, `check_step` and
-`curve_warnings` are the checks, and `curve_table` is the level table (0.5 m unless the user enters another interval).
+The curve is the hydrologist's table of level (m), volume (hm³) and surface area (km²), read between its rows by linear
+interpolation and held at its first and last rows outside them. The dam sheet gives Hmax, Hcrest, Vactive and Vmax;
+Vdead = Vmax - Vactive and Hmin is the level of the curve at Vdead. `check_table` checks the table itself and
+`check_agreement` that the dam sheet agrees with it; `build_curve` refuses a curve that fails either.
+`curve_warnings` holds the plausibility warning.
 """
 
 import math
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
 
-SHAPE_CLASSES = {"gorge": 1.25, "hill": 2.0, "foothill": 3.0, "lake": 4.0}
-EXPONENT_RANGE = (1.0, 4.5)  # a fitted m outside this is implausible (FR-M4-01)
-MIN_DEPTH_M = 10.0  # Hmax - Hbed below this leaves the curve poorly constrained
-STEP_M = 0.5  # the table's default level step (the user may enter another, FR-M4-02)
-MAX_TABLE_ROWS = 100_000  # a finer interval only makes the grid and the CSV unusable (D69)
+LEVEL_TOLERANCE_M = 0.5  # the bed and the crest of the dam sheet against the curve's first and last level (OI-11)
+VOLUME_TOLERANCE = 0.01  # Vmax against the curve's volume at Hmax, as a share of the curve's volume (OI-11)
 
 ELEVATION_M, VOLUME_HM3, AREA_KM2 = "Elevation_m", "Volume_hm3", "Area_km2"
 
 
 @dataclass(frozen=True)
 class ReservoirCurve:
-    bed_elev_m: float
+    levels_m: Tuple[float, ...]
+    volumes_hm3: Tuple[float, ...]
+    areas_km2: Tuple[float, ...]
     max_elev_m: float
     crest_elev_m: float
     active_vol_hm3: float
     max_vol_hm3: float
-    exponent: float
+
+    @property
+    def bed_elev_m(self) -> float:
+        """The first level of the curve."""
+        return self.levels_m[0]
 
     @property
     def dead_vol_hm3(self) -> float:
@@ -40,146 +44,137 @@ class ReservoirCurve:
         """The level at which the reservoir holds only its dead volume."""
         return self.elevation(self.dead_vol_hm3)
 
-    def _fraction(self, h):
-        """x = (H - Hbed) / (Hmax - Hbed), zero at and below the bed."""
-        return np.maximum(np.asarray(h, dtype=float) - self.bed_elev_m, 0.0) / (self.max_elev_m - self.bed_elev_m)
-
     def volume(self, h):
         """V(H) in hm³."""
-        result = self.max_vol_hm3 * self._fraction(h) ** self.exponent
+        result = np.interp(h, self.levels_m, self.volumes_hm3)
         return float(result) if np.ndim(h) == 0 else result
 
     def area(self, h):
-        """A(H) = dV/dH = m V / (H - Hbed) in km², written as m Vmax / (Hmax - Hbed) x**(m - 1) so that the bed is defined
-        (zero for m above 1, infinite below 1)."""
-        scale = self.exponent * self.max_vol_hm3 / (self.max_elev_m - self.bed_elev_m)
-        with np.errstate(divide="ignore"):
-            result = scale * self._fraction(h) ** (self.exponent - 1.0)
+        """A(H) in km²."""
+        result = np.interp(h, self.levels_m, self.areas_km2)
         return float(result) if np.ndim(h) == 0 else result
 
     def elevation(self, v):
-        """H(V) = Hbed + (Hmax - Hbed) (V / Vmax)**(1 / m) for a volume V in hm³ (the bed for V <= 0)."""
-        v = np.maximum(np.asarray(v, dtype=float), 0.0)
-        result = self.bed_elev_m + (self.max_elev_m - self.bed_elev_m) * (v / self.max_vol_hm3) ** (1.0 / self.exponent)
+        """H(V) in m for a volume V in hm³."""
+        result = np.interp(v, self.volumes_hm3, self.levels_m)
         return float(result) if np.ndim(v) == 0 else result
 
+    def table(self) -> pd.DataFrame:
+        """The rows of the curve: level, volume and surface area."""
+        return pd.DataFrame(
+            {ELEVATION_M: self.levels_m, VOLUME_HM3: self.volumes_hm3, AREA_KM2: self.areas_km2}, dtype=float
+        )
 
-def check_inputs(
+
+def check_table(
+    levels_m: Sequence[float],
+    volumes_hm3: Sequence[float],
+    areas_km2: Sequence[float],
+    rows: Optional[Sequence[int]] = None,
+) -> List[str]:
+    """Every problem of the curve table: at least two rows, levels and volumes rising from row to row, and no volume or
+    area below 0. `rows` names each row in the messages; by default they count from the header as row 1."""
+    if len(levels_m) < 2:
+        return [f"The curve needs at least two rows, found {len(levels_m)}."]
+    rows = rows if rows is not None else range(2, len(levels_m) + 2)
+    problems = []
+    for position, row in enumerate(rows):
+        if position and not levels_m[position] > levels_m[position - 1]:
+            problems.append(f"row {row}: the level {levels_m[position]:g} m does not rise above the row before.")
+        if position and not volumes_hm3[position] > volumes_hm3[position - 1]:
+            problems.append(f"row {row}: the volume {volumes_hm3[position]:g} hm³ does not rise above the row before.")
+        if volumes_hm3[position] < 0 or areas_km2[position] < 0:
+            problems.append(f"row {row}: the volume and the surface area must not be below 0.")
+    return problems
+
+
+def check_agreement(
+    levels_m: Sequence[float],
+    volumes_hm3: Sequence[float],
     *,
     bed_elev_m: float,
-    h_min_m: Optional[float],
     max_elev_m: float,
     crest_elev_m: float,
     active_vol_hm3: float,
     max_vol_hm3: float,
 ) -> List[str]:
-    """Every rule of FR-M4-01 the inputs break, in words: Hbed < Hmin < Hmax <= Hcrest and 0 < Vactive < Vmax. Hmin may
-    be None."""
-    problems = []
+    """Every way the dam sheet disagrees with a valid curve table (OI-11), each naming both values: Hbed and Hcrest within
+    LEVEL_TOLERANCE_M of the curve's first and last level, Hmax inside the curve, Vmax within VOLUME_TOLERANCE of the
+    curve's volume at Hmax, and Hbed < Hmax <= Hcrest and 0 < Vactive < Vmax."""
     named = {
         "Hbed": bed_elev_m,
-        "Hmin": h_min_m,
         "Hmax": max_elev_m,
         "Hcrest": crest_elev_m,
         "Vactive": active_vol_hm3,
         "Vmax": max_vol_hm3,
     }
-    for name, value in named.items():
-        if value is not None and not math.isfinite(value):
-            problems.append(f"{name} must be a finite number, found {value}.")
+    problems = [
+        f"{name} must be a finite number, found {value}." for name, value in named.items() if not math.isfinite(value)
+    ]
     if problems:
         return problems
-    if not bed_elev_m < max_elev_m:
-        problems.append(f"Hmax ({max_elev_m:g} m) must be above Hbed ({bed_elev_m:g} m).")
-    if h_min_m is not None and not bed_elev_m < h_min_m < max_elev_m:
+    if not bed_elev_m < max_elev_m <= crest_elev_m:
         problems.append(
-            f"Hmin ({h_min_m:g} m) must be above Hbed ({bed_elev_m:g} m) and below Hmax ({max_elev_m:g} m)."
+            f"The dam sheet must have Hbed ({bed_elev_m:g} m) < Hmax ({max_elev_m:g} m) <= Hcrest ({crest_elev_m:g} m)."
         )
-    if not max_elev_m <= crest_elev_m:
-        problems.append(f"Hcrest ({crest_elev_m:g} m) must not be below Hmax ({max_elev_m:g} m).")
     if not 0 < active_vol_hm3 < max_vol_hm3:
         problems.append(f"Vactive ({active_vol_hm3:g} hm³) must be above 0 and below Vmax ({max_vol_hm3:g} hm³).")
+    first, last = levels_m[0], levels_m[-1]
+    if abs(bed_elev_m - first) > LEVEL_TOLERANCE_M:
+        problems.append(
+            f"Hbed on the dam sheet ({bed_elev_m:g} m) differs from the first level of the curve ({first:g} m) "
+            f"by more than {LEVEL_TOLERANCE_M:g} m."
+        )
+    if abs(crest_elev_m - last) > LEVEL_TOLERANCE_M:
+        problems.append(
+            f"Hcrest on the dam sheet ({crest_elev_m:g} m) differs from the last level of the curve ({last:g} m) "
+            f"by more than {LEVEL_TOLERANCE_M:g} m."
+        )
+    if not first <= max_elev_m <= last:
+        problems.append(f"Hmax on the dam sheet ({max_elev_m:g} m) is outside the curve ({first:g} m to {last:g} m).")
+    else:
+        on_curve = float(np.interp(max_elev_m, levels_m, volumes_hm3))
+        if abs(max_vol_hm3 - on_curve) > VOLUME_TOLERANCE * on_curve:
+            problems.append(
+                f"Vmax on the dam sheet ({max_vol_hm3:g} hm³) differs from the curve's volume at Hmax = {max_elev_m:g} m "
+                f"({on_curve:.4g} hm³) by more than {VOLUME_TOLERANCE:.0%}."
+            )
     return problems
 
 
-def check_shape(h_min_m: Optional[float], shape_class: Optional[str]) -> List[str]:
-    """Hmin or a known shape class must fix the curve; a shape class that is given must be known."""
-    if shape_class is not None and shape_class not in SHAPE_CLASSES:
-        return [f"The shape class '{shape_class}' is unknown (gorge, hill, foothill or lake)."]
-    if h_min_m is None and shape_class is None:
-        return ["Enter Hmin or a shape class: one of them fixes the curve."]
-    return []
-
-
-def check_step(step_m: float, span_m: Optional[float] = None) -> List[str]:
-    """The level interval of the table must be a finite number above 0 and, when the depth from the bed to the crest is
-    given, short enough to give at most MAX_TABLE_ROWS levels (D69)."""
-    if not (math.isfinite(step_m) and step_m > 0):
-        return [f"The level interval ({step_m:g} m) must be a number above 0."]
-    rows = int(span_m / step_m + 1e-9) + 1 if span_m is not None else 0
-    if rows > MAX_TABLE_ROWS:
-        return [f"A level interval of {step_m:g} m gives {rows:,} rows; the table holds at most {MAX_TABLE_ROWS:,}."]
-    return []
-
-
-def fit_curve(
+def build_curve(
+    levels_m: Sequence[float],
+    volumes_hm3: Sequence[float],
+    areas_km2: Sequence[float],
     *,
     bed_elev_m: float,
     max_elev_m: float,
     crest_elev_m: float,
     active_vol_hm3: float,
     max_vol_hm3: float,
-    h_min_m: Optional[float] = None,
-    shape_class: Optional[str] = None,
 ) -> ReservoirCurve:
-    """The curve through (Hbed, 0) and (Hmax, Vmax), and through (Hmin, Vdead) when Hmin is given; otherwise the exponent
-    is that of `shape_class`. Raises ValueError listing every problem with the inputs."""
-    problems = check_inputs(
-        bed_elev_m=bed_elev_m,
-        h_min_m=h_min_m,
-        max_elev_m=max_elev_m,
-        crest_elev_m=crest_elev_m,
-        active_vol_hm3=active_vol_hm3,
-        max_vol_hm3=max_vol_hm3,
-    ) + check_shape(h_min_m, shape_class)
+    """The curve of the table with the dam sheet's values. Raises ValueError listing every problem of the table or, for
+    a valid table, every disagreement with the dam sheet."""
+    levels, volumes, areas = (tuple(float(value) for value in column) for column in (levels_m, volumes_hm3, areas_km2))
+    problems = check_table(levels, volumes, areas)
+    if not problems:
+        problems = check_agreement(
+            levels,
+            volumes,
+            bed_elev_m=bed_elev_m,
+            max_elev_m=max_elev_m,
+            crest_elev_m=crest_elev_m,
+            active_vol_hm3=active_vol_hm3,
+            max_vol_hm3=max_vol_hm3,
+        )
     if problems:
-        raise ValueError("The curve inputs are not valid:\n" + "\n".join(f"- {problem}" for problem in problems))
-
-    if h_min_m is None:
-        exponent = SHAPE_CLASSES[shape_class]
-    else:
-        dead_fraction = (max_vol_hm3 - active_vol_hm3) / max_vol_hm3
-        exponent = math.log(dead_fraction) / math.log((h_min_m - bed_elev_m) / (max_elev_m - bed_elev_m))
-    return ReservoirCurve(bed_elev_m, max_elev_m, crest_elev_m, active_vol_hm3, max_vol_hm3, exponent)
+        raise ValueError("The reservoir curve cannot be used:\n" + "\n".join(f"- {problem}" for problem in problems))
+    return ReservoirCurve(levels, volumes, areas, max_elev_m, crest_elev_m, active_vol_hm3, max_vol_hm3)
 
 
 def curve_warnings(curve: ReservoirCurve, drainage_area_km2: Optional[float] = None) -> List[str]:
-    """The plausibility warnings of FR-M4-01. The drainage area is the dam sheet's; without it nothing is compared."""
-    warnings = []
-    low, high = EXPONENT_RANGE
-    if not low <= curve.exponent <= high:
-        warnings.append(f"The fitted exponent m = {curve.exponent:.2f} is outside the usual range {low:g} to {high:g}.")
-    depth = curve.max_elev_m - curve.bed_elev_m
-    if depth < MIN_DEPTH_M:
-        warnings.append(
-            f"Hmax is only {depth:.1f} m above Hbed, below {MIN_DEPTH_M:g} m: the curve is poorly constrained."
-        )
+    """The plausibility warning of FR-M4-01. The drainage area is the dam sheet's; without it nothing is compared."""
     area = curve.area(curve.max_elev_m)
     if drainage_area_km2 is not None and area > drainage_area_km2:
-        warnings.append(
-            f"The surface area at Hmax ({area:.2f} km²) is above the drainage area ({drainage_area_km2:g} km²)."
-        )
-    return warnings
-
-
-def curve_table(curve: ReservoirCurve, step_m: float = STEP_M) -> pd.DataFrame:
-    """Level, volume and surface area every `step_m` (0.5 m by default) from the bed to the crest; a crest off that grid
-    closes the table."""
-    problems = check_step(step_m, curve.crest_elev_m - curve.bed_elev_m)
-    if problems:
-        raise ValueError("\n".join(problems))
-    steps = int((curve.crest_elev_m - curve.bed_elev_m) / step_m + 1e-9)
-    levels = curve.bed_elev_m + step_m * np.arange(steps + 1)
-    if curve.crest_elev_m - levels[-1] > 1e-9:
-        levels = np.append(levels, curve.crest_elev_m)
-    return pd.DataFrame({ELEVATION_M: levels, VOLUME_HM3: curve.volume(levels), AREA_KM2: curve.area(levels)})
+        return [f"The surface area at Hmax ({area:.2f} km²) is above the drainage area ({drainage_area_km2:g} km²)."]
+    return []

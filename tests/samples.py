@@ -10,14 +10,18 @@ from src.services.bedload import compute_dam_bedload, import_flow, import_fracti
 from src.services.integration import compute_dam_integration
 from src.services.project import Project
 from src.services.regional_data import RegionalData
-from src.services.reservoir import compute_dam_curve
+from src.services.reservoir import compute_dam_curve, import_curve_sheet
 from src.services.suspended import compute_suspended
 from src.utils.paths import read_table, resource_path
 
 SAMPLE_BASINS = resource_path("inputs", "master_yield.csv")
 SAMPLE_ZONAL = resource_path("inputs", "raw_zonal_means.csv")
 SAMPLE_FRACTIONS = resource_path("inputs", "fractional_parameters.csv")
-SAMPLE_SHAPE_CLASSES = {"kavsakkaya": "foothill", "cubuk_1": "hill", "cubuk_2": "hill"}
+# The dams with a curve sheet in inputs/reservoir_curves/ (D75); the Çubuk dams have none yet.
+CURVE_DAMS = ("kavsakkaya",)
+# Provisional (OI-11): the Kavşakkaya dam sheet disagrees with its curve sheet, so the curve tests use this copy of it
+# with Hbed (1055 m) and Vmax (90.57 hm³) made to agree with the curve, until the hydrologist corrects one of the two.
+PROVISIONAL_SHEETS = {"kavsakkaya": resource_path("tests", "data", "kavsakkaya_bathymetry_oi11.csv")}
 # Placeholders, not the dams' real years (OI-02): the integration goldens depend on them and are regenerated with the
 # real years before they are signed off. The analysis year is fixed so that the goldens do not move with the date.
 SAMPLE_COMMISSIONING_YEAR, SAMPLE_ANALYSIS_YEAR = 1990, 2020
@@ -58,17 +62,22 @@ def sample_sheet(slug: str):
     return resource_path("inputs", "bathymetry", f"{slug}_bathymetry.csv")
 
 
+def sample_curve(slug: str):
+    """The curve sheet of a dam in CURVE_DAMS."""
+    return resource_path("inputs", "reservoir_curves", f"{slug}_reservoir_curve.csv")
+
+
 def _add_curves(data: RegionalData) -> RegionalData:
-    """Each dam's sheet and the shape class of its worked example in B3.3 (no Hmin)."""
-    data.import_dam_sheets([str(sample_sheet(dam.slug)) for dam in data.project.dams])
+    """Each dam's sheet (the provisional one where there is one) and, for the dams in CURVE_DAMS, its curve sheet."""
+    data.import_dam_sheets([str(PROVISIONAL_SHEETS.get(dam.slug, sample_sheet(dam.slug))) for dam in data.project.dams])
     for dam in data.project.dams:
-        dam.shape_class = SAMPLE_SHAPE_CLASSES[dam.slug]
-    data.project.save()
+        if dam.slug in CURVE_DAMS:
+            import_curve_sheet(data.project, dam, sample_curve(dam.slug))
     return data
 
 
 def sample_curve_inputs(folder) -> RegionalData:
-    """`sample_regional` plus each dam's sheet and shape class."""
+    """`sample_regional` plus each dam's sheet and the curve sheets of CURVE_DAMS."""
     return _add_curves(sample_regional(folder))
 
 
@@ -86,12 +95,13 @@ def sample_dam_results(data: RegionalData, slug: str):
     dam = next(dam for dam in data.project.dams if dam.slug == slug)
     suspended = compute_suspended(data.sub_basins(dam), data.zonal)
     bedload = compute_dam_bedload(data.project, dam)
-    curve = compute_dam_curve(data.dam_sheet(dam).data, dam)
+    curve = compute_dam_curve(data.project, data.dam_sheet(dam).data, dam)
     return dam, suspended, bedload, curve, compute_dam_integration(suspended, bedload, curve, dam)
 
 
 def sample_integration_inputs(folder) -> RegionalData:
-    """`sample_bedload_inputs` plus each dam's sheet and shape class, and the placeholder years of the three dams."""
+    """`sample_bedload_inputs` plus each dam's sheet and curve sheet as in `sample_curve_inputs`, and the placeholder
+    years of the three dams."""
     data = _add_curves(sample_bedload_inputs(folder))
     for dam in data.project.dams:
         dam.commissioning_year, dam.analysis_year = SAMPLE_COMMISSIONING_YEAR, SAMPLE_ANALYSIS_YEAR
