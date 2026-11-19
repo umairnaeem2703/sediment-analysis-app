@@ -13,7 +13,6 @@ from src.ui.steps.reservoir_step import ReservoirStep
 from src.ui.steps.suspended_step import SuspendedStep
 from src.ui.wizard import Wizard
 from tests.samples import (
-    PROVISIONAL_SHEETS,
     SAMPLE_BASINS,
     SAMPLE_FRACTIONS,
     SAMPLE_ZONAL,
@@ -48,7 +47,7 @@ def app(tk_root, tmp_path, errors):
     wizard.go_to(1)
     regional_step.import_basin_table(str(SAMPLE_BASINS))
     regional_step.import_zonal_means(str(SAMPLE_ZONAL))
-    regional_step.import_dam_sheets([str(PROVISIONAL_SHEETS.get(slug, sample_sheet(slug))) for slug in SLUGS])
+    regional_step.import_dam_sheets([str(sample_sheet(slug)) for slug in SLUGS])
     wizard.go_to(2)
     yield wizard, step, later, top
     top.destroy()

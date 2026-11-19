@@ -24,8 +24,8 @@ GRID_COLUMNS = (
 class ReservoirStep(Step):
     """Step 6: the measured reservoir curve of the chosen dam (A5, B3.3, D75).
 
-    The user imports the dam's curve sheet. Generate checks that the dam sheet agrees with the curve, refusing it with
-    every disagreement named when it does not, and shows the curve with Hmin read from it.
+    The user imports the dam's curve sheet. Generate checks that the curve covers the dam sheet (crest, Hmax and Vdead), naming
+    every problem when it does not, and shows the curve with Hmin read from it.
     """
 
     title = "Reservoir curve"

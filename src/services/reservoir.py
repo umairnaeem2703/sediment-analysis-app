@@ -2,7 +2,7 @@
 
 `validate_curve_sheet` and `load_curve_sheet` read a curve sheet: one row per level with its volume and surface area.
 `import_curve_sheet` checks one and copies it into the project as the dam's curve. `compute_curve` and
-`compute_dam_curve` put the table together with the dam sheet, refusing a dam sheet that disagrees with it, and give the
+`compute_dam_curve` put the table together with the dam sheet, refusing a dam sheet the curve does not cover, and give the
 warnings. `write_reservoir_csv` writes `reservoir_curve.csv` into a folder it is given; the run folder itself belongs
 to the reporting service (M5).
 """
@@ -75,7 +75,7 @@ def load_curve_sheet(path) -> Loaded:
 
 def import_curve_sheet(project: Project, dam: Dam, path) -> Loaded:
     """Check a curve sheet and copy it into the project as the dam's curve. An unusable file raises and nothing is
-    copied. Whether the dam sheet agrees with it is checked when the curve is computed."""
+    copied. Whether it covers the dam sheet is checked when the curve is computed."""
     loaded = load_curve_sheet(path)
     relative = project.import_file(path, f"inputs/curves/{dam.slug}_curve{Path(path).suffix.lower()}")
     previous = dam.curve_sheet
@@ -92,8 +92,8 @@ def import_curve_sheet(project: Project, dam: Dam, path) -> Loaded:
 
 def compute_curve(table: pd.DataFrame, sheet: DamSheet, warnings=()) -> CurveResult:
     """The curve of a validated curve sheet with the values of the dam sheet, and its warnings: `warnings` (those of
-    reading the curve sheet) and the plausibility warning. Raises ValueError when the dam sheet disagrees with the
-    curve."""
+    reading the curve sheet) and the plausibility warning. Raises ValueError when the curve does not cover the dam
+    sheet."""
     curve = build_curve(
         table[ELEVATION_M],
         table[VOLUME_HM3],

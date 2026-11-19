@@ -335,7 +335,7 @@ def test_p_m5_03_run_json_records_the_parameters_with_sigma_phi_and_seed(tmp_pat
     assert parameters["Projection length"] == {"name": "Projection length", "value": 100, "unit": "years"}
     names = [name for name in parameters if name.startswith(("H", "V"))]
     assert names == ["Hbed", "Hmin", "Hmax", "Hcrest", "Vactive", "Vmax", "Vdead"]
-    assert parameters["Hbed"]["value"] == 1055.0  # the first level of the curve
+    assert parameters["Hbed"]["value"] == 1059.0  # the thalweg, from the dam sheet
     assert parameters["Hmin"]["value"] == pytest.approx(curve.curve.h_min_m, rel=1e-12)
 
 

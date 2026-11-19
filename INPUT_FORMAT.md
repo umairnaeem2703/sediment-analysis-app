@@ -80,7 +80,7 @@ Dam Name,Drainage Area (km2),Longest River Length (km),Top Elevation of River,Bo
 
 If the area or slope differs from the basin table by more than 1 %, the program warns (it does not stop).
 
-The dam sheet must agree with the dam's reservoir curve sheet ([section 4](#4-step-6-reservoir-curve-sheet)): step 6 refuses the curve otherwise.
+The dam sheet holds the operating values; the dam's reservoir curve sheet ([section 4](#4-step-6-reservoir-curve-sheet)) must cover them, or step 6 refuses the curve.
 
 ## 3. Step 5: Bedload
 
@@ -159,14 +159,13 @@ Elevation (m),Volume (hm3),Surface Area (km2)
 1057,0.212,0.085
 ```
 
-The dam sheet must agree with the curve, or step 6 refuses it and lists every difference:
+The dam sheet holds the operating values, which need not lie on the curve: `Bottom Elevation of River` is the thalweg at the dam axis and `Maximum Volume` the operating maximum, not the curve's volume at the maximum reservoir elevation. The curve must cover them, or step 6 refuses it and lists every problem:
 
-| Dam sheet | Must agree with |
+| Dam sheet | Rule |
 |---|---|
-| `Bottom Elevation of River` | The first level of the curve, within 0.5 m |
 | `Crest Elevation` | The last level of the curve, within 0.5 m |
 | `Maximum Reservoir Elevation` | Lies between the first and the last level |
-| `Maximum Volume` | The curve's volume at the maximum reservoir elevation, within 1 % |
+| `Maximum Volume` - `Active Volume` | Lies between the first and the last volume |
 
 Hmin is the level of the curve at the dead volume (`Maximum Volume` - `Active Volume`).
 
@@ -187,7 +186,7 @@ Hmin is the level of the curve at the dead volume (`Maximum Volume` - `Active Vo
 | A cell marked in the basin-table grid, or `... must be a number ..., found '834,7'` | A cell is empty, not a number, or uses a comma as a decimal | Edit the cell in the grid, or fix the file and import again. Write numbers with a point |
 | `dam 'X' is not in the basin table` | The dam sheet's name does not match any dam in the basin table | Make the names the same |
 | `no zonal mean can be assigned to sub-basin(s): ...` | A sub-basin in the basin table has no matching row in the zonal means (or its name appears twice with different values) | Add the row or correct the name |
-| `The reservoir curve cannot be used: ... differs from ...` | The dam sheet disagrees with the curve sheet (section 4) | Ask the hydrologist which file is right, correct it and import it again |
+| `The reservoir curve cannot be used: ...` | The curve sheet does not cover the dam sheet (section 4) | Ask the hydrologist which file is right, correct it and import it again |
 
 ## 7. Checklist before you import
 
@@ -197,4 +196,4 @@ Hmin is the level of the curve at the dead volume (`Maximum Volume` - `Active Vo
 4. Dam names agree between the basin table and the dam sheets; sub-basin names agree between the basin table and the zonal means.
 5. Fractions `Fi` add up to 1.
 6. For flow you have either a daily file (`Date`, `Flow Q (m3/s)`) or the DSİ monthly table, not both for the same dam.
-7. Each dam has a reservoir curve sheet that agrees with its dam sheet.
+7. Each dam has a reservoir curve sheet that reaches its crest.

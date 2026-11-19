@@ -6,8 +6,8 @@ import pandas as pd
 import pytest
 
 from src.services.reporting import CURVE_PNG, reservoir_curve_figure, write_reservoir_curve
-from src.services.reservoir import compute_dam_curve, import_curve_sheet, write_reservoir_csv
-from tests.samples import CURVE_DAMS, sample_curve, sample_curve_inputs, sample_regional, sample_sheet
+from src.services.reservoir import compute_dam_curve, write_reservoir_csv
+from tests.samples import CURVE_DAMS, sample_curve_inputs
 
 BENCHMARKS = Path(__file__).parents[1] / "benchmarks"
 
@@ -25,22 +25,17 @@ def test_p_m4_01_the_kavsakkaya_curve_is_its_curve_sheet_with_hmin_read_from_it(
     result = _result(sample_curve_inputs(tmp_path / "project"))
 
     assert len(result.table) == 69 and result.warnings == []
-    assert result.curve.h_min_m == pytest.approx(1086.27, abs=0.005)  # Vdead = 90.57 - 74.1 hm3 (provisional, OI-11)
+    assert result.curve.h_min_m == pytest.approx(1071.99, abs=0.005)  # Vdead = 80.83 - 76.14 hm3
     assert result.curve.volume(1099.0) == pytest.approx(33.861)  # the sheet has no row at 1099 m
 
 
-def test_p_m4_01_the_sample_dam_sheet_of_kavsakkaya_is_refused_against_its_curve(tmp_path):
-    """OI-11: until the hydrologist corrects one of the two files, the real sample sheet does not agree."""
-    data = sample_regional(tmp_path / "project")
-    data.import_dam_sheets([str(sample_sheet("kavsakkaya"))])
-    dam = _dam(data, "kavsakkaya")
-    import_curve_sheet(data.project, dam, sample_curve("kavsakkaya"))
+def test_p_m4_01_the_operating_values_come_from_the_dam_sheet(tmp_path):
+    """OI-11: Hbed is the thalweg and Vmax the operating maximum; neither is the curve's own value."""
+    curve = _result(sample_curve_inputs(tmp_path / "project")).curve
 
-    with pytest.raises(ValueError, match="cannot be used") as raised:
-        _result(data)
-
-    assert "Hbed on the dam sheet (1063 m)" in str(raised.value)
-    assert "Vmax on the dam sheet (80.8 hm³)" in str(raised.value)
+    assert (curve.bed_elev_m, curve.max_elev_m, curve.crest_elev_m) == (1059.0, 1122.29, 1124.0)
+    assert (curve.max_vol_hm3, curve.active_vol_hm3) == (80.83, 76.14)
+    assert curve.levels_m[0] == 1055.0 and curve.volume(curve.max_elev_m) == pytest.approx(90.527, abs=0.001)
 
 
 def test_p_m4_01_a_dam_without_a_curve_sheet_has_no_curve(tmp_path):

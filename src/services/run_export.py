@@ -85,7 +85,7 @@ def _parameters(dam: Dam, curve: CurveResult, integration: IntegrationResult) ->
         Parameter("Commissioning year", integration.commissioning_year, ""),
         Parameter("Analysis year", integration.analysis_year, ""),
         Parameter("Projection length", len(integration.projection) - 1, "years"),
-        Parameter("Hbed", shape.bed_elev_m, "m"),  # the first level of the curve
+        Parameter("Hbed", shape.bed_elev_m, "m"),  # the thalweg at the dam axis, from the dam sheet
         Parameter("Hmin", shape.h_min_m, "m"),  # the level of the curve at Vdead
         Parameter("Hmax", shape.max_elev_m, "m"),
         Parameter("Hcrest", shape.crest_elev_m, "m"),

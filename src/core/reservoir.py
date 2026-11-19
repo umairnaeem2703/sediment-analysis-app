@@ -1,10 +1,11 @@
 """The measured elevation-volume curve of one dam (FR-M4-01, FR-M4-02, B3.3, D75).
 
 The curve is the hydrologist's table of level (m), volume (hm³) and surface area (km²), read between its rows by linear
-interpolation and held at its first and last rows outside them. The dam sheet gives Hmax, Hcrest, Vactive and Vmax;
-Vdead = Vmax - Vactive and Hmin is the level of the curve at Vdead. `check_table` checks the table itself and
-`check_agreement` that the dam sheet agrees with it; `build_curve` refuses a curve that fails either.
-`curve_warnings` holds the plausibility warning.
+interpolation and held at its first and last rows outside them. The dam sheet gives the operating values: Hbed (the
+thalweg at the dam axis), Hmax, Hcrest, Vactive and Vmax. They need not lie on the curve: Vmax is the operating maximum,
+not the curve's volume at Hmax (OI-11). Vdead = Vmax - Vactive and Hmin is the level of the curve at Vdead.
+`check_table` checks the table itself and `check_fit` that the curve covers the dam sheet; `build_curve` refuses a
+curve that fails either. `curve_warnings` holds the plausibility warning.
 """
 
 import math
@@ -14,8 +15,7 @@ from typing import List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
-LEVEL_TOLERANCE_M = 0.5  # the bed and the crest of the dam sheet against the curve's first and last level (OI-11)
-VOLUME_TOLERANCE = 0.01  # Vmax against the curve's volume at Hmax, as a share of the curve's volume (OI-11)
+LEVEL_TOLERANCE_M = 0.5  # the crest of the dam sheet against the curve's last level
 
 ELEVATION_M, VOLUME_HM3, AREA_KM2 = "Elevation_m", "Volume_hm3", "Area_km2"
 
@@ -25,15 +25,11 @@ class ReservoirCurve:
     levels_m: Tuple[float, ...]
     volumes_hm3: Tuple[float, ...]
     areas_km2: Tuple[float, ...]
+    bed_elev_m: float
     max_elev_m: float
     crest_elev_m: float
     active_vol_hm3: float
     max_vol_hm3: float
-
-    @property
-    def bed_elev_m(self) -> float:
-        """The first level of the curve."""
-        return self.levels_m[0]
 
     @property
     def dead_vol_hm3(self) -> float:
@@ -88,7 +84,7 @@ def check_table(
     return problems
 
 
-def check_agreement(
+def check_fit(
     levels_m: Sequence[float],
     volumes_hm3: Sequence[float],
     *,
@@ -98,9 +94,9 @@ def check_agreement(
     active_vol_hm3: float,
     max_vol_hm3: float,
 ) -> List[str]:
-    """Every way the dam sheet disagrees with a valid curve table (OI-11), each naming both values: Hbed and Hcrest within
-    LEVEL_TOLERANCE_M of the curve's first and last level, Hmax inside the curve, Vmax within VOLUME_TOLERANCE of the
-    curve's volume at Hmax, and Hbed < Hmax <= Hcrest and 0 < Vactive < Vmax."""
+    """Every way the dam sheet does not fit a valid curve table, each naming the values: Hbed < Hmax <= Hcrest and
+    0 < Vactive < Vmax; Hcrest within LEVEL_TOLERANCE_M of the curve's last level, so the curve reaches the crest; Hmax
+    inside the curve; and Vdead inside the curve's volumes, so Hmin is read from it."""
     named = {
         "Hbed": bed_elev_m,
         "Hmax": max_elev_m,
@@ -120,11 +116,6 @@ def check_agreement(
     if not 0 < active_vol_hm3 < max_vol_hm3:
         problems.append(f"Vactive ({active_vol_hm3:g} hm³) must be above 0 and below Vmax ({max_vol_hm3:g} hm³).")
     first, last = levels_m[0], levels_m[-1]
-    if abs(bed_elev_m - first) > LEVEL_TOLERANCE_M:
-        problems.append(
-            f"Hbed on the dam sheet ({bed_elev_m:g} m) differs from the first level of the curve ({first:g} m) "
-            f"by more than {LEVEL_TOLERANCE_M:g} m."
-        )
     if abs(crest_elev_m - last) > LEVEL_TOLERANCE_M:
         problems.append(
             f"Hcrest on the dam sheet ({crest_elev_m:g} m) differs from the last level of the curve ({last:g} m) "
@@ -132,13 +123,12 @@ def check_agreement(
         )
     if not first <= max_elev_m <= last:
         problems.append(f"Hmax on the dam sheet ({max_elev_m:g} m) is outside the curve ({first:g} m to {last:g} m).")
-    else:
-        on_curve = float(np.interp(max_elev_m, levels_m, volumes_hm3))
-        if abs(max_vol_hm3 - on_curve) > VOLUME_TOLERANCE * on_curve:
-            problems.append(
-                f"Vmax on the dam sheet ({max_vol_hm3:g} hm³) differs from the curve's volume at Hmax = {max_elev_m:g} m "
-                f"({on_curve:.4g} hm³) by more than {VOLUME_TOLERANCE:.0%}."
-            )
+    dead = max_vol_hm3 - active_vol_hm3
+    if dead > 0 and not volumes_hm3[0] <= dead <= volumes_hm3[-1]:
+        problems.append(
+            f"Vdead = Vmax - Vactive ({dead:g} hm³) is outside the volumes of the curve "
+            f"({volumes_hm3[0]:g} to {volumes_hm3[-1]:g} hm³), so Hmin cannot be read from it."
+        )
     return problems
 
 
@@ -154,11 +144,11 @@ def build_curve(
     max_vol_hm3: float,
 ) -> ReservoirCurve:
     """The curve of the table with the dam sheet's values. Raises ValueError listing every problem of the table or, for
-    a valid table, every disagreement with the dam sheet."""
+    a valid table, every way the dam sheet does not fit it."""
     levels, volumes, areas = (tuple(float(value) for value in column) for column in (levels_m, volumes_hm3, areas_km2))
     problems = check_table(levels, volumes, areas)
     if not problems:
-        problems = check_agreement(
+        problems = check_fit(
             levels,
             volumes,
             bed_elev_m=bed_elev_m,
@@ -169,7 +159,7 @@ def build_curve(
         )
     if problems:
         raise ValueError("The reservoir curve cannot be used:\n" + "\n".join(f"- {problem}" for problem in problems))
-    return ReservoirCurve(levels, volumes, areas, max_elev_m, crest_elev_m, active_vol_hm3, max_vol_hm3)
+    return ReservoirCurve(levels, volumes, areas, bed_elev_m, max_elev_m, crest_elev_m, active_vol_hm3, max_vol_hm3)
 
 
 def curve_warnings(curve: ReservoirCurve, drainage_area_km2: Optional[float] = None) -> List[str]:

@@ -19,9 +19,6 @@ SAMPLE_ZONAL = resource_path("inputs", "raw_zonal_means.csv")
 SAMPLE_FRACTIONS = resource_path("inputs", "fractional_parameters.csv")
 # The dams with a curve sheet in inputs/reservoir_curves/ (D75); the Çubuk dams have none yet.
 CURVE_DAMS = ("kavsakkaya",)
-# Provisional (OI-11): the Kavşakkaya dam sheet disagrees with its curve sheet, so the curve tests use this copy of it
-# with Hbed (1055 m) and Vmax (90.57 hm³) made to agree with the curve, until the hydrologist corrects one of the two.
-PROVISIONAL_SHEETS = {"kavsakkaya": resource_path("tests", "data", "kavsakkaya_bathymetry_oi11.csv")}
 # Placeholders, not the dams' real years (OI-02): the integration goldens depend on them and are regenerated with the
 # real years before they are signed off. The analysis year is fixed so that the goldens do not move with the date.
 SAMPLE_COMMISSIONING_YEAR, SAMPLE_ANALYSIS_YEAR = 1990, 2020
@@ -68,8 +65,8 @@ def sample_curve(slug: str):
 
 
 def _add_curves(data: RegionalData) -> RegionalData:
-    """Each dam's sheet (the provisional one where there is one) and, for the dams in CURVE_DAMS, its curve sheet."""
-    data.import_dam_sheets([str(PROVISIONAL_SHEETS.get(dam.slug, sample_sheet(dam.slug))) for dam in data.project.dams])
+    """Each dam's sheet and, for the dams in CURVE_DAMS, its curve sheet."""
+    data.import_dam_sheets([str(sample_sheet(dam.slug)) for dam in data.project.dams])
     for dam in data.project.dams:
         if dam.slug in CURVE_DAMS:
             import_curve_sheet(data.project, dam, sample_curve(dam.slug))

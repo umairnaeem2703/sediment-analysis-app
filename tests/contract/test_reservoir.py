@@ -16,7 +16,7 @@ from src.services.reservoir import (
     validate_curve_sheet,
     write_reservoir_csv,
 )
-from tests.samples import PROVISIONAL_SHEETS, sample_curve
+from tests.samples import sample_curve, sample_sheet
 
 HEADER = "Elevation (m),Volume (hm3),Surface Area (km2)\n"
 ROWS = "100,0,0.5\n110,10,1.5\n120,30,2.5\n130,60,3.5\n"
@@ -194,13 +194,15 @@ def test_c_m4_01_the_curve_reads_the_dam_sheet_and_hmin_from_the_curve(tmp_path)
     assert result.table.equals(table)
 
 
-def test_c_m4_01_a_dam_sheet_that_disagrees_is_refused_with_every_difference(tmp_path):
+def test_c_m4_01_a_dam_sheet_the_curve_does_not_cover_is_refused_with_every_problem(tmp_path):
     table, _ = load_curve_sheet(_write(tmp_path, HEADER + ROWS))
 
     with pytest.raises(ValueError, match="cannot be used") as raised:
-        compute_curve(table, _sheet(bed_elev_m=95.0, max_vol_hm3=50.0))
+        compute_curve(table, _sheet(crest_elev_m=140.0, max_vol_hm3=100.0, active_vol_hm3=30.0))
 
-    assert "Hbed on the dam sheet (95 m)" in str(raised.value) and "Vmax on the dam sheet (50 hm³)" in str(raised.value)
+    assert "Hcrest on the dam sheet (140 m)" in str(raised.value) and "Vdead = Vmax - Vactive (70 hm³)" in str(
+        raised.value
+    )
 
 
 def test_c_m4_01_the_warnings_of_reading_and_of_the_curve_reach_the_result(tmp_path):
@@ -225,8 +227,8 @@ def test_x_01_a_dam_without_a_curve_sheet_says_where_to_import_it(project):
         compute_dam_curve(project, _sheet(), project.dams[0])
 
 
-def test_c_m4_01_the_provisional_kavsakkaya_sheet_agrees_with_its_curve(project):
-    """OI-11: the test copy of the Kavşakkaya dam sheet, with Hbed and Vmax taken from the curve."""
+def test_c_m4_01_the_kavsakkaya_dam_sheet_fits_its_curve_sheet(project):
+    """OI-11: the operating values the hydrologist gave (Vdead = 80.83 - 76.14 hm³) with the measured curve."""
     from src.services.regional import validate_dam_sheet
     from src.utils.paths import read_table
 
@@ -234,10 +236,13 @@ def test_c_m4_01_the_provisional_kavsakkaya_sheet_agrees_with_its_curve(project)
         {"Dam Name": ["Kavşakkaya"], "Basin Name": ["B"], "Sub-basin Name": ["S"], "Drainage Area (km2)": [309.2]}
         | {"Main Waterway Slope": [0.23]}
     )
-    sheet = validate_dam_sheet(read_table(PROVISIONAL_SHEETS["kavsakkaya"]), "sheet", basins).data
+    sheet = validate_dam_sheet(read_table(sample_sheet("kavsakkaya")), "sheet", basins).data
     table, _ = load_curve_sheet(sample_curve("kavsakkaya"))
 
-    assert compute_curve(table, sheet).curve.h_min_m == pytest.approx(1086.2733, abs=1e-4)
+    curve = compute_curve(table, sheet).curve
+
+    assert curve.bed_elev_m == 1059.0 and curve.dead_vol_hm3 == pytest.approx(4.69)
+    assert curve.h_min_m == pytest.approx(1071.9946, abs=1e-4)
 
 
 def test_c_m4_01_the_curve_is_written_as_utf8_with_bom_and_unit_named_columns(tmp_path):

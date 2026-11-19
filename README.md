@@ -239,7 +239,7 @@ The lines appear only for a record of more than three years with some bedload. T
 
 **The method.** Between two rows of the sheet the curve is a straight line, so a level missing from the sheet is filled in; outside the sheet it is held at the first and last rows. The dam sheet gives Hmax, Hcrest, the active volume $V_{active}$ and the maximum volume $V_{max}$. The dead volume is $V_{dead} = V_{max} - V_{active}$, and **Hmin** is the level of the curve at $V_{dead}$.
 
-The dam sheet must agree with the curve sheet, or the curve is refused with every difference named: the bed elevation and the crest within 0.5 m of the curve's first and last level, Hmax inside the curve, and $V_{max}$ within 1 % of the curve's volume at Hmax. If they disagree, ask the hydrologist which file is right.
+The dam sheet holds the **operating** values, which need not lie on the curve: Hbed is the thalweg at the dam axis and $V_{max}$ the operating maximum, not the curve's volume at Hmax. The curve must cover them, or it is refused with every problem named: the crest within 0.5 m of the curve's last level, and Hmax and $V_{dead}$ inside the curve.
 
 **What you get.** A summary (*"Hmin … m (the level of the dead volume, … hm³). Surface area at Hmax … km²."*), a **Curve table** (the rows of the curve sheet: *Elevation (m), Volume (hm³), Surface area (km²)*) and a **Curve chart** of volume and area with Hmin and Hmax marked.
 
@@ -293,10 +293,10 @@ The sample files in `inputs/` are enough to run one dam from start to finish.
 
 1. **Project.** Create a project named *Kavsakkaya demo* in an empty folder.
 2. **Regional data.** Import `inputs/master_yield.csv` (basin table), `inputs/raw_zonal_means.csv` and the dam sheet `inputs/bathymetry/kavsakkaya_bathymetry.csv`. Kavşakkaya has one sub-basin, *Ankara Alt Havzası*, of 309.2 km² with a slope of 0.23 m/m, and the zonal means file holds its soil loss.
-3. **Select dam.** Choose *Kavşakkaya* and enter a commissioning year (the samples do not supply one). Leave trap efficiency at 100 and the analysis year blank. Press *Use this dam*. The sheet shows Hbed 1063 m, Hmax 1122.3 m, Hcrest 1124 m, active volume 74.1 hm³ and maximum volume 80.8 hm³.
+3. **Select dam.** Choose *Kavşakkaya* and enter a commissioning year (the samples do not supply one). Leave trap efficiency at 100 and the analysis year blank. Press *Use this dam*. The sheet shows Hbed 1059 m, Hmax 1122.29 m, Hcrest 1124 m, active volume 76.14 hm³ and maximum volume 80.83 hm³.
 4. **Suspended.** Press *Compute* and read the dam total.
 5. **Bedload.** Choose `inputs/dam_flow_data/kavsakkaya_flow.csv` and `inputs/fractional_parameters.csv`, keep sigma 0.6, phi 0 and seed 0, press *Compute*. The sample flow is a DSİ monthly table, so the result carries the **Synthetic daily flow** flag.
-6. **Reservoir curve.** Choose `inputs/reservoir_curves/kavsakkaya_reservoir_curve.csv` and press *Generate curve*. Until the hydrologist resolves OI-11 the sample dam sheet disagrees with this curve (bed 1063 m against 1055 m, and 80.8 hm³ at Hmax against the curve's 90.57 hm³), so the curve is refused with both differences listed.
+6. **Reservoir curve.** Choose `inputs/reservoir_curves/kavsakkaya_reservoir_curve.csv` and press *Generate curve*. The dead volume is $80.83 - 76.14 = 4.69$ hm³, which the curve reaches at Hmin = 1071.99 m.
 7. **Integration and projection.** Keep 100 years and press *Compute*. Read the three lifespans.
 8. **Report.** Press *Export*. A folder `outputs/kavsakkaya_<YYYYMMDD_HHMM>/` appears inside your project, with the files described next.
 
@@ -361,9 +361,9 @@ The full design record is [docs/project_spec.md](docs/project_spec.md).
 
 - **Hand calculations.** For each phase (suspended, bedload, reservoir curve, integration) a script in [tests/verification/](tests/verification) writes a workbook of **live formulas** that a hydrologist can open and inspect, together with CSV files worked out with Python's `math` alone. The unit tests compare the program's results with those CSVs, so the check never uses the program's own output.
 - **Reference outputs.** [tests/benchmarks/](tests/benchmarks) holds the reviewed outputs for the sample dams. They are regenerated only by script and merged only after hydrologist sign-off. Each comes with a manifest of the input hashes and settings used.
-- **Sign-off.** The suspended-sediment workbook was signed off by the hydrologist. The bedload formulas, oracle and reference outputs were approved on 2026-10-26. The reservoir and integration reference outputs of the measured curve await sign-off.
+- **Sign-off.** The suspended-sediment workbook was signed off by the hydrologist. The bedload formulas, oracle and reference outputs were approved on 2026-10-26. The reservoir and integration reference outputs of the measured curve were signed off on 2026-11-19.
 - The reference outputs for integration use placeholder commissioning and analysis years (1990 and 2020), because the samples do not supply them.
-- The reservoir and integration reference outputs exist only for Kavşakkaya, the one dam with a curve sheet so far, and use a test copy of its dam sheet with the bed (1055 m) and the maximum volume (90.57 hm³) taken from the curve, until the hydrologist resolves OI-11.
+- The reservoir and integration reference outputs exist only for Kavşakkaya, the one dam with a curve sheet so far.
 
 To check a formula yourself, open the workbook for the phase in `tests/verification/` and compare a case with the program's output for the same inputs.
 

@@ -1,4 +1,4 @@
-"""Write the verification oracle for the measured reservoir curve (B3.3, D75; OI-11).
+"""Write the verification oracle for the measured reservoir curve (B3.3, D75).
 
 Run `python tests/verification/make_reservoir_oracle.py` to rewrite these files next to this script:
 
@@ -8,9 +8,8 @@ Run `python tests/verification/make_reservoir_oracle.py` to rewrite these files 
 - `reservoir_cases.csv`, `reservoir_tables.csv`, `reservoir_points.csv`: the same cases with the results worked out
   below using only plain Python. The unit tests read these files, so the oracle never depends on `src`.
 
-Case 1 is the Kavşakkaya curve sheet in `inputs/reservoir_curves/` with the provisional test dam sheet of the pipeline
-tests (Hbed and Vmax made to agree with the curve until OI-11 is resolved). Change a case here, review the workbook, and
-only then commit the files.
+Case 1 is the Kavşakkaya curve sheet in `inputs/reservoir_curves/` with the operating values of its dam sheet, as the
+hydrologist gave them (OI-11). Change a case here, review the workbook, and only then commit the files.
 """
 
 import csv
@@ -33,13 +32,13 @@ def read_curve(path):
 CASES = [
     (
         1,
-        "Kavsakkaya curve sheet, provisional test dam sheet (OI-11)",
+        "Kavsakkaya curve sheet and dam sheet (OI-11)",
         read_curve(KAVSAKKAYA_CURVE),
-        1055.0,
-        1122.3,
+        1059.0,
+        1122.29,
         1124.0,
-        74.1,
-        90.57,
+        76.14,
+        80.83,
         1099.0,  # the sheet has no row at 1099 m
     ),
     (

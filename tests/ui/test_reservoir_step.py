@@ -8,7 +8,7 @@ from src.ui.steps.project_step import ProjectStep
 from src.ui.steps.regional_step import RegionalStep
 from src.ui.steps.reservoir_step import ReservoirStep
 from src.ui.wizard import Wizard
-from tests.samples import PROVISIONAL_SHEETS, SAMPLE_BASINS, SAMPLE_ZONAL, sample_curve, sample_sheet
+from tests.samples import SAMPLE_BASINS, SAMPLE_ZONAL, sample_curve, sample_sheet
 from tests.ui.fakes import FakeStep
 
 SLUGS = ("kavsakkaya", "cubuk_1", "cubuk_2")
@@ -31,8 +31,7 @@ def warnings(monkeypatch):
 
 @pytest.fixture()
 def app(tk_root, tmp_path, errors):
-    """The wizard at step 3 with the sample tables and the three dam sheets imported (the provisional Kavşakkaya sheet
-    of OI-11). The suspended and bedload steps are stand-ins: the curve does not use their results."""
+    """The wizard at step 3 with the sample tables and the three dam sheets imported. The suspended and bedload steps are stand-ins: the curve does not use their results."""
     top = tk.Toplevel(tk_root)
     project_step, regional_step, dam_step = ProjectStep(), RegionalStep(), DamStep()
     suspended, bedload, step, later = (
@@ -47,7 +46,7 @@ def app(tk_root, tmp_path, errors):
     wizard.go_to(1)
     regional_step.import_basin_table(str(SAMPLE_BASINS))
     regional_step.import_zonal_means(str(SAMPLE_ZONAL))
-    regional_step.import_dam_sheets([str(PROVISIONAL_SHEETS.get(slug, sample_sheet(slug))) for slug in SLUGS])
+    regional_step.import_dam_sheets([str(sample_sheet(slug)) for slug in SLUGS])
     wizard.go_to(2)
     yield wizard, step, later, tmp_path
     top.destroy()
@@ -116,7 +115,7 @@ def test_w_m4_01_generate_fills_the_table_the_chart_and_the_summary(app):
     rows = _rows(step)
     assert len(rows) == 69 and rows[0] == ("1055.00", "0.014", "0.028") and rows[-1][0] == "1124.00"
     summary = step.summary_var.get()
-    assert "Hmin 1086.27 m" in summary and "16.47 hm³" in summary and "3.16 km²" in summary
+    assert "Hmin 1071.99 m" in summary and "4.69 hm³" in summary and "3.16 km²" in summary
     assert step._canvas is not None and step._canvas.get_tk_widget().winfo_exists()
     assert step.warning_var.get() == ""
     wizard.refresh()
@@ -135,19 +134,19 @@ def test_w_m4_01_an_invalid_curve_sheet_is_refused_and_named(app, errors, tmp_pa
     assert wizard.project.dams[0].curve_sheet is None
 
 
-def test_w_m4_01_a_dam_sheet_that_disagrees_with_the_curve_is_refused_with_every_difference(app, errors):
+def test_w_m4_01_a_curve_that_does_not_reach_the_crest_is_refused_with_every_problem(app, errors, tmp_path):
     wizard, step, _, _ = app
-    wizard.go_to(1)
-    wizard.steps[1].import_dam_sheets([str(sample_sheet("kavsakkaya"))])  # the real sample sheet (OI-11)
-    wizard.go_to(2)
     _reach_step(wizard)
-    step.use_curve_file(str(sample_curve("kavsakkaya")))
+    short = tmp_path / "short.csv"
+    lines = sample_curve("kavsakkaya").read_text(encoding="utf-8").splitlines()
+    short.write_text("\n".join(lines[:56]) + "\n", encoding="utf-8")  # up to 1110 m
+    step.use_curve_file(str(short))
 
     step.generate()
 
     assert not step.is_complete() and not _rows(step)
     assert len(errors) == 1 and errors[0][0] == "Reservoir curve"
-    assert "Hbed on the dam sheet (1063 m)" in errors[0][1] and "Vmax on the dam sheet (80.8 hm³)" in errors[0][1]
+    assert "Hcrest on the dam sheet (1124 m)" in errors[0][1] and "Hmax on the dam sheet (1122.29 m)" in errors[0][1]
 
 
 def test_w_m4_01_the_warnings_of_the_sheet_are_shown(app, warnings, tmp_path):

@@ -5,9 +5,8 @@ import pytest
 
 from src.core.reservoir import (
     LEVEL_TOLERANCE_M,
-    VOLUME_TOLERANCE,
     build_curve,
-    check_agreement,
+    check_fit,
     check_table,
     curve_warnings,
 )
@@ -43,7 +42,7 @@ def _curve(number=2, **changes):
     return build_curve(*columns, **_sheet(number, **changes))
 
 
-# --- U-M4-01: the table and its agreement with the dam sheet ----------------------------------
+# --- U-M4-01: the table and how it covers the dam sheet --------------------------------------
 
 
 def test_u_m4_01_a_rising_table_has_no_problems():
@@ -76,69 +75,60 @@ def test_u_m4_01_the_rows_of_the_messages_can_be_given():
     assert problems[0].startswith("row 5:")
 
 
-def test_u_m4_01_a_dam_sheet_that_agrees_has_no_problems():
-    assert check_agreement(LEVELS, VOLUMES, **_sheet()) == []
+def test_u_m4_01_a_dam_sheet_the_curve_covers_has_no_problems():
+    assert check_fit(LEVELS, VOLUMES, **_sheet()) == []
+
+
+def test_u_m4_01_the_operating_values_need_not_lie_on_the_curve():
+    """OI-11: Hbed is the thalweg and Vmax the operating maximum, so neither is compared with the curve."""
+    assert check_fit(LEVELS, VOLUMES, **_sheet(bed_elev_m=104.0, max_vol_hm3=40.0, active_vol_hm3=30.0)) == []
 
 
 @pytest.mark.parametrize(
     ("changes", "expected"),
     [
-        ({"bed_elev_m": 99.4}, "Hbed on the dam sheet (99.4 m) differs from the first level of the curve (100 m)"),
         ({"crest_elev_m": 130.6}, "Hcrest on the dam sheet (130.6 m) differs from the last level of the curve (130 m)"),
-        (
-            {"max_vol_hm3": 45.5},
-            "Vmax on the dam sheet (45.5 hm³) differs from the curve's volume at Hmax = 125 m (45 hm³)",
-        ),
-        ({"max_vol_hm3": 44.5}, "Vmax on the dam sheet (44.5 hm³)"),
+        ({"crest_elev_m": 129.4}, "Hcrest on the dam sheet (129.4 m)"),
+        ({"max_vol_hm3": 100.0, "active_vol_hm3": 30.0}, "Vdead = Vmax - Vactive (70 hm³) is outside the volumes"),
         ({"active_vol_hm3": 0.0}, "Vactive"),
         ({"active_vol_hm3": 45.0}, "Vactive"),
         ({"max_elev_m": 100.0}, "Hbed (100 m) < Hmax (100 m)"),
         ({"bed_elev_m": float("nan")}, "Hbed must be a finite number"),
     ],
 )
-def test_u_m4_01_each_disagreement_is_named_with_both_values(changes, expected):
-    problems = check_agreement(LEVELS, VOLUMES, **_sheet(**changes))
+def test_u_m4_01_each_problem_of_the_fit_is_named_with_the_values(changes, expected):
+    problems = check_fit(LEVELS, VOLUMES, **_sheet(**changes))
 
     assert any(expected in problem for problem in problems), problems
 
 
-def test_u_m4_01_the_tolerances_are_half_a_metre_and_one_percent():
-    assert (LEVEL_TOLERANCE_M, VOLUME_TOLERANCE) == (0.5, 0.01)
-    within = _sheet(bed_elev_m=99.5, crest_elev_m=130.5, max_vol_hm3=45.0 * 1.0099)
-
-    assert check_agreement(LEVELS, VOLUMES, **within) == []
+def test_u_m4_01_the_crest_may_be_half_a_metre_off_the_last_level():
+    assert LEVEL_TOLERANCE_M == 0.5
+    assert check_fit(LEVELS, VOLUMES, **_sheet(crest_elev_m=130.5)) == []
 
 
 def test_u_m4_01_hmax_outside_the_curve_is_refused():
-    problems = check_agreement([100.0, 110.0, 120.0], [0.0, 10.0, 30.0], **_sheet(crest_elev_m=125.0))
+    problems = check_fit([100.0, 110.0, 120.0], [0.0, 10.0, 30.0], **_sheet(crest_elev_m=125.0))
 
     assert any("Hmax on the dam sheet (125 m) is outside the curve (100 m to 120 m)" in p for p in problems)
 
 
-def test_u_m4_01_every_disagreement_is_listed_at_once():
-    problems = check_agreement(LEVELS, VOLUMES, **_sheet(bed_elev_m=95.0, max_vol_hm3=50.0))
+def test_u_m4_01_every_problem_is_listed_at_once():
+    problems = check_fit(LEVELS, VOLUMES, **_sheet(crest_elev_m=140.0, max_vol_hm3=100.0, active_vol_hm3=30.0))
 
     assert len(problems) == 2
 
 
-def test_u_m4_01_a_curve_is_not_built_from_a_bad_table_or_a_disagreeing_sheet():
+def test_u_m4_01_a_curve_is_not_built_from_a_bad_table_or_a_sheet_it_does_not_cover():
     with pytest.raises(ValueError, match="cannot be used:\n- row 4: the volume"):
         build_curve(LEVELS, [0.0, 10.0, 10.0, 60.0], AREAS, **_sheet())
-    with pytest.raises(ValueError, match="Hbed on the dam sheet"):
-        build_curve(LEVELS, VOLUMES, AREAS, **_sheet(bed_elev_m=90.0))
+    with pytest.raises(ValueError, match="Hcrest on the dam sheet"):
+        build_curve(LEVELS, VOLUMES, AREAS, **_sheet(crest_elev_m=140.0))
 
 
-def test_u_m4_01_the_kavsakkaya_dam_sheet_disagrees_with_its_curve_sheet():
-    """OI-11: the sample dam sheet of Kavşakkaya, refused against the hydrologist's curve."""
-    problems = check_agreement(
-        [row["Elevation_m"] for row in TABLES if row["Case"] == 1],
-        [row["Volume_hm3"] for row in TABLES if row["Case"] == 1],
-        **_sheet(1, bed_elev_m=1063.0, max_vol_hm3=80.8),
-    )
-
-    assert len(problems) == 2
-    assert "Hbed on the dam sheet (1063 m)" in problems[0] and "(1055 m)" in problems[0]
-    assert "Vmax on the dam sheet (80.8 hm³)" in problems[1] and "(90.57 hm³)" in problems[1]
+def test_u_m4_01_the_kavsakkaya_dam_sheet_fits_its_curve_sheet():
+    """OI-11: the operating values the hydrologist gave, with the measured curve."""
+    assert _curve(1).h_min_m == pytest.approx(1071.99, abs=0.005)
 
 
 def test_u_m4_01_a_surface_area_above_the_drainage_area_is_a_warning():
@@ -172,7 +162,7 @@ def test_u_m4_02_volume_area_and_the_inverse_match_the_hand_calculation(point):
     assert curve.elevation(point["V_hm3"]) == pytest.approx(point["H_m"], rel=1e-12)
 
 
-def test_u_m4_02_hmin_is_the_level_of_the_dead_volume_and_hbed_the_first_level():
+def test_u_m4_02_hmin_is_the_level_of_the_dead_volume_and_hbed_the_dam_sheets():
     curve = _curve()
 
     assert curve.h_min_m == 110.0 and curve.volume(curve.h_min_m) == curve.dead_vol_hm3 == 10.0
