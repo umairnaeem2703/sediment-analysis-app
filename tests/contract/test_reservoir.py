@@ -1,4 +1,5 @@
-"""C-M4-01: the curve sheet of one dam, its import into the project and the curve service (FR-M4-01, FR-M4-02, D75)."""
+"""C-M4-01: the curve sheet of one dam, its import into the project and the curve service (FR-M4-01, FR-M4-02, D75,
+D76)."""
 
 import json
 
@@ -6,34 +7,22 @@ import pandas as pd
 import pytest
 
 from src.services.project import Project
-from src.services.regional import DamSheet, TableError
+from src.services.regional import TableError
 from src.services.reservoir import (
     CSV_NAME,
+    apply_h_min,
     compute_curve,
     compute_dam_curve,
     import_curve_sheet,
     load_curve_sheet,
+    parse_h_min,
     validate_curve_sheet,
     write_reservoir_csv,
 )
-from tests.samples import sample_curve, sample_sheet
+from tests.samples import SAMPLE_H_MIN, sample_curve
 
 HEADER = "Elevation (m),Volume (hm3),Surface Area (km2)\n"
 ROWS = "100,0,0.5\n110,10,1.5\n120,30,2.5\n130,60,3.5\n"
-
-
-def _sheet(**changes) -> DamSheet:
-    """A dam sheet that agrees with ROWS."""
-    values = {
-        "name": "Kavşakkaya",
-        "bed_elev_m": 100.0,
-        "crest_elev_m": 130.0,
-        "max_elev_m": 125.0,
-        "active_vol_hm3": 35.0,
-        "max_vol_hm3": 45.0,
-        "drainage_area_km2": 309.2,
-    }
-    return DamSheet(**{**values, **changes})
 
 
 def _write(folder, text, name="curve.csv", encoding="utf-8"):
@@ -174,81 +163,128 @@ def test_c_m4_01_a_project_of_schema_version_1_opens_without_the_generated_curve
     data = json.loads(path.read_text(encoding="utf-8"))
     data["schema_version"] = 1
     data["dams"][0] |= {"curve": {"max_elev_m": 1121.0}, "h_min_m": 1090.0, "shape_class": "hill"}
-    del data["dams"][0]["curve_sheet"]
+    del data["dams"][0]["curve_sheet"]  # the generated curve's Hmin is not the minimum operating level of D76
     path.write_text(json.dumps(data), encoding="utf-8")
 
     dam = Project.open(project.folder).dams[0]
 
-    assert dam.curve_sheet is None and not hasattr(dam, "shape_class")
+    assert dam.curve_sheet is None and dam.h_min_m is None and not hasattr(dam, "shape_class")
 
 
 # --- the curve --------------------------------------------------------------------------------
 
 
-def test_c_m4_01_the_curve_reads_the_dam_sheet_and_hmin_from_the_curve(tmp_path):
+def test_c_m4_01_the_curve_reads_hbed_hcrest_and_vmax_from_the_table_and_vdead_at_hmin(tmp_path):
     table, _ = load_curve_sheet(_write(tmp_path, HEADER + ROWS))
 
-    result = compute_curve(table, _sheet())
+    result = compute_curve(table, 115.0)
 
-    assert result.curve.h_min_m == 110.0 and result.curve.max_vol_hm3 == 45.0 and result.warnings == []
+    curve = result.curve
+    assert (curve.bed_elev_m, curve.crest_elev_m, curve.max_vol_hm3) == (100.0, 130.0, 60.0)
+    assert curve.h_min_m == 115.0 and curve.dead_vol_hm3 == 20.0 and result.warnings == []
     assert result.table.equals(table)
 
 
-def test_c_m4_01_a_dam_sheet_the_curve_does_not_cover_is_refused_with_every_problem(tmp_path):
+def test_c_m4_01_an_hmin_outside_the_curve_is_refused_naming_its_ends(tmp_path):
     table, _ = load_curve_sheet(_write(tmp_path, HEADER + ROWS))
 
     with pytest.raises(ValueError, match="cannot be used") as raised:
-        compute_curve(table, _sheet(crest_elev_m=140.0, max_vol_hm3=100.0, active_vol_hm3=30.0))
+        compute_curve(table, 140.0)
 
-    assert "Hcrest on the dam sheet (140 m)" in str(raised.value) and "Vdead = Vmax - Vactive (70 hm³)" in str(
-        raised.value
-    )
+    assert "Hmin (140 m) must lie above Hbed (100 m) and below Hcrest (130 m)" in str(raised.value)
 
 
-def test_c_m4_01_the_warnings_of_reading_and_of_the_curve_reach_the_result(tmp_path):
+def test_c_m4_01_the_warnings_of_reading_reach_the_result(tmp_path):
     table, _ = load_curve_sheet(_write(tmp_path, HEADER + ROWS))
 
-    result = compute_curve(table, _sheet(drainage_area_km2=2.0), ["curve.csv: ignored column(s) Note."])
+    result = compute_curve(table, 110.0, ["curve.csv: ignored column(s) Note."])
 
-    assert len(result.warnings) == 2 and "Note" in result.warnings[0] and "drainage area" in result.warnings[1]
+    assert result.warnings == ["curve.csv: ignored column(s) Note."]
 
 
-def test_c_m4_01_a_dam_curve_is_made_from_its_imported_sheet(project, tmp_path):
+@pytest.mark.parametrize(("text", "expected"), [("1071.99", 1071.99), (" 110 ", 110.0), (1090, 1090.0)])
+def test_c_m4_01_an_entered_hmin_is_read_with_a_point(text, expected):
+    assert parse_h_min(text) == expected
+
+
+@pytest.mark.parametrize("text", ["", "abc", "1071,99", "nan"])
+def test_c_m4_01_an_hmin_that_is_not_a_number_is_refused(text):
+    with pytest.raises(ValueError, match=r"Hmin \(m\) must be a number"):
+        parse_h_min(text)
+
+
+def test_c_m4_01_a_dam_curve_is_made_from_its_imported_sheet_and_its_hmin(project, tmp_path):
     dam = project.dams[0]
     import_curve_sheet(project, dam, _write(tmp_path, HEADER + ROWS))
+    dam.h_min_m = 110.0
 
-    result = compute_dam_curve(project, _sheet(), dam)
-
-    assert result.curve.h_min_m == 110.0
+    assert compute_dam_curve(project, dam).curve.dead_vol_hm3 == 10.0
 
 
 def test_x_01_a_dam_without_a_curve_sheet_says_where_to_import_it(project):
+    project.dams[0].h_min_m = 110.0
+
     with pytest.raises(ValueError, match="no reservoir curve sheet. Import it in step 6"):
-        compute_dam_curve(project, _sheet(), project.dams[0])
+        compute_dam_curve(project, project.dams[0])
 
 
-def test_c_m4_01_the_kavsakkaya_dam_sheet_fits_its_curve_sheet(project):
-    """OI-11: the operating values the hydrologist gave (Vdead = 80.83 - 76.14 hm³) with the measured curve."""
-    from src.services.regional import validate_dam_sheet
-    from src.utils.paths import read_table
+def test_x_01_a_dam_without_hmin_says_where_to_enter_it(project, tmp_path):
+    import_curve_sheet(project, project.dams[0], _write(tmp_path, HEADER + ROWS))
 
-    basins = pd.DataFrame(
-        {"Dam Name": ["Kavşakkaya"], "Basin Name": ["B"], "Sub-basin Name": ["S"], "Drainage Area (km2)": [309.2]}
-        | {"Main Waterway Slope": [0.23]}
-    )
-    sheet = validate_dam_sheet(read_table(sample_sheet("kavsakkaya")), "sheet", basins).data
+    with pytest.raises(ValueError, match="no Hmin. Enter it in step 6"):
+        compute_dam_curve(project, project.dams[0])
+
+
+def test_c_m4_01_apply_h_min_keeps_an_accepted_hmin_on_the_dam_and_saves_it(project, tmp_path):
+    dam = project.dams[0]
+    import_curve_sheet(project, dam, _write(tmp_path, HEADER + ROWS))
+
+    result = apply_h_min(project, dam, "120")
+
+    assert result.curve.dead_vol_hm3 == 30.0 and dam.h_min_m == 120.0
+    assert Project.open(project.folder).dams[0].h_min_m == 120.0
+
+
+@pytest.mark.parametrize("text", ["abc", "140"])
+def test_c_m4_01_apply_h_min_keeps_nothing_when_the_curve_refuses_it(project, tmp_path, text):
+    dam = project.dams[0]
+    import_curve_sheet(project, dam, _write(tmp_path, HEADER + ROWS))
+    dam.h_min_m = 110.0
+
+    with pytest.raises(ValueError):
+        apply_h_min(project, dam, text)
+
+    assert dam.h_min_m == 110.0
+
+
+def test_c_m4_01_apply_h_min_restores_the_dam_when_the_save_fails(project, tmp_path, monkeypatch):
+    dam = project.dams[0]
+    import_curve_sheet(project, dam, _write(tmp_path, HEADER + ROWS))
+
+    def fail():
+        raise OSError("disk full")
+
+    monkeypatch.setattr(project, "save", fail)
+    with pytest.raises(OSError):
+        apply_h_min(project, dam, "120")
+
+    assert dam.h_min_m is None
+
+
+def test_c_m4_01_the_kavsakkaya_curve_sheet_with_the_sample_hmin(project):
+    """D76: Hbed, Hcrest and Vmax come from the measured curve; Vdead is read at the placeholder Hmin."""
     table, _ = load_curve_sheet(sample_curve("kavsakkaya"))
 
-    curve = compute_curve(table, sheet).curve
+    curve = compute_curve(table, SAMPLE_H_MIN["kavsakkaya"]).curve
 
-    assert curve.bed_elev_m == 1059.0 and curve.dead_vol_hm3 == pytest.approx(4.69)
-    assert curve.h_min_m == pytest.approx(1071.9946, abs=1e-4)
+    assert (curve.bed_elev_m, curve.crest_elev_m, curve.max_vol_hm3) == (1055.0, 1124.0, 96.517)
+    assert curve.dead_vol_hm3 == pytest.approx(4.68743)
 
 
 def test_c_m4_01_the_curve_is_written_as_utf8_with_bom_and_unit_named_columns(tmp_path):
     table, _ = load_curve_sheet(_write(tmp_path, HEADER + ROWS))
 
-    path = write_reservoir_csv(compute_curve(table, _sheet()), tmp_path)
+    path = write_reservoir_csv(compute_curve(table, 110.0), tmp_path)
 
     assert path == tmp_path / CSV_NAME
     assert path.read_bytes().startswith(b"\xef\xbb\xbfElevation_m,Volume_hm3,Area_km2")

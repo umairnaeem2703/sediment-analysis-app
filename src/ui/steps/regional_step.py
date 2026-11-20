@@ -1,9 +1,8 @@
 import tkinter as tk
 from tkinter import ttk
 from typing import List
-
 from src.services.labels import BASIN_TABLE
-from src.ui.common import browse_open_file, browse_open_files, show_error, show_warning
+from src.ui.common import browse_open_file, show_error, show_warning
 from src.ui.steps.base import Step
 
 COLUMNS = list(BASIN_TABLE)
@@ -11,12 +10,12 @@ FLAG = "⚠ "
 
 
 class RegionalStep(Step):
-    """Step 2: import the basin table, zonal means and dam sheets; fix invalid basin cells in a grid (FR-M1-02..06)."""
+    """Step 2: import the basin table and zonal means; fix invalid basin cells in a grid (FR-M1-02..06)."""
 
     title = "Regional data"
 
     def build(self, frame):
-        self.status_vars = {key: tk.StringVar() for key in ("basin", "zonal", "sheets")}
+        self.status_vars = {key: tk.StringVar() for key in ("basin", "zonal")}
         self._editor = None
         frame.columnconfigure(0, weight=1)
         frame.rowconfigure(2, weight=1)
@@ -25,7 +24,6 @@ class RegionalStep(Step):
         buttons.grid(row=0, column=0, sticky="w", padx=10, pady=(8, 4))
         ttk.Button(buttons, text="Import basin table...", command=self.on_import_basin).pack(side=tk.LEFT, padx=(0, 6))
         ttk.Button(buttons, text="Import zonal means...", command=self.on_import_zonal).pack(side=tk.LEFT, padx=6)
-        ttk.Button(buttons, text="Import dam sheets...", command=self.on_import_sheets).pack(side=tk.LEFT, padx=6)
 
         status = ttk.Frame(frame)
         status.grid(row=1, column=0, sticky="w", padx=10)
@@ -84,11 +82,6 @@ class RegionalStep(Step):
         if path:
             self.import_zonal_means(path)
 
-    def on_import_sheets(self):
-        paths = browse_open_files(title="Select the dam sheets")
-        if paths:
-            self.import_dam_sheets(paths)
-
     def import_basin_table(self, path: str) -> None:
         try:
             notices = self.wizard.regional.import_basin_table(path)
@@ -106,19 +99,6 @@ class RegionalStep(Step):
         self._changed("The zonal means were replaced.", [])
         if warnings:
             show_warning("Zonal means", "\n".join(warnings))
-
-    def import_dam_sheets(self, paths: List[str]) -> None:
-        try:
-            result = self.wizard.regional.import_dam_sheets(paths)
-        except (ValueError, OSError) as exc:
-            show_error("Dam sheets", str(exc))
-            return
-        if result.imported:
-            self._changed("Dam sheets were imported.", [])
-        if result.errors:
-            show_error("Dam sheets", "\n".join(result.errors))
-        if result.warnings:
-            show_warning("Dam sheets", "\n".join(result.warnings))
 
     def commit_edit(self, position: int, column: str, value: str) -> None:
         """Save one edited cell. Nothing happens when the text is unchanged."""
@@ -198,7 +178,6 @@ class RegionalStep(Step):
             self.problem_list.insert(tk.END, f"Warning: {warning}")
         self.status_vars["basin"].set(self._basin_status(regional))
         self.status_vars["zonal"].set(self._zonal_status(regional))
-        self.status_vars["sheets"].set(self._sheet_status(regional))
 
     @staticmethod
     def _basin_status(regional) -> str:
@@ -214,11 +193,3 @@ class RegionalStep(Step):
         if regional.zonal is None:
             return "Zonal means: not imported."
         return f"Zonal means: {len(regional.zonal)} sub-basin(s) loaded."
-
-    @staticmethod
-    def _sheet_status(regional) -> str:
-        dams = regional.project.dams
-        if regional.basin_table is None or not dams:
-            return "Dam sheets: import them once the basin table is valid."
-        with_sheet = sum(1 for dam in dams if dam.sheet)
-        return f"Dam sheets: {with_sheet} of {len(dams)} dam(s) have a sheet (only the dam you analyse needs one)."

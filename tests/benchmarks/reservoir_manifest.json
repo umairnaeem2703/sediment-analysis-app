@@ -1,6 +1,8 @@
 {
+  "placeholder_h_min_m": {
+    "kavsakkaya": 1071.99
+  },
   "inputs": {
-    "kavsakkaya_bathymetry.csv": "27ea76a54c30b2b7ec0ef6808e498525df3a859ec7aa77dc2471b24c8902fa65",
     "kavsakkaya_reservoir_curve.csv": "3139938a7c5cc4f50d6796572021804b6267422835e8b1342e7518fafac7c317"
   }
 }

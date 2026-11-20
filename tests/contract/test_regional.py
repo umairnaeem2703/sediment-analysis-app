@@ -4,14 +4,11 @@ import pytest
 from src.core.rusle import ZonalMatcher
 from src.core.text import name_key
 from src.services.regional import (
-    DamSheet,
     TableError,
     load_basin_table,
-    load_dam_sheet,
     load_zonal_means,
     parse_number,
     validate_basin_table,
-    validate_dam_sheet,
     validate_zonal_means,
 )
 from src.utils.paths import resource_path
@@ -20,11 +17,6 @@ CANONICAL = ["Dam Name", "Basin Name", "Sub-basin Name", "Drainage Area (km2)", 
 BASIN_HEADER = ",".join(CANONICAL)
 SAMPLE_BASINS = resource_path("inputs", "master_yield.csv")
 SAMPLE_ZONAL = resource_path("inputs", "raw_zonal_means.csv")
-SHEET_HEADER = (
-    "Dam Name,Drainage Area (km2),Longest River Length (km),Top Elevation of River,Bottom Elevation of River,"
-    "Average Slope,Crest Elevation,Maximum Reservoir Elevation,Active Volume,Maximum Volume,Average Flow"
-)
-CUBUK_1_ROW = "Çubuk 1,834.7,25.5,1109,888,0.09,908.6,907.6,5.28,5.6,62.6"
 
 
 def _write(tmp_path, name, text, encoding="utf-8-sig"):
@@ -35,10 +27,6 @@ def _write(tmp_path, name, text, encoding="utf-8-sig"):
 
 def _basins(tmp_path, *rows, header=BASIN_HEADER):
     return _write(tmp_path, "basins.csv", "\n".join([header, *rows]) + "\n")
-
-
-def _sheet(tmp_path, row=CUBUK_1_ROW, header=SHEET_HEADER):
-    return _write(tmp_path, "sheet.csv", f"{header}\n{row}\n")
 
 
 @pytest.fixture()
@@ -151,123 +139,6 @@ def test_c_m1_04_validate_basin_table_accepts_an_edited_grid():
     assert loaded.data["Drainage Area (km2)"].tolist() == [12.5]
 
 
-# --- dam sheet (FR-M1-05, FR-M1-06) -----------------------------------------------------------
-
-EXPECTED_SHEETS = {
-    "kavsakkaya": DamSheet("Kavşakkaya", 1059.0, 1124.0, 1122.29, 76.14, 80.83, 309.2, 0.23, 41.6, 2009.0, 66.5),
-    "cubuk_1": DamSheet("Çubuk 1", 888.0, 908.6, 907.6, 5.28, 5.6, 834.7, 0.09, 25.5, 1109.0, 62.6),
-    "cubuk_2": DamSheet("Çubuk 2", 1110.0, 1117.0, 1115.3, 22.0, 22.4, 180.2, 0.16, 42.2, 1766.0, 30.1),
-}
-
-
-@pytest.mark.parametrize("slug", sorted(EXPECTED_SHEETS))
-def test_c_m1_05_sample_dam_sheets_load_without_warnings(sample_table, slug):
-    path = resource_path("inputs", "bathymetry", f"{slug}_bathymetry.csv")
-
-    loaded = load_dam_sheet(path, sample_table)
-
-    assert loaded.data == EXPECTED_SHEETS[slug]
-    assert loaded.warnings == []
-
-
-@pytest.mark.parametrize("name", ["CUBUK 1", "ÇUBUK 1", "çubuk   1"])
-def test_c_m1_05_dam_name_matches_the_basin_table_turkish_aware(tmp_path, sample_table, name):
-    row = CUBUK_1_ROW.replace("Çubuk 1", name, 1)
-
-    loaded = load_dam_sheet(_sheet(tmp_path, row), sample_table)
-
-    assert loaded.warnings == []
-
-
-def test_c_m1_05_unknown_dam_is_an_error_naming_it(tmp_path, sample_table):
-    row = CUBUK_1_ROW.replace("Çubuk 1", "Sariyar", 1)
-
-    with pytest.raises(ValueError) as error:
-        load_dam_sheet(_sheet(tmp_path, row), sample_table)
-
-    assert "sheet.csv" in str(error.value)
-    assert "Sariyar" in str(error.value)
-    assert "Çubuk 1" in str(error.value)
-
-
-def test_c_m1_05_missing_required_columns_are_named(tmp_path, sample_table):
-    header = SHEET_HEADER.replace("Bottom Elevation of River,", "").replace("Maximum Volume,", "")
-    row = "Çubuk 1,834.7,25.5,1109,0.09,908.6,907.6,5.28,62.6"
-
-    with pytest.raises(ValueError) as error:
-        load_dam_sheet(_sheet(tmp_path, row, header), sample_table)
-
-    assert "Bottom Elevation of River" in str(error.value)
-    assert "Maximum Volume" in str(error.value)
-
-
-def test_c_m1_05_blank_or_non_numeric_required_values_are_named(tmp_path, sample_table):
-    row = "Çubuk 1,834.7,25.5,1109,,0.09,908.6,high,5.28,5.6,62.6"
-
-    with pytest.raises(ValueError) as error:
-        load_dam_sheet(_sheet(tmp_path, row), sample_table)
-
-    message = str(error.value)
-    assert "Bottom Elevation of River" in message
-    assert "Maximum Reservoir Elevation" in message
-    assert "'high'" in message
-
-
-def test_c_m1_05_a_sheet_holds_exactly_one_dam(tmp_path, sample_table):
-    path = _write(
-        tmp_path,
-        "sheet.csv",
-        SHEET_HEADER + "\n" + CUBUK_1_ROW + "\nÇubuk 2,180.2,42.2,1766,1110,0.16,1117,1115.3,22,22.4,30.1\n",
-    )
-
-    with pytest.raises(ValueError, match="exactly one"):
-        load_dam_sheet(path, sample_table)
-
-
-def test_c_m1_05_optional_columns_may_be_absent(tmp_path, sample_table):
-    header = (
-        "Dam Name,Bottom Elevation of River,Crest Elevation,Maximum Reservoir Elevation,Active Volume,Maximum Volume"
-    )
-    path = _sheet(tmp_path, "Çubuk 1,888,908.6,907.6,5.28,5.6", header)
-
-    sheet = load_dam_sheet(path, sample_table).data
-
-    assert sheet.drainage_area_km2 is None
-    assert sheet.slope_m_per_m is None
-    assert sheet.max_vol_hm3 == 5.6
-
-
-@pytest.mark.parametrize(
-    ("area", "slope", "expect_area", "expect_slope"),
-    [
-        ("834.7", "0.09", False, False),
-        ("839.0", "0.09", False, False),  # 0.5% off: inside the tolerance
-        ("900", "0.09", True, False),
-        ("834.7", "0.12", False, True),
-        ("700", "0.20", True, True),
-    ],
-)
-def test_c_m1_06_area_and_slope_are_cross_checked_against_the_table(
-    tmp_path, sample_table, area, slope, expect_area, expect_slope
-):
-    row = f"Çubuk 1,{area},25.5,1109,888,{slope},908.6,907.6,5.28,5.6,62.6"
-
-    warnings = load_dam_sheet(_sheet(tmp_path, row), sample_table).warnings
-
-    assert any("drainage area" in w for w in warnings) is expect_area
-    assert any("slope" in w for w in warnings) is expect_slope
-    assert all("sheet.csv" in w for w in warnings)
-
-
-def test_c_m1_06_cross_check_uses_the_sum_of_the_dams_sub_basins(tmp_path):
-    table = load_basin_table(_basins(tmp_path, "A,B,S1,100,0.1", "A,B,S2,300,0.3", "Z,B,S1,50,0.5")).data
-    row = "A,400,1,1,1,0.25,2,2,1,2,1"  # area-weighted mean slope: (100*0.1 + 300*0.3) / 400 = 0.25
-
-    loaded = load_dam_sheet(_sheet(tmp_path, row), table)
-
-    assert loaded.warnings == []
-
-
 # --- zonal means (FR-M1-06) -------------------------------------------------------------------
 
 
@@ -324,7 +195,6 @@ def test_c_x_01_a_missing_input_is_an_error_naming_it(tmp_path, sample_table):
     for call in (
         lambda: load_basin_table(missing),
         lambda: load_zonal_means(missing),
-        lambda: load_dam_sheet(missing, sample_table),
     ):
         with pytest.raises(FileNotFoundError, match="not_there.csv"):
             call()
@@ -459,14 +329,6 @@ def test_c_x_06_a_name_without_letters_or_digits_has_an_empty_key():
     assert name_key("---") == name_key("") == name_key(None) == ""
 
 
-def test_c_x_06_a_dam_sheet_finds_its_dam_whatever_the_punctuation(tmp_path, sample_table):
-    row = CUBUK_1_ROW.replace("Çubuk 1", "ÇUBUK-1", 1)
-
-    loaded = load_dam_sheet(_sheet(tmp_path, row), sample_table)
-
-    assert loaded.data.name == "Çubuk 1"
-
-
 # --- review follow-ups ------------------------------------------------------------------------
 
 
@@ -503,32 +365,6 @@ def test_c_m1_07_validate_zonal_means_accepts_an_in_memory_table():
 
     assert loaded.data["Sub-basin Name"].tolist() == ["A"]
     assert "skipped 1 row(s)" in loaded.warnings[0]
-
-
-def test_c_m1_05_validate_dam_sheet_accepts_an_in_memory_table(sample_table):
-    grid = pd.read_csv(resource_path("inputs", "bathymetry", "cubuk_1_bathymetry.csv"), encoding="utf-8-sig")
-
-    loaded = validate_dam_sheet(grid, "grid", sample_table)
-
-    assert loaded.data == EXPECTED_SHEETS["cubuk_1"]
-
-
-def test_c_m1_06_a_sheet_covering_only_part_of_the_dams_area_is_flagged(tmp_path):
-    table = load_basin_table(_basins(tmp_path, "A,B,S1,100,0.2", "A,B,S2,300,0.2")).data
-    row = "A,100,1,1,1,0.2,2,2,1,2,1"  # the table holds 400 km2 for dam A
-
-    warnings = load_dam_sheet(_sheet(tmp_path, row), table).warnings
-
-    assert len(warnings) == 1
-    assert "drainage area" in warnings[0]
-    assert "400" in warnings[0]
-
-
-def test_c_m1_05_the_first_spelling_of_a_dam_in_the_table_names_it(tmp_path):
-    table = load_basin_table(_basins(tmp_path, "Çubuk 1,B,S1,100,0.2", "CUBUK 1,B,S2,300,0.2")).data
-    row = "cubuk 1,400,1,1,1,0.2,2,2,1,2,1"
-
-    assert load_dam_sheet(_sheet(tmp_path, row), table).data.name == "Çubuk 1"
 
 
 def test_c_x_01_a_truncated_workbook_is_an_error_naming_it(tmp_path):

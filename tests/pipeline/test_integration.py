@@ -21,7 +21,7 @@ def _parts(data, slug):
     dam = next(dam for dam in data.project.dams if dam.slug == slug)
     suspended = compute_suspended(data.sub_basins(dam), data.zonal)
     bedload = compute_dam_bedload(data.project, dam)
-    curve = compute_dam_curve(data.project, data.dam_sheet(dam).data, dam)
+    curve = compute_dam_curve(data.project, dam)
     return suspended, bedload, curve, dam
 
 

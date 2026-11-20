@@ -65,7 +65,7 @@ def write_bedload_trend(table: pd.DataFrame, folder) -> Path:
 
 
 def reservoir_curve_figure(result: CurveResult) -> Figure:
-    """Volume and surface area against the level, with Hmin and Hmax marked, from a `CurveResult`."""
+    """Volume and surface area against the level, with Hmin marked, from a `CurveResult`."""
     table, curve = result.table, result.curve
     figure = Figure(figsize=(10, 6), layout="tight")
     volume_axis = figure.subplots()
@@ -77,16 +77,13 @@ def reservoir_curve_figure(result: CurveResult) -> Figure:
     h_min_line = volume_axis.axvline(
         curve.h_min_m, color="green", linestyle="--", label=f"Hmin ({curve.h_min_m:.2f} m)"
     )
-    h_max_line = volume_axis.axvline(
-        curve.max_elev_m, color="black", linestyle="--", label=f"Hmax ({curve.max_elev_m:.2f} m)"
-    )
 
     area_axis = volume_axis.twinx()
     area_line = area_axis.plot(table[ELEVATION_M], table[AREA_KM2], color="red", label="Surface area")[0]
     area_axis.set_ylabel("Surface area (km²)", color="red", fontweight="bold")
     area_axis.tick_params(axis="y", labelcolor="red")
 
-    lines = [volume_line, area_line, h_min_line, h_max_line]
+    lines = [volume_line, area_line, h_min_line]
     volume_axis.legend(lines, [line.get_label() for line in lines], loc="upper left")
     volume_axis.set_title("Reservoir Elevation-Volume Curve", fontweight="bold", pad=15)
     return figure

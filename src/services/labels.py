@@ -22,18 +22,6 @@ BASIN_TABLE = (DAM, BASIN, SUBBASIN, AREA, SLOPE)
 MEAN = "MEAN"
 ZONAL = (SUBBASIN, MEAN)
 
-# Dam sheet; the dam name and the drainage area are shared with the basin table.
-BED_ELEV, CREST_ELEV, MAX_ELEV = "Bottom Elevation of River", "Crest Elevation", "Maximum Reservoir Elevation"
-ACTIVE_VOL, MAX_VOL = "Active Volume", "Maximum Volume"
-SHEET_SLOPE, RIVER_LENGTH, TOP_ELEV, AVG_FLOW = (
-    "Average Slope",
-    "Longest River Length (km)",
-    "Top Elevation of River",
-    "Average Flow",
-)
-SHEET_REQUIRED = (DAM, BED_ELEV, CREST_ELEV, MAX_ELEV, ACTIVE_VOL, MAX_VOL)
-SHEET_OPTIONAL = (AREA, SHEET_SLOPE, RIVER_LENGTH, TOP_ELEV, AVG_FLOW)
-
 # Reservoir curve sheet: the measured elevation-volume curve of one dam, one row per level (D75).
 CURVE_ELEV, CURVE_VOL, CURVE_AREA = "Elevation (m)", "Volume (hm3)", "Surface Area (km2)"
 CURVE_SHEET = (CURVE_ELEV, CURVE_VOL, CURVE_AREA)

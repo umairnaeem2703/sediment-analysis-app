@@ -6,7 +6,8 @@ import pytest
 from src.services import labels
 from src.services.bedload import load_flow, load_fractions
 from src.services.labels import fold, is_monthly_flow_table, match_columns
-from src.services.regional import load_basin_table, load_dam_sheet, load_zonal_means
+from src.services.regional import load_basin_table, load_zonal_means
+from src.services.reservoir import load_curve_sheet
 from src.utils.paths import resource_path
 
 
@@ -59,11 +60,6 @@ RETIRED = [
     (labels.ZONAL, "MEAN", "ORTALAMA"),
     (labels.ZONAL, "Sub-basin Name", "Alt Havza"),
     (labels.FRACTIONS_REQUIRED, "Fi", "share"),
-    (labels.SHEET_REQUIRED, "Bottom Elevation of River", "Bot Elev of River"),
-    (labels.SHEET_REQUIRED, "Crest Elevation", "Cret Elev"),
-    (labels.SHEET_REQUIRED, "Maximum Reservoir Elevation", "Max Res. Elev"),
-    (labels.SHEET_REQUIRED, "Active Volume", "Active Vol."),
-    (labels.SHEET_REQUIRED, "Maximum Volume", "Max Vol."),
     (labels.DAILY_FLOW, "Date", "Tarih"),
     (labels.DAILY_FLOW, "Flow Q (m3/s)", "Flow"),
     (labels.DAILY_FLOW, "Flow Q (m3/s)", "Debi"),
@@ -136,11 +132,10 @@ def test_c_x_05_the_dsi_layout_is_the_year_column_and_twelve_months_with_an_opti
 
 
 def test_c_x_05_every_shipped_sample_loads_without_a_warning():
-    basins = load_basin_table(resource_path("inputs", "master_yield.csv")).data
-
+    assert load_basin_table(resource_path("inputs", "master_yield.csv")).warnings == []
     assert load_zonal_means(resource_path("inputs", "raw_zonal_means.csv")).warnings == []
     assert load_fractions(resource_path("inputs", "fractional_parameters.csv")).warnings == []
-    for sheet in sorted(resource_path("inputs", "bathymetry").glob("*.csv")):
-        assert load_dam_sheet(sheet, basins).warnings == [], sheet.name
+    for sheet in sorted(resource_path("inputs", "reservoir_curves").glob("*.csv")):
+        assert load_curve_sheet(sheet).warnings == [], sheet.name
     for flow in sorted(resource_path("inputs", "dam_flow_data").glob("*.csv")):
         assert load_flow(flow, 0.6, 0).synthetic, flow.name

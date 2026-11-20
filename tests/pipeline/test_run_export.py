@@ -17,7 +17,7 @@ from src.services.run_export import export_run
 from tests.samples import CURVE_DAMS, sample_dam_results, sample_integration_inputs
 
 BENCHMARKS = Path(__file__).parents[1] / "benchmarks"
-INPUT_ROLES = {"basins", "zonal_means", "fractions", "dam_sheet", "flow", "curve_sheet"}
+INPUT_ROLES = {"basins", "zonal_means", "fractions", "flow", "curve_sheet"}
 NOW = datetime.datetime(2026, 10, 26, 14, 30, 5)
 SHEETS = ["Inputs", "Suspended", "Bedload", "Annual", "Curve", "Projection", "Extremes", "Warnings"]
 FILES = {
@@ -248,13 +248,13 @@ def test_p_m5_02_the_inputs_sheet_lists_the_parameters_and_the_hashed_files(shar
 
 def test_p_m5_02_the_warnings_sheet_has_every_warning_with_its_phase(shared, tmp_path):
     _, (_, suspended, bedload, curve, integration), export = _run(
-        shared, tmp_path, input_warnings=["Dam sheet: area check."]
+        shared, tmp_path, input_warnings=["Basin table: ignored column(s) Note."]
     )
 
     table = _sheet(export, "Warnings")
 
     assert list(table.columns) == ["Phase", "Warning"]
-    expected = [("Inputs", "Dam sheet: area check.")]
+    expected = [("Inputs", "Basin table: ignored column(s) Note.")]
     for phase, warnings in (
         ("Suspended", suspended.warnings),
         ("Bedload", [*bedload.notes, *bedload.warnings]),  # the notes say the daily flow is synthetic
@@ -313,7 +313,7 @@ def test_p_m5_03_run_json_gives_the_sha_256_of_every_input(shared, tmp_path):
     inputs = {entry["role"]: entry for entry in _json(export)["inputs"]}
 
     assert set(inputs) == INPUT_ROLES
-    paths = {**project.inputs, "dam_sheet": dam.sheet, "flow": dam.flow.path, "curve_sheet": dam.curve_sheet}
+    paths = {**project.inputs, "flow": dam.flow.path, "curve_sheet": dam.curve_sheet}
     for role, entry in inputs.items():
         assert entry["path"] == paths[role]
         assert entry["sha256"] == hashlib.sha256((project.folder / entry["path"]).read_bytes()).hexdigest()
@@ -334,8 +334,8 @@ def test_p_m5_03_run_json_records_the_parameters_with_sigma_phi_and_seed(tmp_pat
     assert parameters["Commissioning year"]["value"] == 1990 and parameters["Analysis year"]["value"] == 2020
     assert parameters["Projection length"] == {"name": "Projection length", "value": 100, "unit": "years"}
     names = [name for name in parameters if name.startswith(("H", "V"))]
-    assert names == ["Hbed", "Hmin", "Hmax", "Hcrest", "Vactive", "Vmax", "Vdead"]
-    assert parameters["Hbed"]["value"] == 1059.0  # the thalweg, from the dam sheet
+    assert names == ["Hbed", "Hmin", "Hcrest", "Vmax", "Vdead"]
+    assert parameters["Hbed"]["value"] == 1055.0  # the first level of the curve sheet
     assert parameters["Hmin"]["value"] == pytest.approx(curve.curve.h_min_m, rel=1e-12)
 
 
@@ -346,7 +346,7 @@ def test_p_m5_03_run_json_records_the_flags(shared, tmp_path):
 
 
 def test_p_m5_03_run_json_has_every_warning_the_workbook_has(shared, tmp_path):
-    _, _, export = _run(shared, tmp_path, input_warnings=["Dam sheet: area check."])
+    _, _, export = _run(shared, tmp_path, input_warnings=["Basin table: ignored column(s) Note."])
 
     warnings = _json(export)["warnings"]
     sheet = _sheet(export, "Warnings")
@@ -354,7 +354,7 @@ def test_p_m5_03_run_json_has_every_warning_the_workbook_has(shared, tmp_path):
     assert [(entry["phase"], entry["text"]) for entry in warnings] == list(
         zip(sheet["Phase"], sheet["Warning"], strict=True)
     )
-    assert {"phase": "Inputs", "text": "Dam sheet: area check."} in warnings
+    assert {"phase": "Inputs", "text": "Basin table: ignored column(s) Note."} in warnings
 
 
 def test_x_nfr_03_the_same_inputs_give_the_same_run_json_and_workbook_sheets(shared, tmp_path):

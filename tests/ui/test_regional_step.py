@@ -12,9 +12,6 @@ from tests.ui.fakes import FakeStep
 HEADER = "Dam Name,Basin Name,Sub-basin Name,Drainage Area (km2),Main Waterway Slope"
 SAMPLE_BASINS = resource_path("inputs", "master_yield.csv")
 SAMPLE_ZONAL = resource_path("inputs", "raw_zonal_means.csv")
-SAMPLE_SHEETS = [
-    resource_path("inputs", "bathymetry", f"{s}_bathymetry.csv") for s in ("kavsakkaya", "cubuk_1", "cubuk_2")
-]
 
 
 @pytest.fixture()
@@ -161,31 +158,6 @@ def test_w_m1_02_an_unreadable_or_incomplete_table_shows_an_error_and_changes_no
     assert len(step.tree.get_children()) == 3  # the earlier valid table is still shown
 
 
-def test_w_m1_02_dam_sheets_are_matched_and_counted(app, dialogs):
-    wizard, step, _, tmp_path = app
-    step.import_basin_table(str(SAMPLE_BASINS))
-    stranger = tmp_path / "stranger.csv"
-    stranger.write_text(
-        SAMPLE_SHEETS[1].read_text(encoding="utf-8-sig").replace("Çubuk 1", "Sariyar"), encoding="utf-8"
-    )
-
-    step.import_dam_sheets([str(p) for p in SAMPLE_SHEETS[:2]] + [str(stranger)])
-
-    assert "2 of 3" in step.status_vars["sheets"].get()
-    assert len(dialogs["error"]) == 1 and "Sariyar" in dialogs["error"][0][1]
-
-
-def test_w_m1_02_dam_sheet_warnings_are_shown(app, dialogs):
-    wizard, step, _, tmp_path = app
-    step.import_basin_table(str(SAMPLE_BASINS))
-    off = tmp_path / "off.csv"
-    off.write_text(SAMPLE_SHEETS[1].read_text(encoding="utf-8-sig").replace("834.7", "999"), encoding="utf-8")
-
-    step.import_dam_sheets([str(off)])
-
-    assert len(dialogs["warning"]) == 1 and "drainage area" in dialogs["warning"][0][1]
-
-
 def test_w_m1_02_zonal_warnings_are_shown(app, dialogs):
     wizard, step, _, tmp_path = app
     z = tmp_path / "z.csv"
@@ -312,19 +284,6 @@ def test_w_m1_02_double_clicking_the_header_or_empty_space_does_nothing(app):
 
 
 # --- review follow-ups -------------------------------------------------------------------------
-
-
-def test_w_m1_02_a_disk_error_while_saving_dam_sheets_is_shown_not_raised(app, dialogs, monkeypatch):
-    wizard, step, _, _ = app
-    step.import_basin_table(str(SAMPLE_BASINS))
-
-    def full_disk(self, paths):
-        raise OSError("disk is full")
-
-    monkeypatch.setattr(type(wizard.regional), "import_dam_sheets", full_disk)
-    step.import_dam_sheets([str(SAMPLE_SHEETS[0])])
-
-    assert len(dialogs["error"]) == 1 and "disk is full" in dialogs["error"][0][1]
 
 
 def test_w_m1_02_zonal_warnings_stay_visible_and_survive_reopening(app, tk_root, dialogs):

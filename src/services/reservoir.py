@@ -1,10 +1,10 @@
-"""The measured reservoir curve of one dam (FR-M4-01, FR-M4-02, B3.3, D75).
+"""The measured reservoir curve of one dam (FR-M4-01, FR-M4-02, B3.3, D75, D76).
 
 `validate_curve_sheet` and `load_curve_sheet` read a curve sheet: one row per level with its volume and surface area.
-`import_curve_sheet` checks one and copies it into the project as the dam's curve. `compute_curve` and
-`compute_dam_curve` put the table together with the dam sheet, refusing a dam sheet the curve does not cover, and give the
-warnings. `write_reservoir_csv` writes `reservoir_curve.csv` into a folder it is given; the run folder itself belongs
-to the reporting service (M5).
+`import_curve_sheet` checks one and copies it into the project as the dam's curve. `parse_h_min` reads the entered
+Hmin; `compute_curve`, `compute_dam_curve` and `apply_h_min` (which keeps it on the dam) put the table together with
+it, refusing an Hmin outside the curve. `write_reservoir_csv` writes `reservoir_curve.csv` into a folder it is
+given; the run folder itself belongs to the reporting service (M5).
 """
 
 from pathlib import Path
@@ -19,12 +19,10 @@ from src.core.reservoir import (
     ReservoirCurve,
     build_curve,
     check_table,
-    curve_warnings,
 )
 from src.services.labels import CURVE_AREA, CURVE_ELEV, CURVE_SHEET, CURVE_VOL, match_columns
 from src.services.project import Dam, Project
 from src.services.regional import (
-    DamSheet,
     Loaded,
     Problem,
     TableError,
@@ -75,7 +73,7 @@ def load_curve_sheet(path) -> Loaded:
 
 def import_curve_sheet(project: Project, dam: Dam, path) -> Loaded:
     """Check a curve sheet and copy it into the project as the dam's curve. An unusable file raises and nothing is
-    copied. Whether it covers the dam sheet is checked when the curve is computed."""
+    copied. Whether it holds Hmin is checked when the curve is computed."""
     loaded = load_curve_sheet(path)
     relative = project.import_file(path, f"inputs/curves/{dam.slug}_curve{Path(path).suffix.lower()}")
     previous = dam.curve_sheet
@@ -90,29 +88,47 @@ def import_curve_sheet(project: Project, dam: Dam, path) -> Loaded:
     return loaded
 
 
-def compute_curve(table: pd.DataFrame, sheet: DamSheet, warnings=()) -> CurveResult:
-    """The curve of a validated curve sheet with the values of the dam sheet, and its warnings: `warnings` (those of
-    reading the curve sheet) and the plausibility warning. Raises ValueError when the curve does not cover the dam
-    sheet."""
-    curve = build_curve(
-        table[ELEVATION_M],
-        table[VOLUME_HM3],
-        table[AREA_KM2],
-        bed_elev_m=sheet.bed_elev_m,
-        max_elev_m=sheet.max_elev_m,
-        crest_elev_m=sheet.crest_elev_m,
-        active_vol_hm3=sheet.active_vol_hm3,
-        max_vol_hm3=sheet.max_vol_hm3,
-    )
-    return CurveResult(curve, curve.table(), [*warnings, *curve_warnings(curve, sheet.drainage_area_km2)])
+def parse_h_min(text) -> float:
+    """The entered Hmin (m) as a number. Raises ValueError when it is blank or not a number."""
+    value = parse_number(text)
+    if value is None:
+        raise ValueError(f"Hmin (m) must be a number, found {quote_cell(text)}.")
+    return value
 
 
-def compute_dam_curve(project: Project, sheet: DamSheet, dam: Dam) -> CurveResult:
-    """The dam's curve from the curve sheet in the project and its dam sheet."""
+def compute_curve(table: pd.DataFrame, h_min_m: float, warnings=()) -> CurveResult:
+    """The curve of a validated curve sheet with Hmin, and `warnings` (those of reading the curve sheet). Raises
+    ValueError when Hmin is not inside the curve."""
+    curve = build_curve(table[ELEVATION_M], table[VOLUME_HM3], table[AREA_KM2], h_min_m=h_min_m)
+    return CurveResult(curve, curve.table(), list(warnings))
+
+
+def _dam_curve(project: Project, dam: Dam, h_min_m: float) -> CurveResult:
     if not dam.curve_sheet:
         raise ValueError(f"{dam.name} has no reservoir curve sheet. Import it in step 6 (Reservoir curve).")
     table, warnings = load_curve_sheet(project.folder / dam.curve_sheet)
-    return compute_curve(table, sheet, warnings)
+    return compute_curve(table, h_min_m, warnings)
+
+
+def compute_dam_curve(project: Project, dam: Dam) -> CurveResult:
+    """The dam's curve from the curve sheet in the project and the Hmin kept on the dam."""
+    if dam.curve_sheet and dam.h_min_m is None:  # a missing curve sheet is named first, by _dam_curve
+        raise ValueError(f"{dam.name} has no Hmin. Enter it in step 6 (Reservoir curve).")
+    return _dam_curve(project, dam, dam.h_min_m)
+
+
+def apply_h_min(project: Project, dam: Dam, text) -> CurveResult:
+    """The dam's curve with the entered Hmin, which is kept on the dam only once the curve accepts it and it is saved."""
+    h_min_m = parse_h_min(text)
+    result = _dam_curve(project, dam, h_min_m)
+    previous = dam.h_min_m
+    dam.h_min_m = h_min_m
+    try:
+        project.save()
+    except OSError:
+        dam.h_min_m = previous
+        raise
+    return result
 
 
 def write_reservoir_csv(result: CurveResult, folder) -> Path:

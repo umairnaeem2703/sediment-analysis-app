@@ -71,8 +71,8 @@ Hydrologists and engineers (DSİ-style studies) using one Windows machine, offli
 | SIO | *Sediment İletim Oranı*, the sediment delivery ratio (SDR) |
 | USDA-SCS SIO, ÇEM SIO | The two empirical SIO formulas; the app averages them |
 | Water year | Oct (Y-1) to Sep (Y), labelled Y. DSİ monthly tables use it. |
-| Hbed, Hmin, Hmax, Hcrest | Riverbed elevation at the dam axis, minimum operating level, maximum reservoir level, crest level (m) |
-| Vmax, Vactive, Vdead | Volume at Hmax, active volume, dead volume = Vmax - Vactive (hm³) |
+| Hbed, Hmin, Hcrest | Reservoir bed elevation (the first level of the curve sheet), minimum operating level (entered in step 6), crest level (the last level of the curve sheet) (m) |
+| Vmax, Vdead | Volume at Hcrest (the last volume of the curve sheet), dead volume = V(Hmin) (hm³) |
 | TE | Trap efficiency, the share of delivered sediment that stays in the reservoir (%) |
 | Commissioning year, analysis year | First year of operation; the year the projection starts from |
 | Level-pool fill | Sediment is assumed to fill the reservoir from the bed up, as a horizontal surface |
@@ -85,7 +85,7 @@ The main window is a wizard (D17, D18) with a step list on the left and Back/Nex
 | # | Step | The user... | The app shows |
 |---|---|---|---|
 | 1 | Project | Creates or opens a project folder | Project name and folder |
-| 2 | Regional data (M1) | Imports the basin table, zonal means and dam sheets (each is copied into the project) | Editable basin grid, validation messages |
+| 2 | Regional data (M1) | Imports the basin table and zonal means (each is copied into the project) | Editable basin grid, validation messages |
 | 3 | Select dam | Picks a dam; enters commissioning year, analysis year, TE and optionally Hmin | The dam's sub-basins and sheet values |
 | 4 | Suspended (M2) | Presses Compute | Per sub-basin SIO, mass, volume; the dam total |
 | 5 | Bedload (M3) | Picks the flow file (daily or DSİ monthly) and the fractions file | Annual flow and bedload table, trend chart, "synthetic daily flow" flag |
@@ -105,9 +105,9 @@ Test IDs follow `<layer>-<milestone>-<nn>`; the layers are `U` unit, `C` input c
 | FR-M1-02 | Importing a file copies it into `<project>/inputs/`; originals are never modified (D33) | Source file bytes are unchanged after an import. Edits in the grid are saved to the copy. | C-M1-02 |
 | FR-M1-03 | Load the basin table and validate it | Required columns matched by their canonical labels (D67), including `Drainage Area (km2)`. Area > 0. Slope present and numeric. Blank rows skipped. Duplicate sub-basin names within a dam are an error. | C-M1-03, C-M1-04 |
 | FR-M1-04 | Edit the basin table in a grid | Edited cells persist to the project copy (D41). Invalid cells are flagged before M2 runs, and a table with invalid cells is still imported (D38). | C-M1-08, W-M1-02 |
-| FR-M1-05 | Load a dam sheet and cross-check it | Dam name matches a basin-table dam (Turkish-aware). Sheet drainage area and slope differ from the table by more than 1%: warning. Missing required fields: error naming them. | C-M1-05, C-M1-06 |
+| FR-M1-05 | *Removed by D76: there is no dam sheet; the curve sheet of step 6 is the dam's bathymetry.* | | |
 | FR-M1-06 | Load zonal means | `MEAN` and `Sub-basin Name` columns matched by their canonical labels (D67); empty or non-numeric means are skipped with a count in the warnings. | C-M1-07 |
-| FR-M1-07 | Select the dam to analyse and enter its settings (D40, D42) | The dam needs a sheet. Commissioning year is optional; the analysis year is blank for the current year and not before the commissioning year; trap efficiency is above 0 and at most 100 (default 100); Hmin is optional. Choosing another dam or changing a setting resets the later steps. | C-M1-09, W-M1-03 |
+| FR-M1-07 | Select the dam to analyse and enter its settings (D40, D42) | Any dam of the basin table can be chosen (D76). Commissioning year is optional; the analysis year is blank for the current year and not before the commissioning year; trap efficiency is above 0 and at most 100 (default 100). Choosing another dam or changing a setting resets the later steps. | C-M1-09, W-M1-03 |
 
 ### M2: Suspended sediment
 
@@ -132,8 +132,8 @@ Test IDs follow `<layer>-<milestone>-<nn>`; the layers are `U` unit, `C` input c
 
 | ID | Requirement | Acceptance criteria | Tests |
 |---|---|---|---|
-| FR-M4-01 | The curve sheet is validated and must cover the dam sheet (D75) | The sheet's levels and volumes rise from row to row; no volume or area below 0. The dam sheet holds the operating values, which need not lie on the curve (OI-11). Refused unless Hbed < Hmax <= Hcrest, 0 < Vactive < Vmax, Hcrest is within 0.5 m of the curve's last level, Hmax lies inside the curve and Vdead lies inside the curve's volumes; every problem is named with its values. Warning: surface area at Hmax above the sheet's drainage area. | U-M4-01, C-M4-01, W-M4-01 |
-| FR-M4-02 | Generate the curve (D75, B3.3) | The curve is the measured table, read by linear interpolation between its rows and held at its first and last rows. Hmin = H(Vdead). The table is the sheet's rows, with elevation, volume (hm³) and area (km²). Chart included. | U-M4-02, U-M4-03, C-M4-01, P-M4-01, W-M4-01 |
+| FR-M4-01 | The curve sheet is validated, and Hmin is entered and must lie inside it (D75, D76) | The sheet's levels and volumes rise from row to row; no volume or area below 0. Hmin is a number with a point, refused unless Hbed < Hmin < Hcrest (the first and last levels of the curve), naming both. An accepted Hmin is kept on the dam; changing it resets the later steps. | U-M4-01, C-M4-01, W-M4-01 |
+| FR-M4-02 | Generate the curve (D75, B3.3) | The curve is the measured table, read by linear interpolation between its rows and held at its first and last rows. Hbed, Hcrest and Vmax are the curve's first level, last level and last volume, and Vdead = V(Hmin). The table is the sheet's rows, with elevation, volume (hm³) and area (km²). Chart included. | U-M4-02, U-M4-03, C-M4-01, P-M4-01, W-M4-01 |
 | FR-M4-03 | Compute annual totals and sediment elevations (B3.4) | Total = TE x (suspended + bedload). Elevation is read from the curve; volumes above the volume at the crest are limited to Hcrest and warned (D54). | U-M4-04, C-M4-02, P-M4-02, W-M4-02 |
 | FR-M4-04 | Accumulation to date (D12) | Sum of annual totals from the commissioning year up to (not including) the analysis year, using each record year's own total and the mean for years outside the record. Years in the record before commissioning are ignored. Requires a commissioning year. | U-M4-05, C-M4-02 |
 | FR-M4-05 | Projection and lifespan (D20) | Cumulative volume to the number of years the user enters in step 7 (100 by default) at the mean, min-year and max-year rates; lifespan = year the cumulative volume reaches Vdead. "Already exceeded in year X" when accumulation to date is above Vdead. | U-M4-06, U-M4-07, C-M4-02, P-M4-03, W-M4-02 |
@@ -173,22 +173,7 @@ All inputs are copied into the project (FR-M1-02). Every column has **one canoni
 
 **Zonal means** (sample: `inputs/raw_zonal_means.csv`; both columns required): `Sub-basin Name` (the same label as the basin table, the join key) and `MEAN` (t/ha/yr).
 
-**Dam sheet** (samples: `inputs/bathymetry/*_bathymetry.csv`; one row per dam). Required: Dam Name, Bottom Elevation of River, Crest Elevation, Maximum Reservoir Elevation, Active Volume, Maximum Volume The other columns are optional.
-
-| Column | Symbol | Unit | Use |
-|---|---|---|---|
-| Dam Name | | | Match with the basin table |
-| Drainage Area (km2) | | km² | Optional. Cross-check only |
-| Longest River Length (km) | | km | Optional. Informational |
-| Top Elevation of River, Bottom Elevation of River | | m | **Bottom Elevation of River = Hbed**, must be the bed at the dam axis (OI-01). Top is optional and informational. |
-| Average Slope | | m/m | Optional. Cross-check only. **Values are decimal m/m, not percent (D23).** |
-| Crest Elevation | Hcrest | m | Curve upper end |
-| Maximum Reservoir Elevation | Hmax | m | Curve |
-| Active Volume | Vactive | hm³ | Curve; Vdead = Vmax - Vactive |
-| Maximum Volume | Vmax | hm³ | Curve |
-| Average Flow | | hm³/yr | Optional. Shown in step 3 |
-
-**Reservoir curve sheet** (sample: `inputs/reservoir_curves/kavsakkaya_reservoir_curve.csv`; one per dam, one row per level; all three columns required, D75): `Elevation (m)` (m), `Volume (hm3)` (hm³) and `Surface Area (km2)` (km²). Levels and volumes rise from row to row; no volume or area below 0. The dam sheet must agree with it (FR-M4-01).
+**Reservoir curve sheet** (sample: `inputs/reservoir_curves/kavsakkaya_reservoir_curve.csv`; one per dam, one row per level; all three columns required, D75): `Elevation (m)` (m), `Volume (hm3)` (hm³) and `Surface Area (km2)` (km²). Levels and volumes rise from row to row; no volume or area below 0. It is the dam's whole bathymetry, from the bed to the crest; the only other reservoir input is Hmin, typed in step 6 (FR-M4-01, D76).
 
 **Daily flow**: `Date` (dd/mm/yyyy; ISO also accepted) and `Flow Q (m3/s)` (m³/s) required; `Water_Year` optional.
 
@@ -202,11 +187,11 @@ All inputs are copied into the project (FR-M1-02). Every column has **one canoni
 | Fi | | Required, sums to 1 within 0.02 |
 | tau_ri, bi | | Optional, cross-checked only (D36) |
 
-**`project.json`** (schema version 1; paths are relative to the project folder)
+**`project.json`** (schema version 3; paths are relative to the project folder)
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "name": "Sakarya_Region",
   "inputs": {
     "basins": "inputs/basins.csv",
@@ -217,9 +202,9 @@ All inputs are copied into the project (FR-M1-02). Every column has **one canoni
     {
       "name": "Çubuk 1",
       "slug": "cubuk_1",
-      "sheet": "inputs/dams/cubuk_1.csv",
       "flow": {"path": "inputs/flow/cubuk_1_flow.csv", "sigma": 0.6, "seed": 0, "phi": 0},
       "curve_sheet": "inputs/curves/cubuk_1_curve.csv",
+      "h_min_m": null,
       "commissioning_year": null,
       "analysis_year": null,
       "trap_efficiency_pct": 100
@@ -228,7 +213,7 @@ All inputs are copied into the project (FR-M1-02). Every column has **one canoni
 }
 ```
 
-`null` means "not yet entered"; `analysis_year: null` means the current year. `curve_sheet` is the dam's reservoir curve sheet, copied into the project in step 6. A version 1 file opens with its `curve`, `h_min_m` and `shape_class` dropped (D75). Output columns are named for their units (`Volume_m3`, `Volume_hm3`, `Elevation_m`, `Area_km2`).
+`null` means "not yet entered"; `analysis_year: null` means the current year. `curve_sheet` is the dam's reservoir curve sheet, copied into the project in step 6, and `h_min_m` the Hmin entered there (D76). A version 1 file opens with its `curve`, `h_min_m` and `shape_class` dropped (D75), and a version 1 or 2 file with its dam `sheet` dropped (D76). Output columns are named for their units (`Volume_m3`, `Volume_hm3`, `Elevation_m`, `Area_km2`).
 
 ## A8. Non-functional requirements
 
@@ -269,11 +254,12 @@ All inputs are copied into the project (FR-M1-02). Every column has **one canoni
 | OI-04 | Hydrologist review of the bedload before and after D35 and D36, and confirmation of the tau_ri form (D50). | M3 | Closed 2026-10-26: the hydrologist approved the formulas (D35, D36, D50), the oracle and the goldens |
 | OI-05 | Hydrologist confirmation of the shape classes (gorge 1.25, hill 2, foothill 3, lake 4) and of the plausibility thresholds in FR-M4-01. | M4 | Closed 2026-10-26: the shape classes stay as the default; an Hmin the user enters takes precedence |
 | OI-06 | Independent hand calculations for `tests/verification/` (the spreadsheet is written by the developer, reviewed by the hydrologist). Closed for M2: the hydrologist signed off `suspended_verification.xlsx`. | M2 |
-| OI-07 | The dam sheet is cross-checked against the sum of the dam's sub-basin areas and their area-weighted mean slope (D43). A downstream dam holds the *incremental* catchment in the table (D21) but the total drainage area in its sheet, so its area check will warn. Decide whether to compare against the cumulative upstream area. | M4 |
+| OI-07 | The dam sheet is cross-checked against the sum of the dam's sub-basin areas and their area-weighted mean slope (D43). A downstream dam holds the *incremental* catchment in the table (D21) but the total drainage area in its sheet, so its area check will warn. Decide whether to compare against the cumulative upstream area. | M4 | Closed by D76: there is no dam sheet to cross-check |
 | OI-08 | The golden manifests record a `code_version` that is a branch commit not on `main` (suspended 582e3d6, reservoir 6e41806, bedload 4d7a0a3, integration 3cbc7d3), and the bedload and integration manifests do not record the lag-1 phi (0 for every golden). Fix both at the next regeneration, which needs hydrologist sign-off anyway; the goldens themselves are unaffected. | Next regeneration | Closed 2026-10-30: the manifests no longer record a commit (a branch commit does not survive a squash-merge, and the history of the manifest says when the goldens were made), the bedload and integration manifests record phi, and the input hashes, which had gone stale when D67 relabelled the sample inputs, are refreshed. `tests/pipeline/test_manifests.py` fails when an input no longer matches. The regeneration left every golden file byte-identical, so it was merged without a new sign-off |
 | OI-09 | The sigma limits of D73: an error above 3 and a warning above 1.5. The hydrologist approved limiting sigma; the two values were chosen from the sweep in D73 and the hydrologist confirmed them. | Step 5 | Closed 2026-10-30: the hydrologist approved the values 3 and 1.5 |
 | OI-10 | Closed 2026-11-10: the hydrologist confirmed the thresholds of D74 (the share of the 3 largest years above 50% and a rank correlation below 0.5 are flagged, and a year below 1% of the mean counts as negligible). | Step 5 |
-| OI-11 | The measured reservoir curve replaces the generated one. Each dam has a curve sheet, and Hmin is read from the curve at Vdead = Vmax - Vactive. Step 6 refuses a dam sheet that disagrees with its curve sheet. Kavşakkaya disagrees in two places. (1) Hbed: the dam sheet says 1063 m, but the curve starts at 1055 m and holds 1.216 hm³ at 1063 m. (2) Vmax: the dam sheet gives 80.8 hm³ at Hmax = 1122.3 m, but the curve holds 90.57 hm³ at 1122.3 m and reaches 80.8 hm³ at about 1120.0 m. This puts Hmin at about 1075.4 m with the sheet's Vmax, or at about 1086.3 m with the curve's volume at Hmax. The hydrologist to correct whichever file is wrong and set the tolerances. Proposed: levels within 0.5 m, and Vmax within 1% of the curve's volume at Hmax. The curve sheet has no row at 1099 m; it is interpolated. | Measured curve | Closed 2026-11-19: the hydrologist said the curve sheet is up to date and the dam sheet holds the operating values, which are not the curve's: thalweg (Hbed) 1059 m, a 65 m dam with its crest at 1124 m, Hmax 1122.29 m for operation, Vmax 80.83 hm³ and Vactive 76.14 hm³, so Vdead = Vmax - Vactive = 4.69 hm³ and Hmin = 1071.99 m. The Kavşakkaya dam sheet is corrected to these values. Hbed and Vmax are no longer compared with the curve; Hcrest (0.5 m), Hmax and Vdead must lie inside it (D75) |
+| OI-11 | The measured reservoir curve replaces the generated one. Each dam has a curve sheet, and Hmin is read from the curve at Vdead = Vmax - Vactive. Step 6 refuses a dam sheet that disagrees with its curve sheet. Kavşakkaya disagrees in two places. (1) Hbed: the dam sheet says 1063 m, but the curve starts at 1055 m and holds 1.216 hm³ at 1063 m. (2) Vmax: the dam sheet gives 80.8 hm³ at Hmax = 1122.3 m, but the curve holds 90.57 hm³ at 1122.3 m and reaches 80.8 hm³ at about 1120.0 m. This puts Hmin at about 1075.4 m with the sheet's Vmax, or at about 1086.3 m with the curve's volume at Hmax. The hydrologist to correct whichever file is wrong and set the tolerances. Proposed: levels within 0.5 m, and Vmax within 1% of the curve's volume at Hmax. The curve sheet has no row at 1099 m; it is interpolated. | Measured curve | Closed 2026-11-19: the hydrologist said the curve sheet is up to date and the dam sheet holds the operating values, which are not the curve's: thalweg (Hbed) 1059 m, a 65 m dam with its crest at 1124 m, Hmax 1122.29 m for operation, Vmax 80.83 hm³ and Vactive 76.14 hm³, so Vdead = Vmax - Vactive = 4.69 hm³ and Hmin = 1071.99 m. The Kavşakkaya dam sheet is corrected to these values. Hbed and Vmax are no longer compared with the curve; Hcrest (0.5 m), Hmax and Vdead must lie inside it (D75). *Superseded by D76*: the dam sheet is removed and Hmin is entered |
+| OI-12 | D76 takes Hmin as an input. The sample Kavşakkaya Hmin is a placeholder, 1071.99 m (the level the old dam sheet's Vdead of 4.69 hm³ gave on the curve); the curve now gives Vdead = 4.687 hm³ there. The hydrologist to give the real minimum operating level of each dam, and curve sheets for Çubuk 1 and Çubuk 2. | Measured curve | Open |
 
 ---
 
@@ -400,10 +386,11 @@ The curve is the dam's reservoir curve sheet (D75): levels `H_i`, volumes `V_i` 
 - volume: `V(H)` is the straight line between the two rows around H; below the first row it is `V_1`, above the last `V_n`
 - surface area: `A(H)` the same way from the `A_i`
 - inverse: `H(V)` the same way from the `V_i` to the `H_i`
-- dead volume: `Vdead = Vmax - Vactive`, from the dam sheet
-- `Hmin = H(Vdead)`; Hbed is the curve's first level
+- Hbed = `H_1`, Hcrest = `H_n` and Vmax = `V_n`: the curve sheet is the dam's whole bathymetry (D76)
+- Hmin is entered in step 6, with `H_1 < Hmin < H_n`
+- dead volume: `Vdead = V(Hmin)`
 
-The dam sheet holds the operating values, which need not lie on the curve: Hbed is the thalweg at the dam axis and Vmax the operating maximum, not V(Hmax) (FR-M4-01, OI-11). Worked example (`tests/verification/reservoir_cases.csv`, case 1): the Kavşakkaya curve sheet with its dam sheet (Hbed 1059 m, Hmax 1122.29 m, Hcrest 1124 m, Vactive 76.14 hm³, Vmax 80.83 hm³) gives Vdead = 4.69 hm³, Hmin = 1071.99 m and A(Hmax) = 3.16 km².
+Worked example (`tests/verification/reservoir_cases.csv`, case 1): the Kavşakkaya curve sheet with the placeholder Hmin = 1071.99 m (OI-12) gives Hbed = 1055 m, Hcrest = 1124 m, Vmax = 96.517 hm³ and Vdead = 4.687 hm³.
 
 ### B3.4 Integration, accumulation, lifespan (M4b)
 
@@ -561,10 +548,10 @@ The evidence column describes the code before M1. Files removed in M1.5 can be r
 | D37 | Keep `0.51 · A^(-0.11)` with area in km² | Accepted (AL-04) |
 | D38 | A basin table with invalid cells is still imported and shown in the grid with the cells flagged. An unreadable file, missing columns or no data rows is refused and nothing is copied | The grid is where the data is fixed (FR-M1-04); a structural problem cannot be fixed there |
 | D39 | The project's dams follow the basin table: one per dam name, matched by identifier (slug). Settings of dams that stay are kept; dams that leave the table are dropped and named in a notice | One source of truth for which dams exist |
-| D40 | Step 2 is complete when the basin table is valid and the zonal means are loaded. A dam sheet is needed only for the dam chosen in step 3 | One dam can be analysed without every sheet |
+| D40 | Step 2 is complete when the basin table is valid and the zonal means are loaded. A dam sheet is needed only for the dam chosen in step 3 *The dam sheet is removed by D76.* | One dam can be analysed without every sheet |
 | D41 | Grid edits rewrite the project's copy as comma-separated UTF-8 with BOM and canonical English headers; the file the user picked is never touched | Edits persist without altering originals (D33) |
 | D42 | Step 3: commissioning year optional; analysis year blank means the current year and is not before the commissioning year; trap efficiency above 0 and at most 100, default 100; Hmin optional | Missing commissioning years (OI-02) must not block steps 4 to 6 |
-| D43 | A dam sheet is cross-checked against the sum of the dam's sub-basin areas and their area-weighted mean slope; more than 1% apart gives a warning | The spec was silent for dams with several sub-basins (OI-07) |
+| D43 | A dam sheet is cross-checked against the sum of the dam's sub-basin areas and their area-weighted mean slope; more than 1% apart gives a warning *Superseded by D76.* | The spec was silent for dams with several sub-basins (OI-07) |
 | D44 | Work-package pull requests are squash-merged once CI is green and every review finding is fixed or declined in the PR description | Branch protection already requires the PR and the `ci` check |
 | D45 | The suspended service writes `suspended.csv` into a folder it is given; step 4 creates no run folder. The file holds a row per sub-basin and a final `Total` row (area, gross mass, yield mass, volume) | The run folder and its naming belong to M5; the total is the number the reviewer reads |
 | D46 | The M2 oracle is a workbook of live formulas for review plus a CSV of the same cases worked out with `math` in `tests/verification/make_suspended_oracle.py`; the unit tests read the CSV. A pull request with new goldens is held until the hydrologist signs them off | No spreadsheet engine was available to store the workbook's results. Evaluating the workbook's formulas separately gave the CSV values exactly. B6 allows goldens only after sign-off |
@@ -597,3 +584,4 @@ The evidence column describes the code before M1. Files removed in M1.5 can be r
 | D73 | A sigma above 3 is refused (the limit of 30 in D69 is lowered to 3), and a sigma above 1.5 is a warning of the bedload: it is shown under the result of step 5, kept in `run.json` and listed in the Warnings sheet. The limits are `MAX_SIGMA` and `WARN_SIGMA` in `src/core/monthly_flow_preprocessor.py`. The default 0.6 is unchanged | The 30 of D69 was the point where the arithmetic fails, not a hydrological limit. On the sample flow files (seed 0, phi 0) the largest day of a month carries on average 9.7% of its volume at the default 0.6, 27.8% at 1.5, 54.4% at 3 and 95.8% at 30, and the mean bedload of Kavşakkaya is 25,904, 1,250,662, 9,568,632 and 49,475,007 m³/yr at those values, so a sigma of 30 gives about 1,900 times the bedload of the default. Above 3 the largest day carries more than half the month, which is no longer a hydrograph. The hydrologist approved limiting sigma on 2026-10-30; the values 3 and 1.5 were chosen from these figures and were confirmed by the hydrologist on 2026-10-30 (OI-09). No calculated number changes for a sigma of 3 or less |
 | D74 | Step 5 states under its result how the annual mass is spread over the record (`src/core/record.py`, `BedloadResult.record_lines`): the share of the `TOP_YEARS` (3) largest years, the median year against the mean, the mean without the largest year, the years below `NEGLIGIBLE_SHARE` (1%) of the mean, and Spearman's rank correlation of the mass with the annual mean flow. A share above `CONCENTRATED_SHARE` (0.5) and a correlation below `WEAK_RANK_CORRELATION` (0.5) are marked ⚠. The lines are shown in step 5 only, not exported. The trend chart shows the values of a point under the pointer and has the matplotlib toolbar | The chart alone did not show that a few years carry the mean rate step 7 uses: on the sample flows (sigma 0.6, phi 0, seed 0) the three largest years carry 90% (Çubuk 1), 86% (Çubuk 2) and 49% (Kavşakkaya) of the bedload, and leaving out the largest year lowers the mean by 50% for Çubuk 1 and 22% for Kavşakkaya. The rank correlation is 0.75 to 0.88 on the samples, so the order of the years follows the flow and only the magnitudes diverge, as a threshold process does; a low value points to a data problem or a split artefact. The thresholds were confirmed by the hydrologist (OI-10, closed 2026-11-10). No calculated number changes |
 | D75 | The reservoir curve is the measured table the hydrologist prepares for each dam (a reservoir curve sheet, `inputs/reservoir_curves/`), imported in step 6 and kept on the dam as `curve_sheet`; the generated power law, its shape classes, Hmin as an input (step 3 and step 6), the curve edits of step 6 and the level interval are removed (supersedes D19, D51, D52, D53, D60 and the level-interval limit of D69). The curve is read by linear interpolation between rows, which fills a missing level, and held at its first and last rows. Vdead = Vmax - Vactive from the dam sheet and Hmin = H(Vdead). The dam sheet keeps the operating values (Hbed the thalweg, Vmax the operating maximum), which are not compared with the curve; step 6 refuses a curve that does not cover them (Hcrest within 0.5 m of the last level, Hmax and Vdead inside the curve), naming every problem (OI-11). `project.json` goes to schema version 2; a version 1 file opens with the generated curve's fields dropped. `run.json` loses the `h_min_given` and `shape_class` flags and the level interval and exponent parameters, and lists the curve sheet among the hashed inputs. The reservoir and integration goldens exist for Kavşakkaya only, with its corrected dam sheet; the Çubuk goldens are removed until their curve sheets exist | The hydrologist now supplies measured curves for every dam, which replace the one-parameter fit. The hydrologist confirmed that the dam is assessed at its operating values, not at the top of the curve, so Vdead = Vmax - Vactive uses the dam sheet and only the levels and volumes come from the curve (OI-11, 2026-11-19). Calculated numbers change: the hydrologist signed off the reservoir, integration and projection goldens on 2026-11-19 |
+| D76 | The reservoir curve sheet is the dam's whole bathymetry: Hbed is its first level, Hcrest its last level and Vmax its last volume. The dam sheet (`inputs/bathymetry/`) is removed from the program, the samples and the documents, with its import in step 2, its check in step 3, its labels, its area and slope cross-check (D43, OI-07) and the area warning of FR-M4-01. Hmin, the minimum operating level, is typed in step 6 and Vdead = V(Hmin); Hmin must lie strictly between Hbed and Hcrest, is kept on the dam as `h_min_m` once the curve accepts it, and a new value resets the later steps. Hmax and Vactive are no longer used: Hmax only marked the chart and gave the area warning. `project.json` goes to schema version 3; a version 1 or 2 file opens with its dam `sheet` dropped. `run.json` no longer hashes a dam sheet, and its parameters are Hbed, Hmin, Hcrest, Vmax and Vdead (supersedes the dam-sheet parts of D75 and OI-11) | The user said the curve sheet is the absolute bathymetry the program must consider, and that the dam sheets are to be removed entirely. The curve cannot give the dead storage, so Hmin is entered, as the user chose. The reservoir golden (the curve table) and the integration and projection goldens are unchanged, because they depend only on the curve; the lifespans and Vdead move with the placeholder Hmin (OI-12), which awaits the hydrologist |

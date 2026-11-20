@@ -11,7 +11,7 @@ from src.ui.steps.base import Step
 
 
 class DamStep(Step):
-    """Step 3: pick the dam to analyse and enter its settings (A5). The dam needs a sheet from step 2."""
+    """Step 3: pick the dam to analyse and enter its settings (A5)."""
 
     title = "Select dam"
 
@@ -19,8 +19,7 @@ class DamStep(Step):
         self._selected_slug: Optional[str] = None
         self.confirmed: Optional[str] = None  # slug of the dam the user has chosen with "Use this dam"
         self._confirmed_entries: Optional[Tuple[str, ...]] = None  # the field texts at that moment
-        self.sheet_var = tk.StringVar()
-        self.warning_var = tk.StringVar()
+        self.info_var = tk.StringVar()
         self.status_var = tk.StringVar()
         self.commissioning_var = tk.StringVar()
         self.analysis_var = tk.StringVar()
@@ -49,12 +48,7 @@ class DamStep(Step):
             self.sub_basin_tree.column(column, width=170, anchor="w")
         self.sub_basin_tree.pack(fill=tk.X, padx=6, pady=6)
 
-        sheet = ttk.LabelFrame(right, text="Dam sheet")
-        sheet.grid(row=1, column=0, sticky="ew", pady=6)
-        ttk.Label(sheet, textvariable=self.sheet_var, justify=tk.LEFT).pack(anchor="w", padx=6, pady=(4, 0))
-        ttk.Label(sheet, textvariable=self.warning_var, justify=tk.LEFT, foreground="firebrick", wraplength=560).pack(
-            anchor="w", padx=6, pady=(0, 4)
-        )
+        ttk.Label(right, textvariable=self.info_var, justify=tk.LEFT).grid(row=1, column=0, sticky="w", pady=6)
 
         settings = ttk.LabelFrame(right, text="Settings")
         settings.grid(row=2, column=0, sticky="ew")
@@ -89,9 +83,8 @@ class DamStep(Step):
         return tuple(variable.get().strip() for variable in variables)
 
     def is_complete(self) -> bool:
-        """True while the confirmed dam has a sheet and the fields still show what was confirmed."""
-        dam = self._dam(self.confirmed)
-        return dam is not None and bool(dam.sheet) and self._entries() == self._confirmed_entries
+        """True while a dam is confirmed and the fields still show what was confirmed."""
+        return self._dam(self.confirmed) is not None and self._entries() == self._confirmed_entries
 
     def on_show(self):
         self._render_list()
@@ -131,14 +124,6 @@ class DamStep(Step):
         if dam is None:
             show_error("Select a dam", "Select a dam in the list first.")
             return
-        if not dam.sheet:
-            show_error("Dam sheet", f"{dam.name} has no dam sheet. Import it in step 2 (Regional data) first.")
-            return
-        try:
-            self.wizard.regional.dam_sheet(dam)
-        except (ValueError, OSError) as exc:
-            show_error("Dam sheet", f"The sheet of {dam.name} cannot be used: {exc}")
-            return
         before = (dam.commissioning_year, dam.analysis_year, dam.trap_efficiency_pct)
         try:
             apply_dam_settings(
@@ -176,10 +161,9 @@ class DamStep(Step):
 
     def _show_dam(self, reload_fields: bool) -> None:
         self.sub_basin_tree.delete(*self.sub_basin_tree.get_children())
-        self.warning_var.set("")
         dam, regional = self.selected, self.wizard.regional
         if dam is None or regional is None or regional.basin_table is None:
-            self.sheet_var.set(
+            self.info_var.set(
                 "Select a dam in the list." if dam is None else "Complete step 2 (Regional data) to see this dam."
             )
             if reload_fields:
@@ -187,13 +171,7 @@ class DamStep(Step):
             return
         for _, row in regional.sub_basins(dam).iterrows():
             self.sub_basin_tree.insert("", "end", values=(row[SUBBASIN], row[AREA], row[SLOPE]))
-        try:
-            loaded = regional.dam_sheet(dam)
-        except (ValueError, OSError) as exc:
-            self.sheet_var.set(f"No sheet is available for this dam: {exc} Import it in step 2 (Regional data).")
-        else:
-            self.sheet_var.set(self._sheet_text(loaded.data))
-            self.warning_var.set("\n".join(loaded.warnings))
+        self.info_var.set("")
         if reload_fields:
             self._set_fields(
                 "" if dam.commissioning_year is None else str(dam.commissioning_year),
@@ -205,18 +183,3 @@ class DamStep(Step):
         self.commissioning_var.set(commissioning)
         self.analysis_var.set(analysis)
         self.efficiency_var.set(efficiency)
-
-    @staticmethod
-    def _sheet_text(sheet) -> str:
-        lines = [
-            f"Bed elevation (Hbed): {sheet.bed_elev_m:g} m",
-            f"Crest elevation (Hcrest): {sheet.crest_elev_m:g} m",
-            f"Maximum level (Hmax): {sheet.max_elev_m:g} m",
-            f"Active volume: {sheet.active_vol_hm3:g} hm³",
-            f"Maximum volume: {sheet.max_vol_hm3:g} hm³",
-        ]
-        if sheet.drainage_area_km2 is not None:
-            lines.append(f"Drainage area: {sheet.drainage_area_km2:g} km²")
-        if sheet.avg_flow_hm3_yr is not None:
-            lines.append(f"Mean annual flow: {sheet.avg_flow_hm3_yr:g} hm³/yr")
-        return "\n".join(lines)

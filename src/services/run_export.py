@@ -62,7 +62,7 @@ def _sha256(path: Path) -> str:
 def _input_files(project: Project, dam: Dam) -> List[InputFile]:
     """Every file the run read, with its SHA-256. A missing input is an error naming it (FR-X-01)."""
     entries = [(role, project.inputs.get(role)) for role in INPUT_KEYS]
-    entries += [("dam_sheet", dam.sheet), ("flow", dam.flow.path), ("curve_sheet", dam.curve_sheet)]
+    entries += [("flow", dam.flow.path), ("curve_sheet", dam.curve_sheet)]
     files = []
     for role, relative in entries:
         label = role.replace("_", " ")
@@ -85,13 +85,11 @@ def _parameters(dam: Dam, curve: CurveResult, integration: IntegrationResult) ->
         Parameter("Commissioning year", integration.commissioning_year, ""),
         Parameter("Analysis year", integration.analysis_year, ""),
         Parameter("Projection length", len(integration.projection) - 1, "years"),
-        Parameter("Hbed", shape.bed_elev_m, "m"),  # the thalweg at the dam axis, from the dam sheet
-        Parameter("Hmin", shape.h_min_m, "m"),  # the level of the curve at Vdead
-        Parameter("Hmax", shape.max_elev_m, "m"),
-        Parameter("Hcrest", shape.crest_elev_m, "m"),
-        Parameter("Vactive", shape.active_vol_hm3, "hm³"),
-        Parameter("Vmax", shape.max_vol_hm3, "hm³"),
-        Parameter("Vdead", shape.dead_vol_hm3, "hm³"),
+        Parameter("Hbed", shape.bed_elev_m, "m"),  # the first level of the curve
+        Parameter("Hmin", shape.h_min_m, "m"),  # entered in step 6
+        Parameter("Hcrest", shape.crest_elev_m, "m"),  # the last level of the curve
+        Parameter("Vmax", shape.max_vol_hm3, "hm³"),  # the volume at the crest
+        Parameter("Vdead", shape.dead_vol_hm3, "hm³"),  # V(Hmin)
     ]
 
 
@@ -223,7 +221,7 @@ def export_run(
     now: Optional[datetime.datetime] = None,
 ) -> RunExport:
     """Write the run folder of `dam` and return it with the files written. `input_warnings` are those of the inputs
-    (the zonal means and the dam sheet), which the results do not carry. Raises ValueError for a missing input."""
+    (the basin table and the zonal means), which the results do not carry. Raises ValueError for a missing input."""
     now = now or datetime.datetime.now()
     stamp = now.isoformat(timespec="seconds")
     files = _input_files(project, dam)

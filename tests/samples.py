@@ -19,6 +19,9 @@ SAMPLE_ZONAL = resource_path("inputs", "raw_zonal_means.csv")
 SAMPLE_FRACTIONS = resource_path("inputs", "fractional_parameters.csv")
 # The dams with a curve sheet in inputs/reservoir_curves/ (D75); the Çubuk dams have none yet.
 CURVE_DAMS = ("kavsakkaya",)
+# A placeholder Hmin per dam in CURVE_DAMS (D76): the level the dam sheet's Vdead gave on the curve before D76. The
+# hydrologist confirms the real minimum operating level before the goldens are signed off.
+SAMPLE_H_MIN = {"kavsakkaya": 1071.99}
 # Placeholders, not the dams' real years (OI-02): the integration goldens depend on them and are regenerated with the
 # real years before they are signed off. The analysis year is fixed so that the goldens do not move with the date.
 SAMPLE_COMMISSIONING_YEAR, SAMPLE_ANALYSIS_YEAR = 1990, 2020
@@ -54,27 +57,23 @@ def sample_flow(slug: str):
     return resource_path("inputs", "dam_flow_data", f"{slug}_flow.csv")
 
 
-def sample_sheet(slug: str):
-    """The dam sheet of one of the three sample dams."""
-    return resource_path("inputs", "bathymetry", f"{slug}_bathymetry.csv")
-
-
 def sample_curve(slug: str):
     """The curve sheet of a dam in CURVE_DAMS."""
     return resource_path("inputs", "reservoir_curves", f"{slug}_reservoir_curve.csv")
 
 
 def _add_curves(data: RegionalData) -> RegionalData:
-    """Each dam's sheet and, for the dams in CURVE_DAMS, its curve sheet."""
-    data.import_dam_sheets([str(sample_sheet(dam.slug)) for dam in data.project.dams])
+    """The curve sheet and the placeholder Hmin of each dam in CURVE_DAMS."""
     for dam in data.project.dams:
         if dam.slug in CURVE_DAMS:
             import_curve_sheet(data.project, dam, sample_curve(dam.slug))
+            dam.h_min_m = SAMPLE_H_MIN[dam.slug]
+    data.project.save()
     return data
 
 
 def sample_curve_inputs(folder) -> RegionalData:
-    """`sample_regional` plus each dam's sheet and the curve sheets of CURVE_DAMS."""
+    """`sample_regional` plus the curve sheets and Hmin of CURVE_DAMS."""
     return _add_curves(sample_regional(folder))
 
 
@@ -92,12 +91,12 @@ def sample_dam_results(data: RegionalData, slug: str):
     dam = next(dam for dam in data.project.dams if dam.slug == slug)
     suspended = compute_suspended(data.sub_basins(dam), data.zonal)
     bedload = compute_dam_bedload(data.project, dam)
-    curve = compute_dam_curve(data.project, data.dam_sheet(dam).data, dam)
+    curve = compute_dam_curve(data.project, dam)
     return dam, suspended, bedload, curve, compute_dam_integration(suspended, bedload, curve, dam)
 
 
 def sample_integration_inputs(folder) -> RegionalData:
-    """`sample_bedload_inputs` plus each dam's sheet and curve sheet as in `sample_curve_inputs`, and the placeholder
+    """`sample_bedload_inputs` plus the curve sheets and Hmin as in `sample_curve_inputs`, and the placeholder
     years of the three dams."""
     data = _add_curves(sample_bedload_inputs(folder))
     for dam in data.project.dams:

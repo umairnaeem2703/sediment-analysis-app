@@ -8,12 +8,13 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from src.core.reservoir import AREA_KM2, ELEVATION_M, VOLUME_HM3
 from src.services.dam_run import CURVE
 from src.services.reporting import reservoir_curve_figure
-from src.services.reservoir import CurveResult, compute_dam_curve, import_curve_sheet
+from src.services.reservoir import CurveResult, apply_h_min, import_curve_sheet
 from src.ui.common import (
     add_point_readout,
     add_table,
     bold_font,
     browse_open_file,
+    format_number,
     curve_lines,
     show_error,
     show_warning,
@@ -30,10 +31,10 @@ GRID_COLUMNS = (
 
 
 class ReservoirStep(Step):
-    """Step 6: the measured reservoir curve of the chosen dam (A5, B3.3, D75).
+    """Step 6: the measured reservoir curve of the chosen dam (A5, B3.3, D75, D76).
 
-    The user imports the dam's curve sheet. Generate checks that the curve covers the dam sheet (crest, Hmax and Vdead), naming
-    every problem when it does not, and shows the curve with Hmin read from it.
+    The user imports the dam's curve sheet and enters Hmin, the minimum operating level. Generate checks the curve and
+    that Hmin lies inside it, naming every problem, keeps Hmin on the dam and shows the curve with Vdead = V(Hmin).
     """
 
     title = "Reservoir curve"
@@ -43,10 +44,13 @@ class ReservoirStep(Step):
         super().__init__()
         self.dam_step = dam_step
         self._canvas: Optional[FigureCanvasTkAgg] = None
+        self._result_h_min: Optional[str] = None  # the Hmin text when the result was made
 
     def build(self, frame):
         self.dam_var = tk.StringVar()
         self.curve_file_var = tk.StringVar()
+        self.h_min_var = tk.StringVar()
+        self.h_min_var.trace_add("write", lambda *_: self.wizard.refresh())  # editing it un-completes the step
         self.summary_var = tk.StringVar()
         self.warning_var = tk.StringVar()
         frame.columnconfigure(0, weight=1)
@@ -57,7 +61,9 @@ class ReservoirStep(Step):
         ttk.Label(inputs, textvariable=self.dam_var).grid(row=0, column=0, columnspan=2, sticky="w", padx=6, pady=3)
         ttk.Button(inputs, text="Curve sheet...", command=self.on_choose_curve).grid(row=1, column=0, padx=6, pady=3)
         ttk.Label(inputs, textvariable=self.curve_file_var).grid(row=1, column=1, sticky="w")
-        ttk.Button(inputs, text="Generate curve", command=self.generate).grid(row=2, column=0, padx=6, pady=6)
+        ttk.Label(inputs, text="Hmin, minimum operating level (m):").grid(row=2, column=0, sticky="w", padx=6, pady=3)
+        ttk.Entry(inputs, textvariable=self.h_min_var, width=14).grid(row=2, column=1, sticky="w")
+        ttk.Button(inputs, text="Generate curve", command=self.generate).grid(row=3, column=0, padx=6, pady=6)
 
         self.bold_font = bold_font()
         ttk.Label(frame, textvariable=self.summary_var, font=self.bold_font, wraplength=640, justify=tk.LEFT).grid(
@@ -77,13 +83,19 @@ class ReservoirStep(Step):
     # --- Step contract ------------------------------------------------------------------------
 
     def is_complete(self) -> bool:
-        return self.result is not None
+        """True while a result exists and the Hmin field still shows what it was made with."""
+        return self.result is not None and self.h_min_var.get().strip() == self._result_h_min
 
     def on_show(self):
         self._render_inputs()
+        dam = self.dam_step.chosen
+        if dam is not None and dam.h_min_m is not None and not self.h_min_var.get().strip():
+            self.h_min_var.set(format_number(dam.h_min_m))  # keep what the user has typed
 
     def reset(self):
         self._clear_result()
+        dam = self.dam_step.chosen if self.wizard.project is not None else None
+        self.h_min_var.set("" if dam is None or dam.h_min_m is None else format_number(dam.h_min_m))
         if self.wizard.project is not None:
             self._render_inputs()
 
@@ -108,22 +120,26 @@ class ReservoirStep(Step):
             show_warning("Curve sheet", "\n".join(loaded.warnings))
 
     def generate(self) -> None:
-        dam = self.dam_step.chosen
+        dam, text = self.dam_step.chosen, self.h_min_var.get().strip()
+        before = dam.h_min_m
         try:
-            sheet = self.wizard.regional.dam_sheet(dam).data
-            result = compute_dam_curve(self.wizard.project, sheet, dam)
+            result = apply_h_min(self.wizard.project, dam, text)
         except (ValueError, OSError) as exc:
             show_error("Reservoir curve", str(exc))
             return
+        if dam.h_min_m != before:
+            self.wizard.invalidate_after(self.index, "Hmin changed.")
         self._show_result(result)
+        self._result_h_min = text
+        self.wizard.refresh()
 
     def _show_result(self, result: CurveResult) -> None:
         self._clear_result()
         self.result = result
         curve = result.curve
         self.summary_var.set(
-            f"Hmin {curve.h_min_m:.2f} m (the level of the dead volume, {curve.dead_vol_hm3:.2f} hm³). "
-            f"Surface area at Hmax {curve.area(curve.max_elev_m):.2f} km²."
+            f"Dead volume {curve.dead_vol_hm3:.2f} hm³ below Hmin {curve.h_min_m:.2f} m. "
+            f"Hbed {curve.bed_elev_m:g} m, Hcrest {curve.crest_elev_m:g} m, Vmax {curve.max_vol_hm3:.2f} hm³."
         )
         for _, row in result.table.iterrows():
             self.tree.insert("", "end", values=[format(row[key], spec) for key, _, _, spec in GRID_COLUMNS])
@@ -139,6 +155,7 @@ class ReservoirStep(Step):
 
     def _clear_result(self) -> None:
         self.result = None
+        self._result_h_min = None
         self.tree.delete(*self.tree.get_children())
         for variable in (self.summary_var, self.warning_var):
             variable.set("")

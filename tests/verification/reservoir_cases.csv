@@ -1,3 +1,3 @@
-Case,Description,Hbed_m,Hmax_m,Hcrest_m,Vactive_hm3,Vmax_hm3,Vdead_hm3,Hmin_m,V_Hmax_hm3,Area_Hmax_km2
-1,Kavsakkaya curve sheet and dam sheet (OI-11),1059.0,1122.29,1124.0,76.14,80.83,4.689999999999998,1071.9946140035906,90.52727999999985,3.1590699999999967
-2,Round numbers,100.0,125.0,130.0,35.0,45.0,10.0,110.0,45.0,3.0
+Case,Description,Hmin_m,Hbed_m,Hcrest_m,Vmax_hm3,Vdead_hm3
+1,"Kavsakkaya curve sheet, placeholder Hmin",1071.99,1055.0,1124.0,96.517,4.687430000000004
+2,Round numbers,110.0,100.0,130.0,60.0,10.0

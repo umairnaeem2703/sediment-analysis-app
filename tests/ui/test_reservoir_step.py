@@ -8,10 +8,8 @@ from src.ui.steps.project_step import ProjectStep
 from src.ui.steps.regional_step import RegionalStep
 from src.ui.steps.reservoir_step import ReservoirStep
 from src.ui.wizard import Wizard
-from tests.samples import SAMPLE_BASINS, SAMPLE_ZONAL, sample_curve, sample_sheet
+from tests.samples import SAMPLE_BASINS, SAMPLE_H_MIN, SAMPLE_ZONAL, sample_curve
 from tests.ui.fakes import FakeStep
-
-SLUGS = ("kavsakkaya", "cubuk_1", "cubuk_2")
 
 
 @pytest.fixture()
@@ -31,7 +29,8 @@ def warnings(monkeypatch):
 
 @pytest.fixture()
 def app(tk_root, tmp_path, errors):
-    """The wizard at step 3 with the sample tables and the three dam sheets imported. The suspended and bedload steps are stand-ins: the curve does not use their results."""
+    """The wizard at step 3 with the sample tables imported. The suspended and bedload steps are stand-ins: the curve
+    does not use their results."""
     top = tk.Toplevel(tk_root)
     project_step, regional_step, dam_step = ProjectStep(), RegionalStep(), DamStep()
     suspended, bedload, step, later = (
@@ -46,7 +45,6 @@ def app(tk_root, tmp_path, errors):
     wizard.go_to(1)
     regional_step.import_basin_table(str(SAMPLE_BASINS))
     regional_step.import_zonal_means(str(SAMPLE_ZONAL))
-    regional_step.import_dam_sheets([str(sample_sheet(slug)) for slug in SLUGS])
     wizard.go_to(2)
     yield wizard, step, later, tmp_path
     top.destroy()
@@ -66,6 +64,7 @@ def _reach_step(wizard, slug="kavsakkaya"):
 def _generated(wizard, step):
     _reach_step(wizard)
     step.use_curve_file(str(sample_curve("kavsakkaya")))
+    step.h_min_var.set(str(SAMPLE_H_MIN["kavsakkaya"]))
     step.generate()
 
 
@@ -90,6 +89,7 @@ def test_w_m4_01_the_step_names_the_dam_and_that_no_curve_sheet_is_chosen(app):
 def test_x_01_generating_without_a_curve_sheet_says_where_to_import_it(app, errors):
     wizard, step, _, _ = app
     _reach_step(wizard)
+    step.h_min_var.set("1080")
 
     step.generate()
 
@@ -115,7 +115,8 @@ def test_w_m4_01_generate_fills_the_table_the_chart_and_the_summary(app):
     rows = _rows(step)
     assert len(rows) == 69 and rows[0] == ("1055.00", "0.014", "0.028") and rows[-1][0] == "1124.00"
     summary = step.summary_var.get()
-    assert "Hmin 1071.99 m" in summary and "4.69 hm³" in summary and "3.16 km²" in summary
+    assert summary == "Dead volume 4.69 hm³ below Hmin 1071.99 m. Hbed 1055 m, Hcrest 1124 m, Vmax 96.52 hm³."
+    assert wizard.project.dams[0].h_min_m == 1071.99
     assert step._canvas is not None and step._canvas.get_tk_widget().winfo_exists()
     assert step.warning_var.get() == ""
     wizard.refresh()
@@ -134,19 +135,58 @@ def test_w_m4_01_an_invalid_curve_sheet_is_refused_and_named(app, errors, tmp_pa
     assert wizard.project.dams[0].curve_sheet is None
 
 
-def test_w_m4_01_a_curve_that_does_not_reach_the_crest_is_refused_with_every_problem(app, errors, tmp_path):
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("", "Hmin (m) must be a number, found an empty cell"),
+        ("1071,99", "Hmin (m) must be a number, found '1071,99'"),
+        ("1124", "Hmin (1124 m) must lie above Hbed (1055 m) and below Hcrest (1124 m)"),
+    ],
+)
+def test_w_m4_01_an_hmin_that_is_not_a_level_inside_the_curve_is_refused(app, errors, text, expected):
     wizard, step, _, _ = app
     _reach_step(wizard)
-    short = tmp_path / "short.csv"
-    lines = sample_curve("kavsakkaya").read_text(encoding="utf-8").splitlines()
-    short.write_text("\n".join(lines[:56]) + "\n", encoding="utf-8")  # up to 1110 m
-    step.use_curve_file(str(short))
+    step.use_curve_file(str(sample_curve("kavsakkaya")))
+    step.h_min_var.set(text)
 
     step.generate()
 
-    assert not step.is_complete() and not _rows(step)
-    assert len(errors) == 1 and errors[0][0] == "Reservoir curve"
-    assert "Hcrest on the dam sheet (1124 m)" in errors[0][1] and "Hmax on the dam sheet (1122.29 m)" in errors[0][1]
+    assert not step.is_complete() and not _rows(step) and wizard.project.dams[0].h_min_m is None
+    assert len(errors) == 1 and errors[0][0] == "Reservoir curve" and expected in errors[0][1]
+
+
+def test_w_m4_01_editing_hmin_un_completes_the_step(app):
+    wizard, step, _, _ = app
+    _generated(wizard, step)
+
+    step.h_min_var.set("1080")
+
+    assert not step.is_complete()
+    step.h_min_var.set(str(SAMPLE_H_MIN["kavsakkaya"]))
+    assert step.is_complete()
+
+
+def test_w_x_02_a_new_hmin_clears_the_later_steps(app):
+    wizard, step, later, _ = app
+    _generated(wizard, step)
+    later.done = True
+
+    step.h_min_var.set("1080")
+    step.generate()
+
+    assert step.is_complete() and later.done is False and "Hmin changed" in wizard.notice_var.get()
+    assert wizard.project.dams[0].h_min_m == 1080.0
+
+
+def test_w_m4_01_the_kept_hmin_is_shown_when_the_dam_is_chosen_again(app):
+    wizard, step, _, _ = app
+    _generated(wizard, step)
+    wizard.steps[2].select_dam("cubuk_2")
+    wizard.steps[2].use_dam()
+    wizard.steps[2].select_dam("kavsakkaya")
+    wizard.steps[2].use_dam()
+
+    assert step.h_min_var.get() == "1071.99"
 
 
 def test_w_m4_01_the_warnings_of_the_sheet_are_shown(app, warnings, tmp_path):
@@ -157,6 +197,7 @@ def test_w_m4_01_the_warnings_of_the_sheet_are_shown(app, warnings, tmp_path):
     noted.write_text("\n".join([text[0] + ",Note", *(line + ",x" for line in text[1:])]) + "\n", encoding="utf-8")
 
     step.use_curve_file(str(noted))
+    step.h_min_var.set("1080")
     step.generate()
 
     assert len(warnings) == 1 and "Note" in warnings[0][1]

@@ -11,12 +11,9 @@ from src.ui.steps.project_step import ProjectStep
 from src.ui.steps.regional_step import RegionalStep
 from src.ui.steps.suspended_step import SuspendedStep
 from src.ui.wizard import Wizard
-from src.utils.paths import resource_path
 from tests.samples import SAMPLE_BASINS, SAMPLE_FRACTIONS, SAMPLE_ZONAL, sample_flow, write_fractions_with_wrong_tau_ri
 from tests.ui.fakes import FakeStep
 from tests.ui.helpers import wait_until
-
-CUBUK_1_SHEET = resource_path("inputs", "bathymetry", "cubuk_1_bathymetry.csv")
 
 
 @pytest.fixture()
@@ -36,7 +33,7 @@ def warnings_shown(monkeypatch):
 
 @pytest.fixture()
 def app(tk_root, tmp_path, errors, warnings_shown):
-    """The wizard at step 3 with the sample tables imported and only Çubuk 1 holding a sheet."""
+    """The wizard at step 3 with the sample tables imported."""
     top = tk.Toplevel(tk_root)
     project_step, regional_step, dam_step = ProjectStep(), RegionalStep(), DamStep()
     suspended, step, later = SuspendedStep(dam_step), BedloadStep(dam_step), FakeStep("Later")
@@ -46,7 +43,6 @@ def app(tk_root, tmp_path, errors, warnings_shown):
     wizard.go_to(1)
     regional_step.import_basin_table(str(SAMPLE_BASINS))
     regional_step.import_zonal_means(str(SAMPLE_ZONAL))
-    regional_step.import_dam_sheets([str(CUBUK_1_SHEET)])
     wizard.go_to(2)
     yield wizard, step, later, top, tmp_path
     top.destroy()
