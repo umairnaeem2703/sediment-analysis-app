@@ -9,7 +9,15 @@ from src.core.reservoir import AREA_KM2, ELEVATION_M, VOLUME_HM3
 from src.services.dam_run import CURVE
 from src.services.reporting import reservoir_curve_figure
 from src.services.reservoir import CurveResult, compute_dam_curve, import_curve_sheet
-from src.ui.common import add_table, bold_font, browse_open_file, show_error, show_warning
+from src.ui.common import (
+    add_point_readout,
+    add_table,
+    bold_font,
+    browse_open_file,
+    curve_lines,
+    show_error,
+    show_warning,
+)
 from src.ui.steps.base import Step
 from src.ui.steps.dam_step import DamStep
 
@@ -124,6 +132,7 @@ class ReservoirStep(Step):
         self._canvas.get_tk_widget().configure(width=400, height=200)  # the canvas then follows the size of the pane
         self._canvas.draw()
         self._canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        add_point_readout(self._canvas, lines=curve_lines(self._canvas.figure))
         self.wizard.refresh()
 
     # --- drawing ------------------------------------------------------------------------------

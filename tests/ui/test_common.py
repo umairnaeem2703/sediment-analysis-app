@@ -95,3 +95,26 @@ def test_w_m3_01_hovering_a_point_of_the_trend_chart_shows_the_year_and_both_val
     MouseEvent("motion_notify_event", canvas, x, y)._process()
     LocationEvent("figure_leave_event", canvas, x, y)._process()
     assert not note.get_visible()
+
+
+def test_w_m3_02_hovering_a_curve_without_markers_names_each_line_at_that_x():
+    from matplotlib.backend_bases import MouseEvent
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    from matplotlib.figure import Figure
+
+    figure = Figure()
+    axis = figure.subplots()
+    axis.plot([2020, 2030, 2040], [0.0, 5.0, 10.0], label="Mean rate")
+    axis.plot([2020, 2030, 2040], [0.0, 8.0, 16.0], label="Maximum rate")
+    axis.axhline(12.0, label="Dead volume")
+    axis.set_xlabel("Year")
+    canvas = FigureCanvasAgg(figure)
+    canvas.draw()
+    lines = common.curve_lines(figure)
+    common.add_point_readout(canvas, lines=lines, by_line=True)
+    x, y = lines[0].get_transform().transform((2030, 5.0))
+
+    MouseEvent("motion_notify_event", canvas, x + 2, y + 2)._process()
+
+    assert len(lines) == 2
+    assert axis.texts[-1].get_text().splitlines() == ["Year: 2030", "Mean rate: 5", "Maximum rate: 8"]

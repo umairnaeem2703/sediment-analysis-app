@@ -126,14 +126,26 @@ def install_error_handler(root: tk.Tk) -> None:
     root.report_callback_exception = handler
 
 
-def add_point_readout(canvas, radius_px: float = 10) -> None:
+def curve_lines(figure) -> List[Line2D]:
+    """The plotted curves of a chart: its lines of more than two points, which leaves out Hmin, Hmax and the like."""
+    return [line for axis in figure.axes for line in axis.get_lines() if len(line.get_xydata()) > 2]
+
+
+def add_point_readout(
+    canvas, radius_px: float = 10, lines: Optional[List[Line2D]] = None, by_line: bool = False
+) -> None:
     """Show the values of the marked points of a chart while the pointer is over one of them.
 
-    The point nearest the pointer, within `radius_px`, is ringed together with the points of the other marked lines at
-    the same x, and a note gives that x and each y with its axis label, so the values of a twin-axis chart can be read.
+    The point nearest the pointer, within `radius_px`, is ringed together with the points of the other lines at the
+    same x, and a note gives that x and each y with its axis label, so the values of a twin-axis chart can be read.
+    `lines` are the lines to read (default: those with markers); `by_line` names each y by its line, for a chart whose
+    lines share an axis.
     """
     figure = canvas.figure
-    lines = [line for axis in figure.axes for line in axis.get_lines() if line.get_marker() not in (None, "None", "")]
+    if lines is None:
+        lines = [
+            line for axis in figure.axes for line in axis.get_lines() if line.get_marker() not in (None, "None", "")
+        ]
     x_label = lines[0].axes.get_xlabel() if lines else ""
     rings = Line2D([], [], linestyle="none", marker="o", markersize=13, markerfacecolor="none", markeredgecolor="black")
     rings.set_transform(IdentityTransform())  # display pixels, so the twin axes need no conversion
@@ -165,7 +177,7 @@ def add_point_readout(canvas, radius_px: float = 10) -> None:
                     if xy[0] == x:
                         points.append(line.get_transform().transform(xy))
                         value = format(xy[1], ",.0f" if abs(xy[1]) >= 100 else ".3g")
-                        text.append(f"{line.axes.get_ylabel()}: {value}")
+                        text.append(f"{line.get_label() if by_line else line.axes.get_ylabel()}: {value}")
             rings.set_data([p[0] for p in points], [p[1] for p in points])
             anchor = points[0]
             left, low = anchor[0] > figure.bbox.width * 0.65, anchor[1] > figure.bbox.height * 0.6

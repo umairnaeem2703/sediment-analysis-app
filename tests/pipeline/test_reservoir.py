@@ -65,7 +65,8 @@ def test_p_m4_01_the_chart_shows_volume_and_area_against_the_level_and_marks_hmi
     assert list(area_axis.lines[0].get_ydata()) == list(result.table["Area_km2"])
     assert "m" in volume_axis.get_xlabel() and "hm³" in volume_axis.get_ylabel() and "km²" in area_axis.get_ylabel()
     marked = {line.get_label() for line in volume_axis.lines[1:]}
-    assert {"Hmin", "Hmax"} <= marked
+    curve = result.curve
+    assert {f"Hmin ({curve.h_min_m:.2f} m)", f"Hmax ({curve.max_elev_m:.2f} m)"} <= marked
 
 
 def test_p_m4_01_the_chart_is_written_as_a_png(tmp_path):
