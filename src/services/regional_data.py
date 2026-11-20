@@ -7,7 +7,7 @@ the project; the file the user picked is only read.
 
 import os
 from pathlib import Path
-from typing import List, NamedTuple, Optional
+from typing import List, Optional
 
 import pandas as pd
 
@@ -15,22 +15,14 @@ from src.core.text import name_key
 from src.services.project import Dam, Project, slugify
 from src.services.regional import (
     DAM,
-    Loaded,
     Problem,
     TableError,
-    load_dam_sheet,
     load_zonal_means,
     read_basin_grid,
     validate_basin_table,
 )
 
 BASIN_COPY = "inputs/basins.csv"
-
-
-class SheetImport(NamedTuple):
-    imported: List[str]  # names of the dams that got a sheet
-    warnings: List[str]
-    errors: List[str]  # one message per file that was refused
 
 
 class RegionalData:
@@ -189,33 +181,3 @@ class RegionalData:
         """The dam's rows of the validated basin table."""
         self._require_table()
         return self.basin_table[self.basin_table[DAM].map(name_key) == name_key(dam.name)]
-
-    def dam_sheet(self, dam: Dam) -> Loaded:
-        """The dam's sheet, re-read from the project copy and cross-checked against the current table."""
-        self._require_table()
-        if not dam.sheet:
-            raise ValueError(f"No sheet has been imported for {dam.name}.")
-        return load_dam_sheet(self.project.folder / dam.sheet, self.basin_table)
-
-    # --- dam sheets ---------------------------------------------------------------------------
-
-    def import_dam_sheets(self, paths) -> SheetImport:
-        """Match each sheet to its dam by the name inside it and copy it to inputs/dams/<slug>. Bad files are skipped."""
-        if self.basin_table is None:
-            raise ValueError("Import a valid basin table before the dam sheets.")
-        imported, warnings, errors = [], [], []
-        dams = {name_key(dam.name): dam for dam in self.project.dams}
-        for path in paths:
-            try:
-                loaded = load_dam_sheet(path, self.basin_table)
-                dam = dams[name_key(loaded.data.name)]
-                relative = self.project.import_file(path, f"inputs/dams/{dam.slug}{Path(path).suffix.lower()}")
-                self._drop_previous(dam.sheet, relative)
-                dam.sheet = relative
-            except (ValueError, OSError) as exc:
-                errors.append(str(exc))
-                continue
-            imported.append(dam.name)
-            warnings.extend(loaded.warnings)
-        self.project.save()
-        return SheetImport(imported, warnings, errors)

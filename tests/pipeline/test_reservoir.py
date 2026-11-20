@@ -7,7 +7,7 @@ import pytest
 
 from src.services.reporting import CURVE_PNG, reservoir_curve_figure, write_reservoir_curve
 from src.services.reservoir import compute_dam_curve, write_reservoir_csv
-from tests.samples import CURVE_DAMS, sample_curve_inputs
+from tests.samples import CURVE_DAMS, SAMPLE_H_MIN, sample_curve_inputs
 
 BENCHMARKS = Path(__file__).parents[1] / "benchmarks"
 
@@ -18,24 +18,23 @@ def _dam(data, slug):
 
 def _result(data, slug="kavsakkaya"):
     dam = _dam(data, slug)
-    return compute_dam_curve(data.project, data.dam_sheet(dam).data, dam)
+    return compute_dam_curve(data.project, dam)
 
 
-def test_p_m4_01_the_kavsakkaya_curve_is_its_curve_sheet_with_hmin_read_from_it(tmp_path):
+def test_p_m4_01_the_kavsakkaya_curve_is_its_curve_sheet_with_vdead_read_at_hmin(tmp_path):
     result = _result(sample_curve_inputs(tmp_path / "project"))
 
     assert len(result.table) == 69 and result.warnings == []
-    assert result.curve.h_min_m == pytest.approx(1071.99, abs=0.005)  # Vdead = 80.83 - 76.14 hm3
+    assert result.curve.h_min_m == SAMPLE_H_MIN["kavsakkaya"]
+    assert result.curve.dead_vol_hm3 == pytest.approx(4.68743)
     assert result.curve.volume(1099.0) == pytest.approx(33.861)  # the sheet has no row at 1099 m
 
 
-def test_p_m4_01_the_operating_values_come_from_the_dam_sheet(tmp_path):
-    """OI-11: Hbed is the thalweg and Vmax the operating maximum; neither is the curve's own value."""
+def test_p_m4_01_hbed_hcrest_and_vmax_come_from_the_curve_sheet(tmp_path):
+    """D76: the curve sheet is the dam's whole bathymetry."""
     curve = _result(sample_curve_inputs(tmp_path / "project")).curve
 
-    assert (curve.bed_elev_m, curve.max_elev_m, curve.crest_elev_m) == (1059.0, 1122.29, 1124.0)
-    assert (curve.max_vol_hm3, curve.active_vol_hm3) == (80.83, 76.14)
-    assert curve.levels_m[0] == 1055.0 and curve.volume(curve.max_elev_m) == pytest.approx(90.527, abs=0.001)
+    assert (curve.bed_elev_m, curve.crest_elev_m, curve.max_vol_hm3) == (1055.0, 1124.0, 96.517)
 
 
 def test_p_m4_01_a_dam_without_a_curve_sheet_has_no_curve(tmp_path):
@@ -54,7 +53,7 @@ def test_p_m4_01_reservoir_curve_csv_matches_the_golden(tmp_path, slug):
     pd.testing.assert_frame_equal(written, golden, check_exact=False, rtol=1e-9, atol=0)
 
 
-def test_p_m4_01_the_chart_shows_volume_and_area_against_the_level_and_marks_hmin_and_hmax(tmp_path):
+def test_p_m4_01_the_chart_shows_volume_and_area_against_the_level_and_marks_hmin(tmp_path):
     result = _result(sample_curve_inputs(tmp_path / "project"))
 
     figure = reservoir_curve_figure(result)
@@ -66,7 +65,7 @@ def test_p_m4_01_the_chart_shows_volume_and_area_against_the_level_and_marks_hmi
     assert "m" in volume_axis.get_xlabel() and "hm³" in volume_axis.get_ylabel() and "km²" in area_axis.get_ylabel()
     marked = {line.get_label() for line in volume_axis.lines[1:]}
     curve = result.curve
-    assert {f"Hmin ({curve.h_min_m:.2f} m)", f"Hmax ({curve.max_elev_m:.2f} m)"} <= marked
+    assert marked == {f"Hmin ({curve.h_min_m:.2f} m)"}
 
 
 def test_p_m4_01_the_chart_is_written_as_a_png(tmp_path):

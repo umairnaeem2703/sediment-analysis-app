@@ -37,11 +37,7 @@ def _curve(number=1):
         [row["Elevation_m"] for row in rows],
         [row["Volume_hm3"] for row in rows],
         [row["Area_km2"] for row in rows],
-        bed_elev_m=case["Hbed_m"],
-        max_elev_m=case["Hmax_m"],
-        crest_elev_m=case["Hcrest_m"],
-        active_vol_hm3=case["Vactive_hm3"],
-        max_vol_hm3=case["Vmax_hm3"],
+        h_min_m=case["Hmin_m"],
     )
 
 

@@ -12,10 +12,6 @@ from src.utils.paths import resource_path
 HEADER = "Dam Name,Basin Name,Sub-basin Name,Drainage Area (km2),Main Waterway Slope"
 SAMPLE_BASINS = resource_path("inputs", "master_yield.csv")
 SAMPLE_ZONAL = resource_path("inputs", "raw_zonal_means.csv")
-SAMPLE_SHEETS = {
-    slug: resource_path("inputs", "bathymetry", f"{slug}_bathymetry.csv")
-    for slug in ("kavsakkaya", "cubuk_1", "cubuk_2")
-}
 
 
 def _sha(path):
@@ -240,7 +236,7 @@ def test_c_m1_04_two_names_the_key_tells_apart_but_the_identifier_does_not_are_a
     assert {cell for problem in data.problems for cell in problem.cells} == {(2, "Dam Name"), (4, "Dam Name")}
 
 
-def test_c_m1_04_a_respelled_dam_keeps_its_settings_its_slug_and_takes_its_sheet(tmp_path, project, data):
+def test_c_m1_04_a_respelled_dam_keeps_its_settings_and_its_slug(tmp_path, project, data):
     data.import_basin_table(_csv(tmp_path, "t.csv", "Çubuk 1,B,Ankara Alt Havzası,834.7,0.09"))
     dam = project.dams[0]
     dam.commissioning_year, dam.trap_efficiency_pct = 1965, 87.0
@@ -250,8 +246,6 @@ def test_c_m1_04_a_respelled_dam_keeps_its_settings_its_slug_and_takes_its_sheet
 
     assert notices == [] and project.dams == [dam]
     assert (dam.name, dam.slug, dam.commissioning_year, dam.trap_efficiency_pct) == ("Çubuk1", "cubuk_1", 1965, 87.0)
-    assert data.import_dam_sheets([SAMPLE_SHEETS["cubuk_1"]]).errors == []
-    assert dam.sheet == "inputs/dams/cubuk_1.csv"
 
 
 # --- zonal means (FR-M1-06) --------------------------------------------------------------------
@@ -295,59 +289,6 @@ def test_c_m1_04_the_regional_step_is_complete_with_a_valid_table_and_zonal_mean
     assert not data.complete
     data.import_zonal_means(SAMPLE_ZONAL)
     assert data.complete
-
-
-# --- dam sheets (FR-M1-05) ---------------------------------------------------------------------
-
-
-def test_c_m1_05_sheets_are_matched_by_dam_name_and_copied_per_dam(project, data):
-    data.import_basin_table(SAMPLE_BASINS)
-    before = {slug: _sha(path) for slug, path in SAMPLE_SHEETS.items()}
-
-    result = data.import_dam_sheets(list(SAMPLE_SHEETS.values()))
-
-    assert result.errors == [] and result.warnings == []
-    assert sorted(result.imported) == ["Kavşakkaya", "Çubuk 1", "Çubuk 2"]
-    by_slug = {d.slug: d for d in project.dams}
-    for slug in SAMPLE_SHEETS:
-        assert by_slug[slug].sheet == f"inputs/dams/{slug}.csv"
-        assert _sha(project.folder / by_slug[slug].sheet) == before[slug]
-    saved = json.loads((project.folder / "project.json").read_text(encoding="utf-8"))
-    assert all(d["sheet"] for d in saved["dams"])
-
-
-def test_c_m1_05_a_bad_sheet_does_not_stop_the_others(tmp_path, project, data):
-    data.import_basin_table(SAMPLE_BASINS)
-    stranger = tmp_path / "stranger.csv"
-    stranger.write_text(
-        SAMPLE_SHEETS["cubuk_1"].read_text(encoding="utf-8-sig").replace("Çubuk 1", "Sariyar"), encoding="utf-8-sig"
-    )
-
-    result = data.import_dam_sheets([stranger, SAMPLE_SHEETS["cubuk_1"], tmp_path / "missing.csv"])
-
-    assert result.imported == ["Çubuk 1"]
-    assert len(result.errors) == 2
-    assert "Sariyar" in result.errors[0] and "stranger.csv" in result.errors[0]
-    assert "missing.csv" in result.errors[1]
-    assert [d.sheet for d in project.dams] == [None, "inputs/dams/cubuk_1.csv", None]
-
-
-def test_c_m1_05_sheet_cross_check_warnings_are_returned(tmp_path, data):
-    data.import_basin_table(SAMPLE_BASINS)
-    off = tmp_path / "off.csv"
-    off.write_text(
-        SAMPLE_SHEETS["cubuk_1"].read_text(encoding="utf-8-sig").replace("834.7", "999"), encoding="utf-8-sig"
-    )
-
-    result = data.import_dam_sheets([off])
-
-    assert result.imported == ["Çubuk 1"]
-    assert any("drainage area" in w for w in result.warnings)
-
-
-def test_c_m1_05_sheets_need_a_valid_basin_table_first(data):
-    with pytest.raises(ValueError, match="basin table"):
-        data.import_dam_sheets(list(SAMPLE_SHEETS.values()))
 
 
 # --- reopening the project ---------------------------------------------------------------------
@@ -481,19 +422,6 @@ def test_c_m1_07_a_zonal_file_with_another_extension_replaces_the_old_copy(tmp_p
 
     assert project.inputs["zonal_means"] == "inputs/zonal_means.csv"
     assert not (project.folder / "inputs" / "zonal_means.xlsx").exists()
-
-
-def test_c_m1_05_a_dam_sheet_with_another_extension_replaces_the_old_copy(tmp_path, project, data):
-    data.import_basin_table(SAMPLE_BASINS)
-    workbook = tmp_path / "sheet.xlsx"
-    pd.read_csv(SAMPLE_SHEETS["cubuk_1"], encoding="utf-8-sig").to_excel(workbook, index=False)
-    data.import_dam_sheets([workbook])
-    assert project.dams[1].sheet == "inputs/dams/cubuk_1.xlsx"
-
-    data.import_dam_sheets([SAMPLE_SHEETS["cubuk_1"]])
-
-    assert project.dams[1].sheet == "inputs/dams/cubuk_1.csv"
-    assert not (project.folder / "inputs" / "dams" / "cubuk_1.xlsx").exists()
 
 
 def test_c_m1_08_a_failed_replace_leaves_no_temporary_file(tmp_path, project, data, monkeypatch):

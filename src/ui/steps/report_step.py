@@ -69,7 +69,7 @@ class ReportStep(Step):
                 for label, extreme in (("Minimum", lowest), ("Maximum", highest))
             )
         )
-        warnings = collect_warnings(self._input_warnings(dam), *results)
+        warnings = collect_warnings(self._input_warnings(), *results)
         self.warning_var.set("\n".join(f"{phase}: {text}" for phase, text in warnings))
 
     def reset(self):
@@ -79,13 +79,10 @@ class ReportStep(Step):
 
     # --- actions ------------------------------------------------------------------------------
 
-    def _input_warnings(self, dam) -> List[str]:
-        """The warnings of the basin table, the zonal means and the dam sheet, which the results do not carry."""
+    def _input_warnings(self) -> List[str]:
+        """The warnings of the basin table and the zonal means, which the results do not carry."""
         regional = self.wizard.regional
-        try:
-            return [*regional.basin_warnings, *regional.zonal_warnings, *regional.dam_sheet(dam).warnings]
-        except (ValueError, OSError):  # the export names the missing file
-            return []
+        return [*regional.basin_warnings, *regional.zonal_warnings]
 
     def export(self) -> None:
         project, run = self.wizard.project, self.wizard.run
@@ -97,7 +94,7 @@ class ReportStep(Step):
         dam = run.dam
 
         def task():
-            return export_run(project, dam, *results, input_warnings=self._input_warnings(dam))
+            return export_run(project, dam, *results, input_warnings=self._input_warnings())
 
         def done(result, error):
             if error is not None:

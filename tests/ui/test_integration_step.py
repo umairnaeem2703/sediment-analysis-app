@@ -15,15 +15,13 @@ from src.ui.wizard import Wizard
 from tests.samples import (
     SAMPLE_BASINS,
     SAMPLE_FRACTIONS,
+    SAMPLE_H_MIN,
     SAMPLE_ZONAL,
     sample_curve,
     sample_flow,
-    sample_sheet,
 )
 from tests.ui.fakes import FakeStep
 from tests.ui.helpers import wait_until
-
-SLUGS = ("kavsakkaya", "cubuk_1", "cubuk_2")
 
 
 @pytest.fixture()
@@ -36,7 +34,7 @@ def errors(monkeypatch):
 
 @pytest.fixture()
 def app(tk_root, tmp_path, errors):
-    """The wizard at step 3 with the sample tables and the three dam sheets imported, and one more step after step 7."""
+    """The wizard at step 3 with the sample tables imported, and one more step after step 7."""
     top = tk.Toplevel(tk_root)
     project_step, regional_step, dam_step = ProjectStep(), RegionalStep(), DamStep()
     suspended, bedload, reservoir = SuspendedStep(dam_step), BedloadStep(dam_step), ReservoirStep(dam_step)
@@ -47,7 +45,6 @@ def app(tk_root, tmp_path, errors):
     wizard.go_to(1)
     regional_step.import_basin_table(str(SAMPLE_BASINS))
     regional_step.import_zonal_means(str(SAMPLE_ZONAL))
-    regional_step.import_dam_sheets([str(sample_sheet(slug)) for slug in SLUGS])
     wizard.go_to(2)
     yield wizard, step, later, top
     top.destroy()
@@ -70,6 +67,7 @@ def _reach_step(wizard, top, slug="kavsakkaya", commissioning="1990", analysis="
     wait_until(top, lambda: not wizard.busy)
     assert wizard.go_to(5)
     reservoir.use_curve_file(str(sample_curve(slug)))
+    reservoir.h_min_var.set(str(SAMPLE_H_MIN[slug]))
     reservoir.generate()
     assert wizard.go_to(6)
 

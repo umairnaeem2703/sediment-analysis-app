@@ -28,11 +28,6 @@ def browse_open_file(
     return filedialog.askopenfilename(title=title, filetypes=list(filetypes)) or None
 
 
-def browse_open_files(filetypes: Sequence[Tuple[str, str]] = TABLE_FILETYPES, title: str = "Select Files") -> List[str]:
-    """Open a file dialog to pick several existing files; an empty list means the dialog was cancelled."""
-    return list(filedialog.askopenfilenames(title=title, filetypes=list(filetypes)))
-
-
 def browse_directory(title: str = "Select Folder") -> Optional[str]:
     """Open a folder dialog; the folder may be created in the dialog."""
     return filedialog.askdirectory(title=title, mustexist=False) or None

@@ -12,7 +12,6 @@ from tests.ui.fakes import FakeStep
 
 SAMPLE_BASINS = resource_path("inputs", "master_yield.csv")
 SAMPLE_ZONAL = resource_path("inputs", "raw_zonal_means.csv")
-CUBUK_1_SHEET = resource_path("inputs", "bathymetry", "cubuk_1_bathymetry.csv")
 ONE_DAM_TABLE = (
     "Dam Name,Basin Name,Sub-basin Name,Drainage Area (km2),Main Waterway Slope\n"
     "Çubuk 1,Sakarya,Ankara Alt Havzası,834.7,0.09\n"
@@ -37,7 +36,6 @@ def app(tk_root, tmp_path, errors):
     wizard.go_to(1)
     regional_step.import_basin_table(str(SAMPLE_BASINS))
     regional_step.import_zonal_means(str(SAMPLE_ZONAL))
-    regional_step.import_dam_sheets([str(CUBUK_1_SHEET)])  # only Çubuk 1 gets a sheet
     wizard.go_to(2)
     yield wizard, dam_step, later, tmp_path
     top.destroy()
@@ -57,15 +55,14 @@ def test_w_m1_03_the_dams_of_the_table_are_listed_and_nothing_is_selected(app):
     assert not step.is_complete()
 
 
-def test_w_m1_03_selecting_a_dam_shows_its_sub_basins_sheet_and_settings(app):
+def test_w_m1_03_selecting_a_dam_shows_its_sub_basins_and_settings(app):
     wizard, step, _, _ = app
 
     step.select_dam("cubuk_1")
 
     rows = [step.sub_basin_tree.item(i, "values") for i in step.sub_basin_tree.get_children()]
     assert [(r[0], str(r[1]), str(r[2])) for r in rows] == [("Ankara Alt Havzası", "834.7", "0.09")]
-    sheet = step.sheet_var.get()
-    assert "908.6" in sheet and "5.6" in sheet and "888" in sheet
+    assert step.info_var.get() == ""
     assert step.efficiency_var.get() == "100"
     assert step.commissioning_var.get() == ""
 
@@ -98,15 +95,14 @@ def test_w_m1_03_using_a_dam_saves_its_settings_and_completes_the_step(app):
     assert not wizard.next_button.instate(["disabled"])
 
 
-def test_w_m1_03_a_dam_without_a_sheet_cannot_be_used(app, errors):
+def test_w_m1_03_any_dam_of_the_table_can_be_used(app, errors):
+    """D76: no dam sheet is needed; the curve sheet comes in step 6."""
     wizard, step, _, _ = app
     step.select_dam("kavsakkaya")
 
-    assert "no sheet" in step.sheet_var.get().lower()
     step.use_dam()
 
-    assert not step.is_complete()
-    assert len(errors) == 1 and "Kavşakkaya" in errors[0][1] and "step 2" in errors[0][1]
+    assert step.is_complete() and errors == []
 
 
 def test_w_m1_03_invalid_settings_are_listed_and_nothing_changes(app, errors):
@@ -171,17 +167,6 @@ def test_w_x_02_editing_regional_data_clears_the_chosen_dam(app):
     assert not step.is_complete()
 
 
-def test_w_m1_03_sheet_cross_check_warnings_are_shown(app):
-    wizard, step, _, _ = app
-    wizard.steps[1].commit_edit(1, "Drainage Area (km2)", "999")
-    wizard.steps[1].import_zonal_means(str(SAMPLE_ZONAL))
-    wizard.go_to(2)
-
-    step.select_dam("cubuk_1")
-
-    assert "drainage area" in step.warning_var.get()
-
-
 def test_w_m1_03_the_list_follows_the_dams_of_the_project(app):
     wizard, step, _, tmp_path = app
     step.select_dam("cubuk_1")
@@ -196,15 +181,6 @@ def test_w_m1_03_the_list_follows_the_dams_of_the_project(app):
 # --- review follow-ups -------------------------------------------------------------------------
 
 
-def test_w_m1_03_a_missing_sheet_copy_is_shown_not_raised(app):
-    wizard, step, _, _ = app
-    (wizard.project.folder / "inputs" / "dams" / "cubuk_1.csv").unlink()
-
-    step.select_dam("cubuk_1")
-
-    assert "No sheet is available" in step.sheet_var.get()
-
-
 def test_w_m1_03_an_invalid_basin_table_clears_the_step_instead_of_crashing(app):
     wizard, step, _, _ = app
     step.select_dam("cubuk_1")
@@ -214,19 +190,8 @@ def test_w_m1_03_an_invalid_basin_table_clears_the_step_instead_of_crashing(app)
     wizard.steps[1].commit_edit(1, "Drainage Area (km2)", "oops")
 
     assert not step.is_complete()
-    assert "step 2" in step.sheet_var.get()
+    assert "step 2" in step.info_var.get()
     assert step.sub_basin_tree.get_children() == ()
-
-
-def test_w_m1_03_a_dam_whose_sheet_cannot_be_read_cannot_be_used(app, errors):
-    wizard, step, _, _ = app
-    step.select_dam("cubuk_1")
-    (wizard.project.folder / "inputs" / "dams" / "cubuk_1.csv").unlink()
-
-    step.use_dam()
-
-    assert not step.is_complete()
-    assert len(errors) == 1 and "Dam sheet" in errors[0][0]
 
 
 def test_w_m1_03_editing_the_fields_after_using_a_dam_makes_the_step_incomplete_until_reconfirmed(app):

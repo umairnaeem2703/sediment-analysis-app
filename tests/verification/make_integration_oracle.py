@@ -10,9 +10,9 @@ Run `python tests/verification/make_integration_oracle.py` to rewrite these file
   depends on `src`.
 
 All seven cases share one reservoir and one five-year record, 2001 to 2005. The reservoir is the measured curve in
-`CURVE` (D75; written to `integration_curve.csv`), read between its rows by linear interpolation, with Hmax 150 m,
-Hcrest 155 m, Vactive 120 hm3 and Vmax 200 hm3, so Vdead = 80 hm3 and V(Hcrest) = 242 hm3. Change a case or a constant
-here, review the workbook, and only then commit the files.
+`CURVE` (D75; written to `integration_curve.csv`), read between its rows by linear interpolation, with Hmin 130 m
+(D76), so Hbed = 100 m and Hcrest = 155 m (its first and last levels), Vdead = V(Hmin) = 72 hm3 and
+V(Hcrest) = 242 hm3. Change a case or a constant here, review the workbook, and only then commit the files.
 """
 
 import csv
@@ -35,8 +35,8 @@ CURVE = [
     (155.0, 242.0, 8.8),
 ]
 LEVELS, VOLUMES = [row[0] for row in CURVE], [row[1] for row in CURVE]
-HMAX, HCREST, VACTIVE, VMAX = 150.0, 155.0, 120.0, 200.0
-HBED = LEVELS[0]
+HMIN = 130.0
+HBED, HCREST = LEVELS[0], LEVELS[-1]
 
 
 def interpolate(x, xs, ys):
@@ -45,9 +45,8 @@ def interpolate(x, xs, ys):
     return ys[i] + (x - xs[i]) * (ys[i + 1] - ys[i]) / (xs[i + 1] - xs[i])
 
 
-VDEAD = VMAX - VACTIVE
+VDEAD = interpolate(HMIN, LEVELS, VOLUMES)
 VCREST = interpolate(HCREST, LEVELS, VOLUMES)
-HMIN = interpolate(VDEAD, VOLUMES, LEVELS)
 
 RECORD_YEARS = [2001, 2002, 2003, 2004, 2005]
 BEDLOAD = [1_000_000.0, 2_500_000.0, 500_000.0, 2_000_000.0, 1_500_000.0]  # m3/yr
@@ -119,7 +118,7 @@ def write_csv():
     with open(HERE / "integration_cases.csv", "w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
         writer.writerow(
-            ["Case", "Description", "Hbed_m", "Hmax_m", "Hcrest_m", "Vactive_hm3", "Vmax_hm3"]
+            ["Case", "Description", "Hbed_m", "Hcrest_m"]
             + ["Suspended_m3_yr", "TE_pct", "Commissioning_year", "Analysis_year", "Vdead_hm3", "Vcrest_hm3", "Hmin_m"]
             + [f"Rate_{name}_hm3_yr" for name in RATES]
             + ["S0_hm3", "S0_Elevation_m", "Exceeded_Year"]
@@ -129,7 +128,7 @@ def write_csv():
             number, description, suspended, _, te, commissioning, analysis = case
             _, rates, _, _, _, s0, exceeded, lifespans = worked(case)
             writer.writerow(
-                [number, description, HBED, HMAX, HCREST, VACTIVE, VMAX, suspended, te, commissioning, analysis]
+                [number, description, HBED, HCREST, suspended, te, commissioning, analysis]
                 + [VDEAD, VCREST, HMIN, *(rates[name] for name in RATES), s0, elevation(s0)]
                 + ["" if exceeded is None else exceeded, *(lifespans[name] for name in RATES)]
             )
@@ -169,10 +168,10 @@ def case_sheet(book, case):
 
     inputs = [
         ("Hbed (m), the first level of the curve", HBED),
-        ("Hmax (m)", HMAX),
-        ("Hcrest (m)", HCREST),
-        ("Vactive (hm3)", VACTIVE),
-        ("Vmax (hm3)", VMAX),
+        ("Hmin (m), entered", HMIN),
+        ("Hcrest (m), the last level of the curve", HCREST),
+        ("", None),
+        ("", None),
         ("Rows of the curve (columns H to J)", len(CURVE)),
         ("Suspended Vs (m3/yr)", suspended),
         ("Trap efficiency TE (%)", te),
@@ -183,9 +182,8 @@ def case_sheet(book, case):
         sheet.cell(row=row, column=1, value=label)
         sheet.cell(row=row, column=2, value=value)
     derived = [
-        ("Vdead (hm3) = Vmax - Vactive", "=B7-B6"),
+        ("Vdead (hm3) = V(Hmin), read from the curve", "=" + interpolate_formula("B4", LEVEL_CELLS, VOLUME_CELLS)),
         ("V(Hcrest) (hm3), read from the curve", "=" + interpolate_formula("B5", LEVEL_CELLS, VOLUME_CELLS)),
-        ("Hmin (m) = H(Vdead), read from the curve", "=" + interpolate_formula("B14", VOLUME_CELLS, LEVEL_CELLS)),
     ]
     for row, (label, formula) in enumerate(derived, start=14):
         sheet.cell(row=row, column=1, value=label)

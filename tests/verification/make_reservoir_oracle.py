@@ -1,15 +1,16 @@
-"""Write the verification oracle for the measured reservoir curve (B3.3, D75).
+"""Write the verification oracle for the measured reservoir curve (B3.3, D75, D76).
 
 Run `python tests/verification/make_reservoir_oracle.py` to rewrite these files next to this script:
 
 - `reservoir_verification.xlsx`: the hand calculation as live spreadsheet formulas, for the hydrologist to open and
-  review. Each case has its own sheet: the dam sheet's values, the curve's rows, and the curve read at five levels by
-  linear interpolation between the two rows around each level.
+  review. Each case has its own sheet: Hmin, the curve's rows, the values read from the curve (Hbed, Hcrest, Vmax and
+  Vdead), and the curve read at four levels by linear interpolation between the two rows around each level.
 - `reservoir_cases.csv`, `reservoir_tables.csv`, `reservoir_points.csv`: the same cases with the results worked out
   below using only plain Python. The unit tests read these files, so the oracle never depends on `src`.
 
-Case 1 is the Kavşakkaya curve sheet in `inputs/reservoir_curves/` with the operating values of its dam sheet, as the
-hydrologist gave them (OI-11). Change a case here, review the workbook, and only then commit the files.
+Case 1 is the Kavşakkaya curve sheet in `inputs/reservoir_curves/` with the placeholder Hmin of `tests/samples.py`
+(the level the old dam sheet's Vdead gave, until the hydrologist confirms it). Change a case here, review the workbook,
+and only then commit the files.
 """
 
 import csv
@@ -28,33 +29,13 @@ def read_curve(path):
         return [tuple(float(value) for value in row) for row in list(csv.reader(handle))[1:] if row]
 
 
-# (case, description, curve rows, Hbed m, Hmax m, Hcrest m, Vactive hm3, Vmax hm3, a level between the rows)
+# (case, description, curve rows, Hmin m, a level between the rows)
 CASES = [
-    (
-        1,
-        "Kavsakkaya curve sheet and dam sheet (OI-11)",
-        read_curve(KAVSAKKAYA_CURVE),
-        1059.0,
-        1122.29,
-        1124.0,
-        76.14,
-        80.83,
-        1099.0,  # the sheet has no row at 1099 m
-    ),
-    (
-        2,
-        "Round numbers",
-        [(100.0, 0.0, 0.5), (110.0, 10.0, 1.5), (120.0, 30.0, 2.5), (130.0, 60.0, 3.5)],
-        100.0,
-        125.0,
-        130.0,
-        35.0,
-        45.0,
-        115.0,
-    ),
+    (1, "Kavsakkaya curve sheet, placeholder Hmin", read_curve(KAVSAKKAYA_CURVE), 1071.99, 1099.0),  # no row at 1099 m
+    (2, "Round numbers", [(100.0, 0.0, 0.5), (110.0, 10.0, 1.5), (120.0, 30.0, 2.5), (130.0, 60.0, 3.5)], 110.0, 115.0),
 ]
 
-POINTS = ["First level", "Hmin", "Between rows", "Hmax", "Hcrest"]
+POINTS = ["Hbed", "Hmin", "Between rows", "Hcrest"]
 
 
 def interpolate(x, xs, ys):
@@ -64,26 +45,26 @@ def interpolate(x, xs, ys):
 
 
 def worked(case):
-    """Vdead, Hmin, the curve's volume at Hmax and the levels of the five points."""
-    _, _, rows, _, h_max, h_crest, active, v_max, between = case
+    """Hbed, Hcrest, Vmax, Vdead = V(Hmin) and the levels of the four points."""
+    _, _, rows, h_min, between = case
     levels, volumes = [row[0] for row in rows], [row[1] for row in rows]
-    dead = v_max - active
-    h_min = interpolate(dead, volumes, levels)
-    return dead, h_min, interpolate(h_max, levels, volumes), [levels[0], h_min, between, h_max, h_crest]
+    return (
+        levels[0],
+        levels[-1],
+        volumes[-1],
+        interpolate(h_min, levels, volumes),
+        [levels[0], h_min, between, levels[-1]],
+    )
 
 
 def write_csv():
     with open(HERE / "reservoir_cases.csv", "w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
-        writer.writerow(
-            ["Case", "Description", "Hbed_m", "Hmax_m", "Hcrest_m", "Vactive_hm3", "Vmax_hm3"]
-            + ["Vdead_hm3", "Hmin_m", "V_Hmax_hm3", "Area_Hmax_km2"]
-        )
+        writer.writerow(["Case", "Description", "Hmin_m", "Hbed_m", "Hcrest_m", "Vmax_hm3", "Vdead_hm3"])
         for case in CASES:
-            number, description, rows, bed, h_max, h_crest, active, v_max, _ = case
-            dead, h_min, v_at_max, _ = worked(case)
-            area = interpolate(h_max, [row[0] for row in rows], [row[2] for row in rows])
-            writer.writerow([number, description, bed, h_max, h_crest, active, v_max, dead, h_min, v_at_max, area])
+            number, description, _, h_min, _ = case
+            bed, crest, v_max, dead, _ = worked(case)
+            writer.writerow([number, description, h_min, bed, crest, v_max, dead])
 
     with open(HERE / "reservoir_tables.csv", "w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
@@ -97,7 +78,7 @@ def write_csv():
         for case in CASES:
             rows = case[2]
             levels, volumes, areas = ([row[column] for row in rows] for column in range(3))
-            for name, h in zip(POINTS, worked(case)[3], strict=True):
+            for name, h in zip(POINTS, worked(case)[4], strict=True):
                 writer.writerow([case[0], name, h, interpolate(h, levels, volumes), interpolate(h, levels, areas)])
 
 
@@ -111,7 +92,7 @@ def interpolate_formula(x, xs, ys, count):
 
 
 def case_sheet(book, case):
-    number, description, rows, bed, h_max, h_crest, active, v_max, between = case
+    number, description, rows, h_min, between = case
     sheet = book.create_sheet(f"Case {number}")
     sheet["A1"] = f"Case {number}: {description}"
     sheet["A1"].font = Font(bold=True)
@@ -119,15 +100,11 @@ def case_sheet(book, case):
     levels, volumes, areas = (f"${column}$3:${column}${2 + count}" for column in "HIJ")
 
     inputs = [
-        ("Hbed on the dam sheet (m)", bed),
-        ("Hmax (m)", h_max),
-        ("Hcrest (m)", h_crest),
-        ("Vactive (hm3)", active),
-        ("Vmax on the dam sheet (hm3)", v_max),
-        ("Vdead (hm3) = Vmax - Vactive", "=B7-B6"),
-        ("Hmin (m) = H(Vdead), read from the curve", interpolate_formula("B8", volumes, levels, count)),
-        ("V(Hmax) on the curve (hm3)", interpolate_formula("B4", levels, volumes, count)),
-        ("A(Hmax) on the curve (km2)", interpolate_formula("B4", levels, areas, count)),
+        ("Hmin (m), entered", h_min),
+        ("Hbed (m) = the first level of the curve", "=H3"),
+        ("Hcrest (m) = the last level of the curve", f"=H{2 + count}"),
+        ("Vmax (hm3) = the last volume of the curve", f"=I{2 + count}"),
+        ("Vdead (hm3) = V(Hmin), read from the curve", interpolate_formula("B3", levels, volumes, count)),
     ]
     for row, (label, value) in enumerate(inputs, start=3):
         sheet.cell(row=row, column=1, value=label)
@@ -136,7 +113,7 @@ def case_sheet(book, case):
     headers = ["Point", "H (m)", "V (hm3)", "A (km2)", "H back from V (m)"]
     for column, text in enumerate(headers, start=1):
         sheet.cell(row=14, column=column, value=text).font = Font(bold=True)
-    point_levels = ["=H3", "=B9", between, "=B4", "=B5"]
+    point_levels = ["=B4", "=B3", between, "=B5"]
     for row, (name, level) in enumerate(zip(POINTS, point_levels, strict=True), start=15):
         sheet.cell(row=row, column=1, value=name)
         sheet.cell(row=row, column=2, value=level)

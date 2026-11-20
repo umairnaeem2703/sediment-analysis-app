@@ -1,6 +1,6 @@
 # Input format
 
-How to organise your data so the program accepts it. The six files below are the only inputs. The files in the `inputs/` folder are working examples of every layout; if you are unsure, copy one and replace the values.
+How to organise your data so the program accepts it. The five files below are the only inputs. The files in the `inputs/` folder are working examples of every layout; if you are unsure, copy one and replace the values.
 
 ## 1. The rules that apply to every file
 
@@ -54,33 +54,6 @@ Ankara Alt Havzası,3.148701574
 ```
 
 Rows with an empty name or a MEAN that is not a number are skipped, with a warning that lists their row numbers. Use the same names as the basin table; small differences in capitals, spaces, punctuation, Turkish letters and a trailing `Alt Havzası` are tolerated, and the program warns when it had to match loosely.
-
-### 2.3 Dam sheet
-
-One file per dam, holding **exactly one dam row**. The dam must already be in the basin table (same name).
-
-| Label | Unit | Required | What to enter |
-|---|---|---|---|
-| `Dam Name` | | yes | As in the basin table |
-| `Bottom Elevation of River` | m | yes | River-bed elevation at the dam axis |
-| `Crest Elevation` | m | yes | Elevation of the dam crest |
-| `Maximum Reservoir Elevation` | m | yes | Highest water level of the reservoir |
-| `Active Volume` | hm³ | yes | Storage that can be used |
-| `Maximum Volume` | hm³ | yes | Volume at the maximum reservoir elevation |
-| `Drainage Area (km2)` | km² | no | Checked against the basin table |
-| `Average Slope` | m/m | no | Decimal fraction, checked against the basin table |
-| `Longest River Length (km)` | km | no | Information only |
-| `Top Elevation of River` | m | no | Information only |
-| `Average Flow` | hm³/yr | no | Shown in step 3 |
-
-```
-Dam Name,Drainage Area (km2),Longest River Length (km),Top Elevation of River,Bottom Elevation of River,Average Slope,Crest Elevation,Maximum Reservoir Elevation,Active Volume,Maximum Volume,Average Flow
-Çubuk 1,834.7,25.5,1109,888,0.09,908.6,907.6,5.28,5.6,62.6
-```
-
-If the area or slope differs from the basin table by more than 1 %, the program warns (it does not stop).
-
-The dam sheet holds the operating values; the dam's reservoir curve sheet ([section 4](#4-step-6-reservoir-curve-sheet)) must cover them, or step 6 refuses the curve.
 
 ## 3. Step 5: Bedload
 
@@ -159,21 +132,12 @@ Elevation (m),Volume (hm3),Surface Area (km2)
 1057,0.212,0.085
 ```
 
-The dam sheet holds the operating values, which need not lie on the curve: `Bottom Elevation of River` is the thalweg at the dam axis and `Maximum Volume` the operating maximum, not the curve's volume at the maximum reservoir elevation. The curve must cover them, or step 6 refuses it and lists every problem:
-
-| Dam sheet | Rule |
-|---|---|
-| `Crest Elevation` | The last level of the curve, within 0.5 m |
-| `Maximum Reservoir Elevation` | Lies between the first and the last level |
-| `Maximum Volume` - `Active Volume` | Lies between the first and the last volume |
-
-Hmin is the level of the curve at the dead volume (`Maximum Volume` - `Active Volume`).
+The curve sheet is the dam's whole bathymetry: its first level is the bed (Hbed), its last level the crest (Hcrest) and its last volume the maximum volume (Vmax). The one other value step 6 asks for is **Hmin**, the minimum operating level, typed in the step. It must lie above the first level and below the last; the dead volume is the curve's volume at Hmin.
 
 ## 5. Names that must agree between files
 
 | Name | Appears in | Rule |
 |---|---|---|
-| Dam name | Basin table and the dam sheet | Same name (capitals, spaces, punctuation and Turkish letters ignored) |
 | Sub-basin name | Basin table and the zonal means | Same name; every sub-basin of the dam you analyse needs one zonal mean |
 
 ## 6. When something is wrong
@@ -184,16 +148,15 @@ Hmin is the level of the curve at the dead volume (`Maximum Volume` - `Active Vo
 | `file.csv: columns 'Dam Name' and 'dam name' both mean 'Dam Name'` | Two headers are the same label once capitals and spacing are ignored | Delete or rename one of them |
 | `file.csv: ignored column(s) ...` | The file has columns outside this format | Nothing is wrong; the columns are not used. Delete them to silence the warning |
 | A cell marked in the basin-table grid, or `... must be a number ..., found '834,7'` | A cell is empty, not a number, or uses a comma as a decimal | Edit the cell in the grid, or fix the file and import again. Write numbers with a point |
-| `dam 'X' is not in the basin table` | The dam sheet's name does not match any dam in the basin table | Make the names the same |
 | `no zonal mean can be assigned to sub-basin(s): ...` | A sub-basin in the basin table has no matching row in the zonal means (or its name appears twice with different values) | Add the row or correct the name |
-| `The reservoir curve cannot be used: ...` | The curve sheet does not cover the dam sheet (section 4) | Ask the hydrologist which file is right, correct it and import it again |
+| `The reservoir curve cannot be used: ...` | Hmin is not between the first and the last level of the curve sheet (section 4) | Check Hmin with the hydrologist and enter it again |
 
 ## 7. Checklist before you import
 
 1. Every file has its header row first, with the labels from this page.
 2. Numbers use a point and have no thousands separators.
 3. Slopes are decimal fractions (`0.09`), not percentages.
-4. Dam names agree between the basin table and the dam sheets; sub-basin names agree between the basin table and the zonal means.
+4. Sub-basin names agree between the basin table and the zonal means.
 5. Fractions `Fi` add up to 1.
 6. For flow you have either a daily file (`Date`, `Flow Q (m3/s)`) or the DSİ monthly table, not both for the same dam.
-7. Each dam has a reservoir curve sheet that reaches its crest.
+7. Each dam has a reservoir curve sheet from the bed up to the crest, and you know its minimum operating level (Hmin).

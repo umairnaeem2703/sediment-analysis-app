@@ -15,10 +15,10 @@ def test_c_m1_01_saved_project_reopens_identically(tmp_path):
     project.inputs["basins"] = "inputs/basins.csv"
     project.inputs["fractions"] = "inputs/fractions.csv"
     cubuk = project.add_dam("Çubuk 1")
-    cubuk.sheet = "inputs/dams/cubuk_1.csv"
     cubuk.flow = Flow(path="inputs/flow/cubuk_1_flow.csv", sigma=0.4, seed=7)
     cubuk.commissioning_year = 1965
     cubuk.curve_sheet = "inputs/curves/cubuk_1_curve.csv"
+    cubuk.h_min_m = 900.5
     project.add_dam("Kavşakkaya")
     project.save()
 
@@ -161,6 +161,24 @@ def test_dam_dataclass_defaults():
     dam = Dam(name="A", slug="a")
     assert dam.trap_efficiency_pct == 100.0
     assert dam.flow == Flow()
+    assert dam.h_min_m is None
+
+
+def test_c_m1_01_a_version_2_project_opens_without_its_dam_sheet(tmp_path):
+    """D76: the curve sheet replaces the dam sheet, so a version 2 file's `sheet` is dropped; its curve sheet stays."""
+    project = Project.new(tmp_path / "p", "x")
+    project.add_dam("A").curve_sheet = "inputs/curves/a_curve.csv"
+    project.save()
+    file = tmp_path / "p" / "project.json"
+    data = json.loads(file.read_text(encoding="utf-8"))
+    data["schema_version"] = 2
+    data["dams"][0]["sheet"] = "inputs/dams/a.csv"
+    del data["dams"][0]["h_min_m"]
+    file.write_text(json.dumps(data), encoding="utf-8")
+
+    dam = Project.open(tmp_path / "p").dams[0]
+
+    assert dam.curve_sheet == "inputs/curves/a_curve.csv" and dam.h_min_m is None and not hasattr(dam, "sheet")
 
 
 def test_c_m1_01_phi_round_trips_and_a_project_saved_without_it_opens_with_zero(tmp_path):
