@@ -1,186 +1,118 @@
-"""The reservoir curve of one dam (FR-M4-01, FR-M4-02, B3.3).
+"""The measured reservoir curve of one dam (FR-M4-01, FR-M4-02, B3.3, D75).
 
-`curve_inputs` gives the inputs of step 6: the dam sheet's values, with the edits the user kept on the dam, Hmin and the
-shape class. `validate_curve_entries` and `apply_curve_settings` turn the entered texts into numbers and keep them on
-the dam; `parse_table_step` reads the level interval of the table. `compute_curve` and `compute_dam_curve` fit the curve
-and make its table and warnings. `write_reservoir_csv` writes `reservoir_curve.csv` into a folder it is given; the run
-folder itself belongs to the reporting service (M5).
+`validate_curve_sheet` and `load_curve_sheet` read a curve sheet: one row per level with its volume and surface area.
+`import_curve_sheet` checks one and copies it into the project as the dam's curve. `compute_curve` and
+`compute_dam_curve` put the table together with the dam sheet, refusing a dam sheet the curve does not cover, and give the
+warnings. `write_reservoir_csv` writes `reservoir_curve.csv` into a folder it is given; the run folder itself belongs
+to the reporting service (M5).
 """
 
-import math
 from pathlib import Path
-from typing import List, NamedTuple, Optional
+from typing import List, NamedTuple
 
 import pandas as pd
 
 from src.core.reservoir import (
-    STEP_M,
+    AREA_KM2,
+    ELEVATION_M,
+    VOLUME_HM3,
     ReservoirCurve,
-    check_inputs,
-    check_shape,
-    check_step,
-    curve_table,
+    build_curve,
+    check_table,
     curve_warnings,
-    fit_curve,
 )
-from src.services.project import CurveOverrides, Dam, Project
-from src.services.regional import DamSheet, cell_text, parse_number, quote_cell
+from src.services.labels import CURVE_AREA, CURVE_ELEV, CURVE_SHEET, CURVE_VOL, match_columns
+from src.services.project import Dam, Project
+from src.services.regional import (
+    DamSheet,
+    Loaded,
+    Problem,
+    TableError,
+    is_blank,
+    parse_number,
+    quote_cell,
+    read_input,
+)
 
 CSV_NAME = "reservoir_curve.csv"
-
-# input -> (words, symbol, unit), in the order of FR-M4-01
-FIELDS = {
-    "bed_elev_m": ("Bed elevation", "Hbed", "m"),
-    "h_min_m": ("Minimum operating level", "Hmin", "m"),
-    "max_elev_m": ("Maximum level", "Hmax", "m"),
-    "crest_elev_m": ("Crest elevation", "Hcrest", "m"),
-    "active_vol_hm3": ("Active volume", "Vactive", "hm³"),
-    "max_vol_hm3": ("Maximum volume", "Vmax", "hm³"),
-}
-_SHEET_FIELDS = [name for name in FIELDS if name != "h_min_m"]  # the inputs the dam sheet holds
-
-
-class CurveInputs(NamedTuple):
-    bed_elev_m: float
-    h_min_m: Optional[float]
-    max_elev_m: float
-    crest_elev_m: float
-    active_vol_hm3: float
-    max_vol_hm3: float
-    shape_class: Optional[str]
+_COLUMNS = {CURVE_ELEV: ELEVATION_M, CURVE_VOL: VOLUME_HM3, CURVE_AREA: AREA_KM2}  # sheet label -> result column
 
 
 class CurveResult(NamedTuple):
     curve: ReservoirCurve
-    table: pd.DataFrame  # Elevation_m, Volume_hm3, Area_km2
-    h_min_given: bool  # False when Hmin is the one the shape class gives
-    shape_class: Optional[str]  # the class that fixed the exponent; None when Hmin did
+    table: pd.DataFrame  # Elevation_m, Volume_hm3, Area_km2: the rows of the curve sheet
     warnings: List[str]
-    step_m: float = STEP_M  # the level interval of the table
 
 
-def _same(entered: float, on_sheet: float) -> bool:
-    """The fields show 12 significant digits, so a sheet value with more digits counts as unchanged."""
-    return math.isclose(entered, on_sheet, rel_tol=1e-9)
-
-
-def curve_inputs(sheet: DamSheet, dam: Dam) -> CurveInputs:
-    """The sheet's values, replaced by the dam's edits, with the dam's Hmin and shape class."""
-    values = {}
-    for name in _SHEET_FIELDS:
-        edited = getattr(dam.curve, name)
-        values[name] = getattr(sheet, name) if edited is None else edited
-    return CurveInputs(h_min_m=dam.h_min_m, shape_class=dam.shape_class, **values)
-
-
-def sheet_differences(sheet: DamSheet, inputs: CurveInputs) -> List[str]:
-    """One line for each input that differs from the dam sheet, with the sheet's value."""
-    lines = []
-    for name in _SHEET_FIELDS:
-        _, symbol, unit = FIELDS[name]
-        used, on_sheet = getattr(inputs, name), getattr(sheet, name)
-        if not _same(used, on_sheet):
-            lines.append(f"{symbol} {used:g} {unit} (sheet: {on_sheet:g} {unit})")
-    return lines
-
-
-def validate_curve_entries(
-    *, bed_elev_m, h_min_m, max_elev_m, crest_elev_m, active_vol_hm3, max_vol_hm3, shape_class
-) -> CurveInputs:
-    """Convert the entered texts. Hmin and the shape class may be blank (one of them is needed). Raises ValueError listing
-    every problem."""
-    entered = {
-        "bed_elev_m": bed_elev_m,
-        "h_min_m": h_min_m,
-        "max_elev_m": max_elev_m,
-        "crest_elev_m": crest_elev_m,
-        "active_vol_hm3": active_vol_hm3,
-        "max_vol_hm3": max_vol_hm3,
-    }
-    numbers, problems = {}, []
-    for name, text in entered.items():
-        if name == "h_min_m" and not cell_text(text):
-            numbers[name] = None
+def validate_curve_sheet(df: pd.DataFrame, source: str) -> Loaded:
+    """Check a curve sheet: every cell a number, levels and volumes rising, nothing below 0. Gives the table under the
+    result columns (Elevation_m, Volume_hm3, Area_km2). Raises TableError naming every invalid cell or row."""
+    table, warnings = match_columns(df, source, CURVE_SHEET)
+    numbers, rows, problems = [], [], []
+    for position, (_, record) in enumerate(table.iterrows()):
+        if is_blank(record):
             continue
-        numbers[name] = parse_number(text)
-        if numbers[name] is None:
-            words, symbol, unit = FIELDS[name]
-            problems.append(f"{words} ({symbol}, {unit}) must be a number, found {quote_cell(text)}.")
-    shape = cell_text(shape_class) or None
-    problems += check_shape(numbers["h_min_m"], shape)
-    if not problems:
-        problems = check_inputs(**numbers)
+        row = position + 2
+        values = {label: parse_number(record[label]) for label in CURVE_SHEET}
+        for label, value in values.items():
+            if value is None:
+                message = f"row {row}: '{label}' must be a number, found {quote_cell(record[label])}."
+                problems.append(Problem(message, ((row, label),)))
+        numbers.append(values)
+        rows.append(row)
     if problems:
-        raise ValueError("The curve inputs are not valid:\n" + "\n".join(f"- {problem}" for problem in problems))
-    return CurveInputs(shape_class=shape, **numbers)
+        raise TableError(source, problems)
+    curve = pd.DataFrame(numbers, columns=list(CURVE_SHEET), dtype=float).rename(columns=_COLUMNS)
+    found = check_table(list(curve[ELEVATION_M]), list(curve[VOLUME_HM3]), list(curve[AREA_KM2]), rows)
+    if found:
+        raise TableError(source, [Problem(message) for message in found])
+    return Loaded(curve, warnings)
 
 
-def parse_table_step(text, span_m: Optional[float] = None) -> float:
-    """The level interval of the table, in m, as entered in step 6 (a decimal comma is refused). Raises
-    ValueError when it is blank, not a number, not above 0, or, given the depth from the bed to the crest, so small
-    that the table would be too long."""
-    step = parse_number(text)
-    if step is None:
-        raise ValueError(f"The level interval of the table (m) must be a number, found {quote_cell(text)}.")
-    problems = check_step(step, span_m)
-    if problems:
-        raise ValueError("\n".join(problems))
-    return step
+def load_curve_sheet(path) -> Loaded:
+    return validate_curve_sheet(read_input(path), Path(path).name)
 
 
-def apply_curve_settings(project: Project, dam: Dam, sheet: DamSheet, **entered) -> bool:
-    """Validate the entered texts and, only if they are all valid and saved, keep them on the dam: Hmin and the shape
-    class as they are, and each sheet input only when it differs from the sheet. True if the curve changed (a new shape
-    class is kept but does not change the curve while Hmin is given)."""
-    inputs = validate_curve_entries(**entered)
-    overrides = CurveOverrides(
-        **{
-            name: None if _same(getattr(inputs, name), getattr(sheet, name)) else getattr(inputs, name)
-            for name in _SHEET_FIELDS
-        }
-    )
-    previous = (dam.curve, dam.h_min_m, dam.shape_class)
-    current = (overrides, inputs.h_min_m, inputs.shape_class)
-    if current == previous:
-        return False
-    dam.curve, dam.h_min_m, dam.shape_class = current
+def import_curve_sheet(project: Project, dam: Dam, path) -> Loaded:
+    """Check a curve sheet and copy it into the project as the dam's curve. An unusable file raises and nothing is
+    copied. Whether it covers the dam sheet is checked when the curve is computed."""
+    loaded = load_curve_sheet(path)
+    relative = project.import_file(path, f"inputs/curves/{dam.slug}_curve{Path(path).suffix.lower()}")
+    previous = dam.curve_sheet
+    dam.curve_sheet = relative
     try:
         project.save()
     except OSError:
-        dam.curve, dam.h_min_m, dam.shape_class = previous
+        dam.curve_sheet = previous
         raise
-    return _fixing(*current) != _fixing(*previous)
+    if previous and previous != relative:
+        (project.folder / previous).unlink(missing_ok=True)
+    return loaded
 
 
-def _fixing(curve: CurveOverrides, h_min_m: Optional[float], shape_class: Optional[str]) -> tuple:
-    """What fixes the curve: the edits, Hmin, and the shape class only while Hmin is blank."""
-    return curve, h_min_m, shape_class if h_min_m is None else None
-
-
-def compute_curve(
-    inputs: CurveInputs, drainage_area_km2: Optional[float] = None, step_m: float = STEP_M
-) -> CurveResult:
-    """Fit the curve (B3.3) and make its table, at the level interval `step_m`, and warnings. The drainage area is the dam
-    sheet's."""
-    curve = fit_curve(
-        bed_elev_m=inputs.bed_elev_m,
-        max_elev_m=inputs.max_elev_m,
-        crest_elev_m=inputs.crest_elev_m,
-        active_vol_hm3=inputs.active_vol_hm3,
-        max_vol_hm3=inputs.max_vol_hm3,
-        h_min_m=inputs.h_min_m,
-        shape_class=inputs.shape_class,
+def compute_curve(table: pd.DataFrame, sheet: DamSheet, warnings=()) -> CurveResult:
+    """The curve of a validated curve sheet with the values of the dam sheet, and its warnings: `warnings` (those of
+    reading the curve sheet) and the plausibility warning. Raises ValueError when the curve does not cover the dam
+    sheet."""
+    curve = build_curve(
+        table[ELEVATION_M],
+        table[VOLUME_HM3],
+        table[AREA_KM2],
+        bed_elev_m=sheet.bed_elev_m,
+        max_elev_m=sheet.max_elev_m,
+        crest_elev_m=sheet.crest_elev_m,
+        active_vol_hm3=sheet.active_vol_hm3,
+        max_vol_hm3=sheet.max_vol_hm3,
     )
-    given = inputs.h_min_m is not None
-    shape = None if given else inputs.shape_class
-    return CurveResult(
-        curve, curve_table(curve, step_m), given, shape, curve_warnings(curve, drainage_area_km2), step_m
-    )
+    return CurveResult(curve, curve.table(), [*warnings, *curve_warnings(curve, sheet.drainage_area_km2)])
 
 
-def compute_dam_curve(sheet: DamSheet, dam: Dam) -> CurveResult:
-    """The dam's curve from its sheet and what step 6 kept on the dam."""
-    return compute_curve(curve_inputs(sheet, dam), sheet.drainage_area_km2)
+def compute_dam_curve(project: Project, sheet: DamSheet, dam: Dam) -> CurveResult:
+    """The dam's curve from the curve sheet in the project and its dam sheet."""
+    if not dam.curve_sheet:
+        raise ValueError(f"{dam.name} has no reservoir curve sheet. Import it in step 6 (Reservoir curve).")
+    table, warnings = load_curve_sheet(project.folder / dam.curve_sheet)
+    return compute_curve(table, sheet, warnings)
 
 
 def write_reservoir_csv(result: CurveResult, folder) -> Path:

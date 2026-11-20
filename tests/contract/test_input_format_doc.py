@@ -11,6 +11,7 @@ def test_c_x_05_the_input_guide_names_every_canonical_label():
         *labels.ZONAL,
         *labels.SHEET_REQUIRED,
         *labels.SHEET_OPTIONAL,
+        *labels.CURVE_SHEET,
         *labels.FRACTIONS_REQUIRED,
         *labels.FRACTIONS_OPTIONAL,
         *labels.DAILY_FLOW,

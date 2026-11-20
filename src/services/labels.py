@@ -34,6 +34,10 @@ SHEET_SLOPE, RIVER_LENGTH, TOP_ELEV, AVG_FLOW = (
 SHEET_REQUIRED = (DAM, BED_ELEV, CREST_ELEV, MAX_ELEV, ACTIVE_VOL, MAX_VOL)
 SHEET_OPTIONAL = (AREA, SHEET_SLOPE, RIVER_LENGTH, TOP_ELEV, AVG_FLOW)
 
+# Reservoir curve sheet: the measured elevation-volume curve of one dam, one row per level (D75).
+CURVE_ELEV, CURVE_VOL, CURVE_AREA = "Elevation (m)", "Volume (hm3)", "Surface Area (km2)"
+CURVE_SHEET = (CURVE_ELEV, CURVE_VOL, CURVE_AREA)
+
 # Grain fractions: tau_ri and bi are computed and only cross-checked against a supplied column (D36).
 FRACTIONS_REQUIRED = ("di", "Fi")
 FRACTIONS_OPTIONAL = ("bi", "tau_ri")

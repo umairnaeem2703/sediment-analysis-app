@@ -1,4 +1,5 @@
-"""P-M4-02 and P-M4-03: integration, accumulation and projection of the sample dams (FR-M4-03 to FR-M4-05)."""
+"""P-M4-02 and P-M4-03: integration, accumulation and projection of the sample dams with a curve sheet (FR-M4-03 to
+FR-M4-05)."""
 
 from pathlib import Path
 
@@ -10,10 +11,9 @@ from src.services.bedload import VOLUME_M3, compute_dam_bedload
 from src.services.integration import compute_dam_integration, write_integration_csv, write_projection_csv
 from src.services.reservoir import compute_dam_curve
 from src.services.suspended import compute_suspended
-from tests.samples import SAMPLE_ANALYSIS_YEAR, SAMPLE_COMMISSIONING_YEAR, sample_integration_inputs
+from tests.samples import CURVE_DAMS, SAMPLE_ANALYSIS_YEAR, SAMPLE_COMMISSIONING_YEAR, sample_integration_inputs
 
 BENCHMARKS = Path(__file__).parents[1] / "benchmarks"
-SAMPLE_DAMS = ["kavsakkaya", "cubuk_1", "cubuk_2"]
 
 
 def _parts(data, slug):
@@ -21,7 +21,7 @@ def _parts(data, slug):
     dam = next(dam for dam in data.project.dams if dam.slug == slug)
     suspended = compute_suspended(data.sub_basins(dam), data.zonal)
     bedload = compute_dam_bedload(data.project, dam)
-    curve = compute_dam_curve(data.dam_sheet(dam).data, dam)
+    curve = compute_dam_curve(data.project, data.dam_sheet(dam).data, dam)
     return suspended, bedload, curve, dam
 
 
@@ -33,18 +33,10 @@ def _result(data, slug):
 # --- P-M4-02: annual totals and elevations ----------------------------------------------------
 
 
-def test_p_m4_02_each_sample_dam_has_its_own_totals(tmp_path):
-    data = sample_integration_inputs(tmp_path / "project")
-
-    means = {slug: _result(data, slug).annual["Total_hm3"].mean() for slug in SAMPLE_DAMS}
-
-    assert len(set(means.values())) == 3 and all(mean > 0 for mean in means.values())
-
-
 def test_p_m4_02_each_water_year_total_is_te_times_suspended_plus_bedload(tmp_path):
     data = sample_integration_inputs(tmp_path / "project")
-    data.project.dams[1].trap_efficiency_pct = 80.0
-    suspended, bedload, curve, dam = _parts(data, "cubuk_1")
+    data.project.dams[0].trap_efficiency_pct = 80.0
+    suspended, bedload, curve, dam = _parts(data, "kavsakkaya")
 
     result = compute_dam_integration(suspended, bedload, curve, dam)
 
@@ -63,7 +55,7 @@ def test_p_m4_02_the_elevation_of_a_year_is_read_from_the_curve(tmp_path):
     assert list(result.annual["Elevation_m"]) == pytest.approx(expected, rel=1e-12)
 
 
-@pytest.mark.parametrize("slug", SAMPLE_DAMS)
+@pytest.mark.parametrize("slug", CURVE_DAMS)
 def test_p_m4_02_integration_csv_matches_the_golden(tmp_path, slug):
     data = sample_integration_inputs(tmp_path / "project")
 
@@ -80,7 +72,7 @@ def test_p_m4_02_integration_csv_matches_the_golden(tmp_path, slug):
 def test_p_m4_03_the_accumulation_counts_the_years_before_the_analysis_year(tmp_path):
     data = sample_integration_inputs(tmp_path / "project")
 
-    result = _result(data, "cubuk_2")
+    result = _result(data, "kavsakkaya")
 
     table, record = result.accumulation, set(result.annual["Water_Year"])
     years = list(range(SAMPLE_COMMISSIONING_YEAR, SAMPLE_ANALYSIS_YEAR))
@@ -101,7 +93,7 @@ def test_p_m4_03_the_accumulation_is_the_record_years_plus_the_mean_for_the_rest
     assert result.accumulated_hm3 == pytest.approx(expected, rel=1e-12)
 
 
-@pytest.mark.parametrize("slug", SAMPLE_DAMS)
+@pytest.mark.parametrize("slug", CURVE_DAMS)
 def test_p_m4_03_the_lifespans_are_consistent_with_the_accumulation_and_ordered_by_rate(tmp_path, slug):
     result = _result(sample_integration_inputs(tmp_path / "project"), slug)
 
@@ -115,7 +107,7 @@ def test_p_m4_03_the_lifespans_are_consistent_with_the_accumulation_and_ordered_
         assert min(years.values()) > SAMPLE_ANALYSIS_YEAR
 
 
-@pytest.mark.parametrize("slug", SAMPLE_DAMS)
+@pytest.mark.parametrize("slug", CURVE_DAMS)
 def test_p_m4_03_projection_csv_matches_the_golden(tmp_path, slug):
     data = sample_integration_inputs(tmp_path / "project")
 

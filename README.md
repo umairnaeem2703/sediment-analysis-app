@@ -29,7 +29,7 @@ For one dam at a time, the program combines three estimates and carries them for
 |---|---|---|
 | **Suspended sediment** (step 4) | How much suspended sediment does the catchment deliver each year? | Basin table, zonal means (RUSLE soil loss), dam sheet |
 | **Bedload** (step 5) | How much bedload does the river carry past the dam each year? | Daily flow or a DSİ monthly table, grain fractions |
-| **Reservoir curve** (step 6) | How do level, volume and surface area relate? | Dam sheet (levels and volumes) |
+| **Reservoir curve** (step 6) | How do level, volume and surface area relate? | Reservoir curve sheet (measured), dam sheet |
 | **Integration and projection** (step 7) | How much has accumulated so far, and when is the dead storage full? | The three results above, trap efficiency, commissioning and analysis years |
 
 ```
@@ -40,8 +40,8 @@ For one dam at a time, the program combines three estimates and carries them for
  flow file  ──┐                │    and projection     (results.xlsx, CSVs,
  grain fractions ► 5 Bedload ──┤                        PNG charts, run.json)
                                │
- dam sheet ───► 6 Reservoir ───┘
-                   curve
+ curve sheet ─► 6 Reservoir ───┘
+ dam sheet ──┘     curve
 ```
 
 **What it does not do**
@@ -76,14 +76,15 @@ Which files each step needs:
 | 2 Regional data | Dam sheet (one per dam: levels, volumes, area, mean flow) | [INPUT_FORMAT.md §2.3](INPUT_FORMAT.md#23-dam-sheet) |
 | 5 Bedload | Grain fractions (one file for the project) | [INPUT_FORMAT.md §3.1](INPUT_FORMAT.md#31-grain-fractions) |
 | 5 Bedload | Daily flow, **or** the DSİ monthly table (one per dam) | [INPUT_FORMAT.md §3.2 and §3.3](INPUT_FORMAT.md#3-step-5-bedload) |
+| 6 Reservoir curve | Reservoir curve sheet (one per dam: level, volume, surface area) | [INPUT_FORMAT.md §4](INPUT_FORMAT.md#4-step-6-reservoir-curve-sheet) |
 
 [INPUT_FORMAT.md](INPUT_FORMAT.md) is the authoritative description of every column label, unit and rule. In short:
 
 - CSV or Excel (first sheet only). Numbers use a decimal **point**; a comma in a number is refused rather than guessed.
 - Column labels are exact English labels, matched after ignoring case, spaces and Turkish letters. Only the DSİ monthly table keeps its Turkish layout (`Yıllar`, `Ekim`, `Kasım`, …).
-- Names must agree between files (dam names in the basin table and dam sheets, sub-basin names in the basin table and zonal means): [§4](INPUT_FORMAT.md#4-names-that-must-agree-between-files). Turkish names are compared with Turkish-aware rules, so `İ`/`I` and `ı`/`i` do not cause false mismatches.
+- Names must agree between files (dam names in the basin table and dam sheets, sub-basin names in the basin table and zonal means): [§5](INPUT_FORMAT.md#5-names-that-must-agree-between-files). Turkish names are compared with Turkish-aware rules, so `İ`/`I` and `ı`/`i` do not cause false mismatches.
 - Encodings (UTF-8, cp1254, ISO-8859-9 …) are detected automatically.
-- If something is wrong the program says what and where: [§5](INPUT_FORMAT.md#5-when-something-is-wrong). A checklist is in [§6](INPUT_FORMAT.md#6-checklist-before-you-import).
+- If something is wrong the program says what and where: [§6](INPUT_FORMAT.md#6-when-something-is-wrong). A checklist is in [§7](INPUT_FORMAT.md#7-checklist-before-you-import).
 
 Sample files for three dams (Kavşakkaya, Çubuk 1, Çubuk 2) are in the `inputs/` folder.
 
@@ -120,7 +121,6 @@ Every step below follows the same pattern: what it does, what you enter, what yo
 | Commissioning year (optional) | year | blank | First year sediment starts to accumulate. Required for step 7. |
 | Analysis year (blank = current year) | year | current year | The first year **not yet** accumulated. The default excludes the incomplete current year. |
 | Trap efficiency | % | 100 | Share of the delivered sediment that stays in the reservoir. 100 is conservative. |
-| Minimum operating level Hmin (optional) | m | blank | Top of the dead storage. If blank, step 6 uses a shape class. |
 
 **What you get.** The dam's sub-basins (name, area, slope) and the values read from its sheet: bed elevation (Hbed), crest elevation (Hcrest), maximum level (Hmax), active volume, maximum volume, drainage area and mean annual flow.
 
@@ -233,42 +233,17 @@ The lines appear only for a record of more than three years with some bedload. T
 
 ### Step 6. Reservoir curve
 
-**What it does.** Builds the relation between level, volume and surface area, which step 7 uses to turn a sediment volume into a bed elevation.
+**What it does.** Takes the measured relation between level, volume and surface area, which step 7 uses to turn a sediment volume into a bed elevation.
 
-**What you enter.** The inputs are filled in from the dam sheet and can be edited.
+**What you enter.** The dam's **reservoir curve sheet** (*Curve sheet...*), prepared by the hydrologist: one row per level with its volume and surface area ([INPUT_FORMAT.md](INPUT_FORMAT.md), section 4). Then press *Generate curve*.
 
-| Field | Unit | Meaning |
-|---|---|---|
-| Bed elevation Hbed | m | Reservoir bed at the dam axis |
-| Minimum operating level Hmin (optional) | m | Top of the dead storage |
-| Maximum level Hmax | m | Normal maximum operating level |
-| Crest elevation Hcrest | m | Dam crest |
-| Active volume Vactive | hm³ | Volume between Hmin and Hmax |
-| Maximum volume Vmax | hm³ | Volume at Hmax |
-| Shape class | | gorge, hill, foothill or lake. Fixes the curve when Hmin is blank |
-| Level interval of the table | m | Default 0.5 |
+**The method.** Between two rows of the sheet the curve is a straight line, so a level missing from the sheet is filled in; outside the sheet it is held at the first and last rows. The dam sheet gives Hmax, Hcrest, the active volume $V_{active}$ and the maximum volume $V_{max}$. The dead volume is $V_{dead} = V_{max} - V_{active}$, and **Hmin** is the level of the curve at $V_{dead}$.
 
-The dead volume is $V_{dead} = V_{max} - V_{active}$.
+The dam sheet holds the **operating** values, which need not lie on the curve: Hbed is the thalweg at the dam axis and $V_{max}$ the operating maximum, not the curve's volume at Hmax. The curve must cover them, or it is refused with every problem named: the crest within 0.5 m of the curve's last level, and Hmax and $V_{dead}$ inside the curve.
 
-**The method.** A one-parameter power law, with $x = (H - H_{bed})/(H_{max} - H_{bed})$:
+**What you get.** A summary (*"Hmin … m (the level of the dead volume, … hm³). Surface area at Hmax … km²."*), a **Curve table** (the rows of the curve sheet: *Elevation (m), Volume (hm³), Surface area (km²)*) and a **Curve chart** of volume and area with Hmin and Hmax marked.
 
-$$V = V_{max}\,x^{m} \qquad A = \frac{m\,V_{max}}{H_{max} - H_{bed}}\,x^{m-1}$$
-
-If you give Hmin, the exponent is fitted so that the curve passes through (Hmin, $V_{dead}$):
-
-$$m = \frac{\ln\left(V_{dead}/V_{max}\right)}{\ln\left[(H_{min}-H_{bed})/(H_{max}-H_{bed})\right]}$$
-
-If you leave Hmin blank, $m$ comes from the shape class, and Hmin is then the level where the curve reaches $V_{dead}$:
-
-| Shape class | gorge | hill | foothill | lake |
-|---|---|---|---|---|
-| $m$ | 1.25 | 2.0 | 3.0 | 4.0 |
-
-**What you get.** A summary (*"Exponent m = … Hmin … m (given / from the … shape class). Dead volume … hm³. Surface area at Hmax … km²."*), a **Curve table** (*Elevation (m), Volume (hm³), Surface area (km²)* from the bed to the crest) and a **Curve chart** of volume and area with Hmin and Hmax marked. If you changed any value from the sheet, a line *"Changed from the dam sheet: …"* lists the differences.
-
-**How to read it.** The curve is a power law, not a survey, so elevations are indicative; they are only as good as the three points (bed, Hmin or shape class, Hmax) that fix it. A larger $m$ puts more of the volume near the top of the reservoir.
-
-**Warnings.** *m outside the usual range 1 to 4.5*; *Hmax only X m above Hbed, below 10 m* (poorly constrained curve); *surface area at Hmax above the drainage area*. Inputs that are inconsistent (levels out of order, no Hmin and no shape class, a non-positive interval) stop with an error.
+**Warnings.** *Surface area at Hmax above the drainage area*; columns of the curve sheet outside the format. A curve sheet whose levels or volumes do not rise, or a cell that is not a number, is refused when you import it.
 
 ### Step 7. Integration and projection
 
@@ -318,10 +293,10 @@ The sample files in `inputs/` are enough to run one dam from start to finish.
 
 1. **Project.** Create a project named *Kavsakkaya demo* in an empty folder.
 2. **Regional data.** Import `inputs/master_yield.csv` (basin table), `inputs/raw_zonal_means.csv` and the dam sheet `inputs/bathymetry/kavsakkaya_bathymetry.csv`. Kavşakkaya has one sub-basin, *Ankara Alt Havzası*, of 309.2 km² with a slope of 0.23 m/m, and the zonal means file holds its soil loss.
-3. **Select dam.** Choose *Kavşakkaya* and enter a commissioning year (the samples do not supply one). Leave trap efficiency at 100 and the analysis year blank. Press *Use this dam*. The sheet shows Hbed 1063 m, Hmax 1122.3 m, Hcrest 1124 m, active volume 74.1 hm³ and maximum volume 80.8 hm³.
+3. **Select dam.** Choose *Kavşakkaya* and enter a commissioning year (the samples do not supply one). Leave trap efficiency at 100 and the analysis year blank. Press *Use this dam*. The sheet shows Hbed 1059 m, Hmax 1122.29 m, Hcrest 1124 m, active volume 76.14 hm³ and maximum volume 80.83 hm³.
 4. **Suspended.** Press *Compute* and read the dam total.
 5. **Bedload.** Choose `inputs/dam_flow_data/kavsakkaya_flow.csv` and `inputs/fractional_parameters.csv`, keep sigma 0.6, phi 0 and seed 0, press *Compute*. The sample flow is a DSİ monthly table, so the result carries the **Synthetic daily flow** flag.
-6. **Reservoir curve.** Leave Hmin blank and select the *foothill* shape class ($m = 3$). The dead volume is $80.8 - 74.1 = 6.7$ hm³. Press *Generate curve*.
+6. **Reservoir curve.** Choose `inputs/reservoir_curves/kavsakkaya_reservoir_curve.csv` and press *Generate curve*. The dead volume is $80.83 - 76.14 = 4.69$ hm³, which the curve reaches at Hmin = 1071.99 m.
 7. **Integration and projection.** Keep 100 years and press *Compute*. Read the three lifespans.
 8. **Report.** Press *Export*. A folder `outputs/kavsakkaya_<YYYYMMDD_HHMM>/` appears inside your project, with the files described next.
 
@@ -349,7 +324,7 @@ Every export writes a **new** folder, `outputs/<dam-slug>_<YYYYMMDD_HHMM>/` insi
 | Extremes | The minimum and maximum year with total and elevation, then accumulated to date and its elevation, the dead volume, the three rates and the three lifespans |
 | Warnings | Phase, Warning |
 
-**`run.json`** records the program version (`app_version`), the time, the project and dam, every input file with its **SHA-256** hash, every parameter with its unit, the flags (`synthetic_flow`, `h_min_given`, `shape_class`) and every warning. Anyone can check that a result came from the files they hold by hashing those files and comparing; with the same files and settings (including sigma, phi and seed) the numbers are reproduced.
+**`run.json`** records the program version (`app_version`), the time, the project and dam, every input file with its **SHA-256** hash, every parameter with its unit, the flag `synthetic_flow` and every warning. Anyone can check that a result came from the files they hold by hashing those files and comparing; with the same files and settings (including sigma, phi and seed) the numbers are reproduced.
 
 ## 7. Assumptions and limitations
 
@@ -369,7 +344,7 @@ The program states its limits here, and they are carried into the design record.
 | AL-03 | Monthly DSİ flow is split into days at random (log-normal, sigma 0.6 by default, optional lag-1 phi). Bedload depends strongly on sigma and phi. |
 | AL-05 | The ÇEM delivery ratio changes by less than 0.1 % across the sample slopes, so slope hardly affects it. The slope column is read as m/m. |
 | AL-06 | Dams are independent. Sediment trapped by an upstream dam is not removed from a downstream dam. |
-| AL-07 | The elevation-volume curve is a one-parameter power law, not a survey, and sediment fills it as a level pool from the bed up. |
+| AL-07 | The elevation-volume curve is the hydrologist's measured table, read as straight lines between its rows, and sediment fills it as a level pool from the bed up. |
 | AL-08 | Years outside the flow record use the record mean for accumulation. |
 | AL-09 | $D_{50}$ stands in for the surface-mean grain size in the reference stress. |
 | AL-10 | The record's last year may be partial; its annual volume is the mean daily rate times a full year. |
@@ -385,15 +360,16 @@ The full design record is [docs/project_spec.md](docs/project_spec.md).
 ## 8. How the results are verified
 
 - **Hand calculations.** For each phase (suspended, bedload, reservoir curve, integration) a script in [tests/verification/](tests/verification) writes a workbook of **live formulas** that a hydrologist can open and inspect, together with CSV files worked out with Python's `math` alone. The unit tests compare the program's results with those CSVs, so the check never uses the program's own output.
-- **Reference outputs.** [tests/benchmarks/](tests/benchmarks) holds the reviewed outputs for the three sample dams. They are regenerated only by script and merged only after hydrologist sign-off. Each comes with a manifest of the code version, input hashes and settings used.
-- **Sign-off.** The suspended-sediment workbook was signed off by the hydrologist. The bedload formulas, oracle and reference outputs were approved on 2026-10-26, as were the reservoir and integration reference outputs. The end-to-end run of the three sample dams was signed off on 2026-10-27.
+- **Reference outputs.** [tests/benchmarks/](tests/benchmarks) holds the reviewed outputs for the sample dams. They are regenerated only by script and merged only after hydrologist sign-off. Each comes with a manifest of the input hashes and settings used.
+- **Sign-off.** The suspended-sediment workbook was signed off by the hydrologist. The bedload formulas, oracle and reference outputs were approved on 2026-10-26. The reservoir and integration reference outputs of the measured curve were signed off on 2026-11-19.
 - The reference outputs for integration use placeholder commissioning and analysis years (1990 and 2020), because the samples do not supply them.
+- The reservoir and integration reference outputs exist only for Kavşakkaya, the one dam with a curve sheet so far.
 
 To check a formula yourself, open the workbook for the phase in `tests/verification/` and compare a case with the program's output for the same inputs.
 
 ## 9. Warnings reference
 
-Every warning is shown on screen, saved in `run.json` and listed in the workbook's *Warnings* sheet. Messages that stop a step (a missing field, a bad file) are errors, not warnings; see [INPUT_FORMAT.md §5](INPUT_FORMAT.md#5-when-something-is-wrong).
+Every warning is shown on screen, saved in `run.json` and listed in the workbook's *Warnings* sheet. Messages that stop a step (a missing field, a bad file) are errors, not warnings; see [INPUT_FORMAT.md §6](INPUT_FORMAT.md#6-when-something-is-wrong).
 
 | Where | Message (abridged) | What it means and what to do |
 |---|---|---|
@@ -406,8 +382,6 @@ Every warning is shown on screen, saved in `run.json` and listed in the workbook
 | Bedload | *"Dropped N row(s) with missing/non-numeric flow and M row(s) with unparseable dates"* | Those days are missing from the flow series. Check the file if the counts are unexpected. |
 | Bedload | *"⚠ Synthetic daily flow. Converted DSI monthly table …"* | Daily flow was invented from monthly volumes. Report sigma, phi and seed with the result. |
 | Bedload | *"Sigma X is above 1.5: much of each month's volume falls on a few days, and the bedload rises steeply with sigma."* | The split is extreme: on the sample dams sigma 1.5 gives 37 to 88 times the bedload of the default 0.6. Check that you meant it, and report sigma with the result. |
-| Reservoir curve | *"The fitted exponent m = … is outside the usual range 1 to 4.5"* | The curve is unusually concave or convex. Check Hmin and the volumes. |
-| Reservoir curve | *"Hmax is only X m above Hbed, below 10 m: the curve is poorly constrained"* | A shallow range makes the fit sensitive. Check the levels. |
 | Reservoir curve | *"The surface area at Hmax (…) is above the drainage area (…)"* | The curve implies a reservoir surface larger than the catchment. Check the levels and volumes. |
 | Integration | *"N year(s) between the commissioning year and the analysis year are not in the record; the mean annual total was used for them"* | The record does not cover those years (AL-08). |
 | Integration | *"N year(s) of the record deliver more than the volume at the crest …; their elevations are limited to Hcrest"* | The reservoir would be full to the crest in those years. |
@@ -431,15 +405,13 @@ Every warning is shown on screen, saved in `run.json` and listed in the workbook
 | $q_b$ | m²/s | Bedload transport per unit channel width |
 | $T$ | hm³/yr | Annual sediment trapped: $TE/100 \cdot (V_s + V_b)$ |
 | TE | % | Trap efficiency |
-| Hbed | m | Reservoir bed elevation at the dam axis |
-| Hmin | m | Minimum operating level, top of the dead storage |
+| Hbed | m | Reservoir bed elevation at the dam axis, the first level of the curve |
+| Hmin | m | Minimum operating level, top of the dead storage: the level of the curve at $V_{dead}$ |
 | Hmax | m | Maximum (normal) operating level |
 | Hcrest | m | Dam crest elevation |
 | $V_{active}$ | hm³ | Active volume |
 | $V_{max}$ | hm³ | Volume at Hmax |
 | $V_{dead}$ | hm³ | Dead volume, $V_{max} - V_{active}$ |
-| $x$ | | Relative height, $(H - H_{bed})/(H_{max} - H_{bed})$ |
-| $m$ | | Exponent of the volume–elevation power law |
 | $c$ | year | Commissioning year |
 | $a$ | year | Analysis year, the first year not yet accumulated |
 | $S_0$ | hm³ | Accumulation to date |
@@ -452,7 +424,7 @@ Every warning is shown on screen, saved in `run.json` and listed in the workbook
 - Wilcock, P. R. and Crowe, J. C. (2003). Surface-based transport model for mixed-size sediment. *Journal of Hydraulic Engineering*, 129(2), 120–128.
 - Manning's equation for open-channel flow (standard hydraulics texts).
 
-The delivery-ratio formulas (USDA-SCS and ÇEM), the deposited bulk density of 1.3 t/m³, the power-law reservoir curve and its shape classes are used as specified by the project hydrologist; sources are not recorded in the project.
+The delivery-ratio formulas (USDA-SCS and ÇEM), and the deposited bulk density of 1.3 t/m³ are used as specified by the project hydrologist; sources are not recorded in the project.
 
 ## 12. For developers
 

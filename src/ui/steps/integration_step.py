@@ -17,7 +17,7 @@ from src.services.integration import (
 )
 from src.services.dam_run import BEDLOAD, CURVE, INTEGRATION, SUSPENDED
 from src.services.reporting import annual_volume_figure, projection_figure
-from src.ui.common import add_table, bold_font, show_error
+from src.ui.common import add_point_readout, add_table, bold_font, curve_lines, show_error
 from src.ui.steps.base import Step
 from src.ui.steps.dam_step import DamStep
 
@@ -136,6 +136,7 @@ class IntegrationStep(Step):
         self.lifespan_var.set("\n".join(self._lifespan_line(name, result) for name in RATE_NAMES))
         self.warning_var.set("\n".join(result.warnings))
         self._canvas = self._draw(projection_figure(result), self.chart_frame)
+        add_point_readout(self._canvas, lines=curve_lines(self._canvas.figure), by_line=True)
         self._annual_canvas = self._draw(annual_volume_figure(result), self.annual_chart_frame)
         if previous is not None and not (
             previous.annual.equals(result.annual) and previous.projection.equals(result.projection)

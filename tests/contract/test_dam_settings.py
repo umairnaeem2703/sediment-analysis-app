@@ -9,7 +9,7 @@ THIS_YEAR = datetime.date.today().year
 
 
 def _valid(**overrides):
-    values = {"commissioning_year": "1965", "analysis_year": "2025", "trap_efficiency_pct": "80", "h_min_m": "892.5"}
+    values = {"commissioning_year": "1965", "analysis_year": "2025", "trap_efficiency_pct": "80"}
     values.update(overrides)
     return values
 
@@ -19,18 +19,16 @@ def test_c_m1_09_valid_settings_are_converted():
         "commissioning_year": 1965,
         "analysis_year": 2025,
         "trap_efficiency_pct": 80.0,
-        "h_min_m": 892.5,
     }
 
 
 def test_c_m1_09_the_optional_fields_may_be_blank():
-    values = validate_dam_settings(commissioning_year="", analysis_year="  ", trap_efficiency_pct="100", h_min_m="")
+    values = validate_dam_settings(commissioning_year="", analysis_year="  ", trap_efficiency_pct="100")
 
     assert values == {
         "commissioning_year": None,
         "analysis_year": None,  # None means the current year
         "trap_efficiency_pct": 100.0,
-        "h_min_m": None,
     }
 
 
@@ -39,7 +37,6 @@ def test_c_m1_09_the_optional_fields_may_be_blank():
     [
         ({"commissioning_year": "1965.0"}, ("commissioning_year", 1965)),
         ({"trap_efficiency_pct": "87.5"}, ("trap_efficiency_pct", 87.5)),
-        ({"h_min_m": "892.5"}, ("h_min_m", 892.5)),
         ({"trap_efficiency_pct": "100"}, ("trap_efficiency_pct", 100.0)),
         ({"trap_efficiency_pct": "0.5"}, ("trap_efficiency_pct", 0.5)),
     ],
@@ -64,7 +61,6 @@ def test_c_m1_09_decimal_points_and_whole_number_years_are_accepted(overrides, c
         ({"analysis_year": "2k25"}, "Analysis year"),
         ({"analysis_year": "1960"}, "before the commissioning year"),
         ({"commissioning_year": str(THIS_YEAR + 1), "analysis_year": ""}, "before the commissioning year"),
-        ({"h_min_m": "low"}, "Minimum operating level"),
     ],
 )
 def test_c_m1_09_invalid_settings_are_refused_with_the_field_named(overrides, fragment):
@@ -76,10 +72,10 @@ def test_c_m1_09_invalid_settings_are_refused_with_the_field_named(overrides, fr
 
 def test_c_m1_09_every_problem_is_listed():
     with pytest.raises(ValueError) as error:
-        validate_dam_settings(commissioning_year="x", analysis_year="y", trap_efficiency_pct="0", h_min_m="z")
+        validate_dam_settings(commissioning_year="x", analysis_year="y", trap_efficiency_pct="0")
 
     message = str(error.value)
-    for field in ("Commissioning year", "Analysis year", "Trap efficiency", "Minimum operating level"):
+    for field in ("Commissioning year", "Analysis year", "Trap efficiency"):
         assert field in message
 
 
@@ -97,7 +93,7 @@ def test_c_m1_09_applying_settings_saves_them_and_a_refusal_changes_nothing(tmp_
 
     reopened = Project.open(project.folder).dams[0]
     assert (reopened.commissioning_year, reopened.analysis_year) == (1965, 2025)
-    assert (reopened.trap_efficiency_pct, reopened.h_min_m) == (80.0, 892.5)
+    assert reopened.trap_efficiency_pct == 80.0
 
     with pytest.raises(ValueError):
         apply_dam_settings(project, dam, **_valid(trap_efficiency_pct="500", commissioning_year="1900"))

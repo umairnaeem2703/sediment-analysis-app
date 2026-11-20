@@ -18,7 +18,7 @@ PATH_IO_CALLS = {"read_text", "write_text", "read_bytes", "write_bytes"}
 # What the steps take straight from src/core: constants and a result type, never a calculation. Add to it on purpose.
 UI_CORE_NAMES = {
     "src.core.projection": {"EXCEEDED", "HORIZON_YEARS", "RATE_NAMES", "YEAR", "Lifespan"},
-    "src.core.reservoir": {"AREA_KM2", "ELEVATION_M", "SHAPE_CLASSES", "STEP_M", "VOLUME_HM3"},
+    "src.core.reservoir": {"AREA_KM2", "ELEVATION_M", "VOLUME_HM3"},
     "src.core.wilcock": {"WATER_YEAR_COLUMN"},
 }
 

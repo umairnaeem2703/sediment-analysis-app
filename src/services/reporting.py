@@ -74,8 +74,12 @@ def reservoir_curve_figure(result: CurveResult) -> Figure:
     volume_axis.set_ylabel("Volume (hm³)", color="blue", fontweight="bold")
     volume_axis.tick_params(axis="y", labelcolor="blue")
     volume_axis.grid(True, linestyle="--", alpha=0.6)
-    h_min_line = volume_axis.axvline(curve.h_min_m, color="green", linestyle="--", label="Hmin")
-    h_max_line = volume_axis.axvline(curve.max_elev_m, color="black", linestyle="--", label="Hmax")
+    h_min_line = volume_axis.axvline(
+        curve.h_min_m, color="green", linestyle="--", label=f"Hmin ({curve.h_min_m:.2f} m)"
+    )
+    h_max_line = volume_axis.axvline(
+        curve.max_elev_m, color="black", linestyle="--", label=f"Hmax ({curve.max_elev_m:.2f} m)"
+    )
 
     area_axis = volume_axis.twinx()
     area_line = area_axis.plot(table[ELEVATION_M], table[AREA_KM2], color="red", label="Surface area")[0]
